@@ -102,16 +102,51 @@ npm run dev                                   # http://localhost:5173，/api 自
 
 ## 🐳 Docker 部署
 
-前后端各一个镜像，用 compose 一键编排：
+### 方式一：直接本地使用（拉镜像）
+
+镜像已推到阿里云 ACR 且仓库为**公开**，无需登录。机器装好 Docker + compose 即可，**不用克隆源码、不用构建**：
 
 ```bash
-docker compose up -d --build
+docker compose up -d                    # 拉取 ACR 镜像，一键起前后端
 ```
 
-- 前端 `http://localhost:5173`（nginx 托管静态文件，`/api` 反向代理到后端容器）。
-- 后端 `http://localhost:8600`（可直接访问接口）。
+| 服务 | 镜像 | 访问 |
+|---|---|---|
+| 前端 `frontend` | `registry.cn-hangzhou.aliyuncs.com/smartcv/smartcv-frontend:v1` | http://localhost:5173 |
+| 后端 `backend` | `registry.cn-hangzhou.aliyuncs.com/smartcv/smartcv-backend:v1` | http://localhost:8600 |
 
-> 首次构建较慢（后端 docling / playwright 依赖大）；首次解析会从 HF 镜像下模型。检查点 sqlite 在容器内 `/app`，容器重建即重置（它本就会每小时被清空，属临时态）。
+- 前端 nginx 托管静态文件，并把 `/api` 反向代理到后端容器（SSE 已关缓冲、长超时）；后端 healthcheck 用 TCP 拨号 8600，前端等后端健康才启动。
+- 停止：`docker compose down`；看状态：`docker compose ps`。
+- 换其它版本：把 `docker-compose.yml` 里的 image tag（如 `:v1`）改成目标版本再 `up`。
+
+### 方式二：源码构建
+
+每个目录自带 Dockerfile（`smartcv-api/Dockerfile`、`smartcv-web/Dockerfile`），本地克隆后用 `docker build` 分别构建（`docker-compose.yml` 里只有 `image:`，所以**不用也不能用 `docker compose build`**）：
+
+```bash
+docker build -t 镜像名称:版本号  smartcv-api/
+docker build -t 镜像名称:版本号  smartcv-web/
+```
+
+推送到自己的镜像仓库：
+
+```bash
+docker tag 镜像名称:版本号 <你的仓库地址>/镜像名称:版本号
+docker push <你的仓库地址>/镜像名称:版本号
+```
+
+### 为什么后端镜像特别大
+
+后端镜像显著大于前端，主要因为几个**重依赖**被一起打进了镜像：
+
+- **docling（PDF 解析）**：会自动拉入 `torch`、`transformers`、`opencv` 等深度学习库，光 torch 就上百 MB 级，是整个镜像最大的部分。
+- **Playwright 无头 Chromium**：导出 PDF 用，`playwright install chromium` 会额外下载一个完整浏览器（数百 MB）。
+- **docling 的模型**：首次解析时还要从 HF 镜像（`hf-mirror.com`，见 `main.py` 的 `HF_ENDPOINT`）在线下载模型，这部分**不进镜像**，是首次运行时才拉的（所以首次解析慢）。
+
+另外提醒：
+
+- 检查点 sqlite 在容器内 `/app`，容器重建即重置（它本就每小时被清空，属临时态）。
+- 首次构建/拉取、首次解析都较慢，属正常；解析过一次后模型会缓存在容器/挂载卷里。
 
 ## 🖥️ 使用流程
 

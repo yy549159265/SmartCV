@@ -6,7 +6,7 @@
 #   镜像需先在本地存在（docker tag <镜像ID> smartcv-<端>:v1）；不存在则 compose 会试图拉取（本地名拉不到会失败）。
 services:
   backend:
-    image: smartcv-backend:v1
+    image: registry.cn-hangzhou.aliyuncs.com/smartcv/smartcv-backend:v1
     environment:
       HF_ENDPOINT: https://hf-mirror.com
       HF_HUB_DISABLE_XET: "1"
@@ -21,7 +21,7 @@ services:
       start_period: 20s
 
   frontend:
-    image: smartcv-frontend:v1
+    image: registry.cn-hangzhou.aliyuncs.com/smartcv/smartcv-frontend:v1
     depends_on:
       backend:
         condition: service_healthy

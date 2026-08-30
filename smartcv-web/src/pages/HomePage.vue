@@ -170,6 +170,10 @@ function onNew() {
       </button>
     </div>
 
+    <p class="home-privacy">
+      🔒 你的简历只存在本机浏览器里，不收集任何数据；仅在使用 AI 功能时，内容才会发送到你配置的模型服务商
+    </p>
+
     <!-- 导入 PDF / Word 对话框：选解析引擎 → 选文件 -->
     <n-modal
       v-model:show="showImportDialog"
@@ -286,6 +290,14 @@ function onNew() {
   margin: 8px 0 0;
   font-size: 13px;
   color: var(--primary);
+}
+.home-privacy {
+  margin: 0;
+  font-size: 12px;
+  color: #9ca3af;
+  text-align: center;
+  line-height: 1.6;
+  max-width: 460px;
 }
 
 .home-cards {

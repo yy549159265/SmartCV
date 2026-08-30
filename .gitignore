@@ -1,0 +1,31 @@
+# ============ 通用 / 系统 ============
+.DS_Store
+Thumbs.db
+*.log
+
+# ============ 编辑器 / IDE ============
+.idea/
+.vscode/
+*.swp
+
+# ============ Python ============
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ============ Node / 前端 ============
+node_modules/
+dist/
+*.local
+npm-debug.log*
+
+# ============ 运行期数据（后端生成，勿入库） ============
+# chat 流水线的 LangGraph sqlite 检查点（含 -wal/-shm/-sh 伴生文件）
+smartcv-api/chat_checkpoints.sqlite
+smartcv-api/chat_checkpoints.sqlite-*

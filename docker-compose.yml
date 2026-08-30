@@ -1,0 +1,36 @@
+# SmartCV 前后端编排
+# 用法：docker compose up -d
+#   - frontend（nginx:80）→ 浏览器访问 http://localhost:5173
+#   - backend（FastAPI:8600）→ /api 被 frontend 的 nginx 反向代理到这里
+# 说明：改用已构建并打 tag 的镜像（smartcv-frontend:v1 / smartcv-backend:v1），不再从源码构建。
+#   镜像需先在本地存在（docker tag <镜像ID> smartcv-<端>:v1）；不存在则 compose 会试图拉取（本地名拉不到会失败）。
+services:
+  backend:
+    image: smartcv-backend:v1
+    environment:
+      HF_ENDPOINT: https://hf-mirror.com
+      HF_HUB_DISABLE_XET: "1"
+    ports:
+      - "8600:8600"
+    healthcheck:
+      # 纯 TCP 拨号检测：端口能连上即认为就绪（uvicorn 已监听）
+      test: ["CMD", "python", "-c", "import socket,sys; s=socket.socket(); s.settimeout(3); s.connect(('127.0.0.1',8600)); s.close()"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
+
+  frontend:
+    image: smartcv-frontend:v1
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "5173:80"
+    healthcheck:
+      # nginx 就绪检测：访问首页返回 200（busybox wget）
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:80/"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s

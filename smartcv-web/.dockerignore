@@ -1,0 +1,5 @@
+# 前端镜像上下文（smartcv-web/）排除项
+node_modules/
+dist/
+.local/
+*.log

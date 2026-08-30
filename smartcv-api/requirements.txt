@@ -1,0 +1,29 @@
+# SmartCV 后端依赖
+# 说明：docling（PDF 解析）会连带安装 torch/transformers/opencv 等大型包，镜像较大、首次拉取较慢。
+# 模型：docling 首次解析会自动从 HF 下载模型（main.py 里已把 HF_ENDPOINT 指到 hf-mirror 国内镜像）。
+
+# Web 框架
+fastapi
+uvicorn[standard]
+python-multipart
+pydantic
+cachetools
+
+# LLM 框架（LangGraph 编排多 Agent）
+langchain
+langchain-core
+langchain-openai
+langgraph
+langgraph-checkpoint-sqlite
+aiosqlite
+
+# 供应商/技能模块
+pyyaml
+httpx
+
+# PDF 解析（docling / pypdfium2）
+docling
+pypdfium2
+
+# PDF 导出（无头 Chromium 打印 HTML）
+playwright

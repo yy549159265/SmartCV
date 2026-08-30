@@ -1,0 +1,7 @@
+# 后端镜像上下文（smartcv-api/）排除项
+__pycache__/
+*.pyc
+*.sqlite
+*.sqlite-*
+.idea/
+.pytest_cache/

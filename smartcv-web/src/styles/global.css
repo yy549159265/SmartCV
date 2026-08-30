@@ -1,0 +1,150 @@
+/* ============================================================
+ * 全局样式
+ * 这里只放"全应用通用"的样式：底色、字体、滚动条、
+ * 以及 Markdown 渲染内容的通用样式（.md-body）。
+ * 各组件自己的样式写在各自的 <style scoped> 里。
+ * ============================================================ */
+
+:root {
+  /* 主题色板：组件里通过 var(--xxx) 引用，想换配色改这里 */
+  --app-bg: #f3f4f6;
+  --panel-bg: #ffffff;
+  --border: #e5e9f1;
+  --text: #1f2937;
+  --text-secondary: #6b7280;
+  --primary: #4f7cff;
+  --danger: #ef4444;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', sans-serif;
+  color: var(--text);
+  background: var(--app-bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 表单控件继承页面字体（避免输入框变成浏览器默认字体） */
+input,
+textarea,
+button {
+  font-family: inherit;
+}
+
+/* ============================================================
+ * Markdown 渲染内容的通用样式（预览里的内容文字都用 .md-body）
+ * ============================================================ */
+.md-body p {
+  margin: 0 0 6px;
+}
+.md-body p:last-child {
+  margin-bottom: 0;
+}
+.md-body ul,
+.md-body ol {
+  margin: 4px 0;
+  padding-left: 1.4em;
+}
+.md-body code {
+  background: rgba(127, 127, 127, 0.12);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 0.9em;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+}
+.md-body pre {
+  background: #f6f8fa;
+  padding: 10px 12px;
+  border-radius: 6px;
+  overflow: auto;
+  margin: 6px 0;
+}
+.md-body pre code {
+  background: transparent;
+  padding: 0;
+  font-size: 0.85em;
+}
+.md-body a {
+  color: var(--primary);
+}
+.md-body blockquote {
+  margin: 6px 0;
+  padding-left: 10px;
+  border-left: 3px solid #d3dae6;
+  color: var(--text-secondary);
+}
+
+/* ============================================================
+ * naive-ui 弹层过渡修正
+ * 部分浏览器环境下弹层的进入/离开 CSS 过渡会卡死（永远停在
+ * leave-active 状态，导致"点外部关不掉"）。这里直接禁用弹层动画，
+ * 弹层开合瞬时完成 —— 牺牲一点动画效果，换取交互可靠性。
+ * ============================================================ */
+.popover-transition-enter-from,
+.popover-transition-enter-to,
+.popover-transition-leave-from,
+.popover-transition-leave-to,
+.popover-transition-enter-active,
+.popover-transition-leave-active {
+  transition: none !important;
+}
+
+/* 弹窗（n-modal）的过渡同样禁用：否则点「完成/遮罩」后可能卡在关闭动画里 */
+.fade-in-transition-enter-active,
+.fade-in-transition-leave-active,
+.fade-in-scale-up-transition-enter-active,
+.fade-in-scale-up-transition-leave-active,
+.fade-up-transition-enter-active,
+.fade-up-transition-leave-active {
+  transition: none !important;
+}
+
+/* ============================================================
+ * 滚动条美化（WebKit 内核）
+ * ============================================================ */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #b6bdc9;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ============================================================
+ * 预览选中高亮：画布点了章节/内容后，预览里对应渲染块持续闪烁
+ * （类名是动态加在预览组件元素上的，必须全局生效，不能写在 scoped 里）
+ * ============================================================ */
+.preview-flash {
+  outline: 3px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+  animation: preview-flash 0.7s ease-in-out infinite;
+}
+@keyframes preview-flash {
+  0%,
+  100% {
+    outline-color: rgba(79, 124, 255, 0.15);
+  }
+  50% {
+    outline-color: rgba(79, 124, 255, 0.95);
+  }
+}

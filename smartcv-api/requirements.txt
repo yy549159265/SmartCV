@@ -24,6 +24,8 @@ httpx
 # PDF 解析（docling / pypdfium2）
 docling
 pypdfium2
+# OCR 引擎：扫描件路径用 EasyOCR（中文 ch_sim + en），docling 运行时要它，必须显式装
+easyocr
 
 # PDF 导出（无头 Chromium 打印 HTML）
 playwright

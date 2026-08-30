@@ -177,12 +177,43 @@ def _unwrap(resp: httpx.Response, context: str) -> dict:
     return body.get("data") or {}
 
 
+async def _request_retry(
+    client: httpx.AsyncClient,
+    method: str,
+    url: str,
+    *,
+    attempts: int = 3,
+    **kwargs,
+) -> httpx.Response:
+    """对瞬时传输错误（TLS 握手失败 / 拒连 / 超时）做有限重试。
+
+    只重试「没拿到响应」的传输层错误；拿到 HTTP 状态码的错误（如 401/502）
+    不重试，交给 _unwrap 转成可读错误。MinerU 下载结果时偶发 TLS 握手被重置，
+    重连一次通常就能成功。
+    """
+    last_exc: httpx.TransportError | None = None
+    for i in range(attempts):
+        try:
+            return await client.request(method, url, **kwargs)
+        except httpx.TransportError as e:
+            last_exc = e
+            if i < attempts - 1:
+                logger.warning(
+                    "MinerU %s %s 传输失败（%s），重试 %d/%d",
+                    method, url, e, i + 1, attempts,
+                )
+                await asyncio.sleep(1 + i)
+    if last_exc is not None:
+        raise last_exc
+    raise httpx.ConnectError("MinerU 传输请求失败")
+
+
 async def _poll_result(client: httpx.AsyncClient, headers: dict, batch_id: str) -> dict:
     """轮询批量结果直到 done/failed，返回该文件的解析项。"""
     deadline = time.monotonic() + _POLL_TIMEOUT_S
     while True:
-        r = await client.get(
-            f"{_BASE}/extract-results/batch/{batch_id}", headers=headers
+        r = await _request_retry(
+            client, "GET", f"{_BASE}/extract-results/batch/{batch_id}", headers=headers
         )
         data = _unwrap(r, "查询结果")
         results = data.get("extract_result") or []
@@ -208,8 +239,8 @@ async def parse_with_mineru(
     }
     async with httpx.AsyncClient(timeout=60) as client:
         # 1. 申请上传链接
-        r = await client.post(
-            f"{_BASE}/file-urls/batch",
+        r = await _request_retry(
+            client, "POST", f"{_BASE}/file-urls/batch",
             headers=headers,
             json={
                 # data_id 是这条 MinerU 任务的业务关联键，直接用 agent 会话 id，
@@ -227,7 +258,7 @@ async def parse_with_mineru(
             )
 
         # 2. 上传文件（签名链接，不要 Content-Type）
-        up = await client.put(upload_urls[0], content=content)
+        up = await _request_retry(client, "PUT", upload_urls[0], content=content)
         if up.status_code != 200:
             raise HTTPException(
                 status_code=502, detail=f"MinerU 文件上传失败：HTTP {up.status_code}"
@@ -240,7 +271,7 @@ async def parse_with_mineru(
             raise HTTPException(status_code=502, detail="MinerU 结果缺少下载链接")
 
         # 5. 下载 zip，解出 full.md
-        zr = await client.get(zip_url)
+        zr = await _request_retry(client, "GET", zip_url)
         if zr.status_code != 200:
             raise HTTPException(
                 status_code=502,
@@ -306,7 +337,16 @@ async def parse_resume_document(
         if not mineru_token:
             store.fail_step(Step.PARSE, "使用 MinerU 需填写 Token")
             raise HTTPException(status_code=400, detail="使用 MinerU 需填写 Token")
-        markdown = await parse_with_mineru(content, filename, mineru_token, session_id)
+        try:
+            markdown = await parse_with_mineru(content, filename, mineru_token, session_id)
+        except httpx.HTTPError as e:
+            # 传输层错误（DNS / TLS 握手 / 超时 / 拒连）会直接抛 httpx 异常，
+            # 这里转成可读中文，让前端能看到是「连不上 MinerU」而不是裸 500。
+            store.fail_step(Step.PARSE, "MinerU 连接失败")
+            raise HTTPException(
+                status_code=502,
+                detail=f"MinerU 连接失败（{e.__class__.__name__}）：{e}",
+            )
     else:
         # docling 按文字层选路径：电子版（PDF 有文字层 / Word）→ 快速直抽零 OCR；
         # 扫描/图片型 PDF → OCR 管线（渲染→版面分析→OCR→TableFormer）。

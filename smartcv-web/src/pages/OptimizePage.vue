@@ -69,6 +69,7 @@ import { exportResumePdf } from '@/api/pdf'
 import type { Section } from '@/types'
 import { downloadJson } from '@/utils/download'
 import { message } from '@/utils/feedback'
+import { getAgentSessionId, resetAgentSessionId } from '@/api/session'
 
 const resumeStore = useResumeStore()
 const optimizeStore = useOptimizeStore()
@@ -165,9 +166,15 @@ async function onSend() {
   chatListEl.value?.scrollTo({ top: chatListEl.value.scrollHeight, behavior: 'smooth' })
 }
 
-function onClearChat() {
+/** 当前会话 id（展示用；「新建会话」重置后同步更新） */
+const sessionId = ref(getAgentSessionId())
+const shortSessionId = computed(() => sessionId.value.slice(0, 8))
+
+/** 清空对话 + 新建一个会话 id：诊断 / 优化 / 摘要等 agent 共用，后端按它隔离会话 */
+function onNewConversation() {
   optimizeStore.clearMessages()
-  message.success('对话已清空')
+  sessionId.value = resetAgentSessionId()
+  message.success('已清空会话，并新建会话 id')
 }
 </script>
 
@@ -285,13 +292,20 @@ function onClearChat() {
       <!-- 对话栏 -->
       <div class="chat-header">
         <span class="panel-title">💬 简历修改对话</span>
+        <span class="panel-spacer" />
+        <span
+          class="session-id"
+          :title="`会话 id：${sessionId}（诊断 / 优化 / 摘要等 agent 共用）`"
+        >
+          会话 {{ shortSessionId }}
+        </span>
         <n-button
-          v-if="optimizeStore.messages.length > 0"
           size="tiny"
           quaternary
-          @click="onClearChat"
+          :disabled="optimizeStore.sending"
+          @click="onNewConversation"
         >
-          清空对话
+          新建会话
         </n-button>
       </div>
 
@@ -549,6 +563,13 @@ function onClearChat() {
   justify-content: space-between;
   padding: 10px 16px;
   border-bottom: 1px solid #f0f1f4;
+}
+.session-id {
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: #94a3b8;
+  white-space: nowrap;
+  cursor: help;
 }
 
 .chat-list {

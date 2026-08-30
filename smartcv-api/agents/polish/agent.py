@@ -36,7 +36,6 @@ def run_polish_agent(
         model=llm,
         tools=[],
         response_format=PolishedItems,
-        debug=True,
     )
     result = agent.invoke(
         {

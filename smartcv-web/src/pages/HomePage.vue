@@ -185,6 +185,10 @@ function onNew() {
       @positive-click="confirmImport"
     >
       <div class="import-dialog-body">
+        <p class="import-tip">
+          💡 目前 AI 识别还不够准，解析结果可能出错。若要用解析，建议优先选
+          MinerU；最稳的方式是直接「新建」手动搭建简历。
+        </p>
         <div class="import-dialog-row">
           <span class="import-dialog-label">解析引擎</span>
           <n-radio-group v-model:value="parser" size="small">
@@ -312,6 +316,16 @@ function onNew() {
   flex-direction: column;
   gap: 14px;
   padding-top: 4px;
+}
+.import-tip {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #b45309;
+  background: #fef3c7;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  padding: 8px 10px;
 }
 .import-dialog-row {
   display: flex;

@@ -19,6 +19,13 @@ export function getAgentSessionId(): string {
   return id
 }
 
+/** 生成并保存一个新的 agent 会话 id（清空旧会话，开始一段新会话，返回新 id）。 */
+export function resetAgentSessionId(): string {
+  const id = uuidv7()
+  localStorage.setItem(STORAGE_KEY, id)
+  return id
+}
+
 /** 附带 agent 会话 id 的请求头。 */
 export function agentSessionHeaders(): Record<string, string> {
   return { [SESSION_HEADER]: getAgentSessionId() }

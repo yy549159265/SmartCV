@@ -34,7 +34,7 @@
 
 ## ✨ 功能特性
 
-- **🗂 导入解析** — 上传 PDF / Word，docling 解析成结构化简历 JSON（章节/窗口/内容层级），进度可轮询。
+- **🗂 导入解析** — 上传 PDF / Word，MinerU 云解析成结构化简历 JSON（章节/窗口/内容层级），进度可轮询。
 - **🖌 可视化编辑** — 组件库拖拽排布（7 种内容类型 + 命名预设），右侧实时预览 A4 成品，红线分页。
 - **🤖 AI 优化对话** — SSE 流式。诊断 → 按坐标就地改 JSON → 摘要，全程展示「思考过程 / 工具调用 / 回答」。
   - **按坐标改**：`patch_content(s, r, c, i, text)` 只替换文字、不增删结构，排版永远不乱。
@@ -49,7 +49,7 @@
 | 后端 | FastAPI · Pydantic · LangGraph · LangChain（OpenAI 兼容 / DeepSeek） |
 | Agent | 多 Agent：解析（md2json）、诊断、优化、摘要、润色 |
 | 持久化 | SQLite checkpoint（LangGraph）· SSE · UUID7 会话 id |
-| 派生服务 | docling（PDF 解析）· Playwright（HTML→PDF） |
+| 派生服务 | MinerU（PDF 解析）· Playwright（HTML→PDF） |
 
 ## 📁 目录结构
 
@@ -98,8 +98,6 @@ npm install
 npm run dev                                   # http://localhost:5173，/api 自动代理到 8600
 ```
 
-> 若后端机器连不上 huggingface.co，`main.py` 已默认把 `HF_ENDPOINT` 指到 `https://hf-mirror.com` 下载 docling 模型。
-
 ## 🐳 Docker 部署
 
 ### 方式一：直接本地使用（拉镜像）
@@ -137,16 +135,15 @@ docker push <你的仓库地址>/镜像名称:版本号
 
 ### 为什么后端镜像特别大
 
-后端镜像显著大于前端，主要因为几个**重依赖**被一起打进了镜像：
+后端镜像显著大于前端，主要因为**重依赖**被一起打进了镜像：
 
-- **docling（PDF 解析）**：会自动拉入 `torch`、`transformers`、`opencv` 等深度学习库，光 torch 就上百 MB 级，是整个镜像最大的部分。
-- **Playwright 无头 Chromium**：导出 PDF 用，`playwright install chromium` 会额外下载一个完整浏览器（数百 MB）。
-- **docling 的模型**：首次解析时还要从 HF 镜像（`hf-mirror.com`，见 `main.py` 的 `HF_ENDPOINT`）在线下载模型，这部分**不进镜像**，是首次运行时才拉的（所以首次解析慢）。
+- **Playwright 无头 Chromium**：导出 PDF 用，`playwright install chromium` 会额外下载一个完整浏览器并安装其系统库（数百 MB），是整个镜像最大的部分。
+- **LangGraph / LangChain 生态**：FastAPI + langchain 全家桶（langgraph / langchain-openai 等）本身也占一两百 MB。
 
 另外提醒：
 
 - 检查点 sqlite 在容器内 `/app`，容器重建即重置（它本就每小时被清空，属临时态）。
-- 首次构建/拉取、首次解析都较慢，属正常；解析过一次后模型会缓存在容器/挂载卷里。
+- 首次构建 / 拉取较慢，属正常。
 
 ## 🖥️ 使用流程
 
@@ -162,7 +159,7 @@ SmartCV **不收集你的任何数据**：
 - **简历数据只存在你自己的浏览器本地**（localStorage，刷新 / 关闭页面都不丢）。没有账号系统，也没有云端存档、埋点或使用统计。
 - **后端不落库存档**：你上传的文档和简历内容只做「当前这次」的临时处理（解析 / 优化），处理完即用即丢；对话检查点数据每小时自动清理。
 - **只有你主动使用 AI 功能时，内容才会离开你的电脑**：
-  - **导入解析**：`docling` 是本地解析（不出本机）；`MinerU` 是云解析，会把文档发到 MinerU 服务。
+  - **导入解析**：使用 `MinerU` 云解析，会把文档上传到 MinerU 服务。
   - **AI 优化对话 / 润色**：简历内容会发送到你在「Agent 设置」里自己填写的模型服务商（如 DeepSeek / GLM / 通义等）。
 - **API Key 只存在你自己的浏览器里**，仅用于你发起请求时调用你填写的服务商接口；后端不存储、也不用作任何其它用途。
 - **会话状态按「浏览器」隔离，而非按标签页**：SmartCV 用浏览器本地存储记录当前会话，同一个浏览器（同一站点）的所有标签页共用同一个会话标记，且不会随新开标签页 / 窗口而变化。因此：

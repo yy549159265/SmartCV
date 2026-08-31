@@ -1,7 +1,8 @@
 """导出统计：PDF / JSON 导出次数，存 JSON 文件，跨容器重建保留。
 
-文件路径默认容器内 /app/data/stats.json（对应 compose 挂载 /opt/smartcv/stats），
-开发机落 smartcv-api/data/stats.json；可用环境变量 SMARTCV_STATS_FILE 覆盖。
+写路径优先级：环境变量 SMARTCV_STATS_FILE > 容器内固定 /app/data/stats.json
+（对应 compose 挂载 /opt/smartcv/stats，与 stats.py 放在主目录还是 services/ 无关）
+> 开发机 smartcv-api/data/stats.json。
 写入用线程锁 + 临时文件原子替换，避免并发请求把文件写坏。
 """
 
@@ -10,9 +11,19 @@ import os
 import threading
 from pathlib import Path
 
-_STATS_FILE = Path(
-    os.environ.get("SMARTCV_STATS_FILE", Path(__file__).resolve().parent / "data" / "stats.json")
-)
+
+def _default_stats_file() -> Path:
+    env = os.environ.get("SMARTCV_STATS_FILE")
+    if env:
+        return Path(env)
+    if Path("/.dockerenv").exists():
+        # 容器内固定写挂载点，不随 __file__ 位置漂移
+        return Path("/app/data/stats.json")
+    # 开发机：仓库根 smartcv-api/data/stats.json（stats.py 在 services/ 下，向上两级）
+    return Path(__file__).resolve().parent.parent / "data" / "stats.json"
+
+
+_STATS_FILE = _default_stats_file()
 _lock = threading.Lock()
 
 

@@ -13,7 +13,7 @@ FROM python:3.12-slim
 
 # OpenCV 运行库 + curl（docling 用）；不装 gcc（大部分包已有轮子）。
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libgl1 libglib2.0-0 fonts-liberation curl \
+    && apt-get install -y --no-install-recommends fonts-liberation curl \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

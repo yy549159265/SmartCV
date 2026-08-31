@@ -229,7 +229,7 @@ class StatsIncRequest(BaseModel):
 async def resume_parse(
     request: Request,
     file: UploadFile = File(...),
-    parser: str = Form("docling"),
+    parser: str = Form("mineru"),
     mineruToken: str = Form(""),
     provider: ProviderConfig = Depends(provider_config),
     session_id: str | None = Depends(get_agent_session),

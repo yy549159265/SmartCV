@@ -27,6 +27,9 @@ import { uid } from '@/utils/id'
 import { mergeStyle } from '@/utils/style'
 import type { PagePlan, PageUnit } from '@/utils/pagination'
 
+/** 撤销历史最多保留多少步（再多就丢最早的） */
+const MAX_HISTORY = 50
+
 /** 新建的"空白内容"默认内容（按类型给占位值） */
 const EMPTY_CONTENT_DATA: Record<Content['type'], Content['content']> = {
   iconText: { icon: '', text: '' },
@@ -313,6 +316,10 @@ export const useResumeStore = defineStore('resume', {
     pagePlan: { pages: [], pageStartOffsets: [], totalHeight: 0 } as PagePlan,
     /** 页面单元列表：标题和顶层行各自是一个"可裁切单元"，预览和导出按它渲染，页数才一致 */
     pageUnits: [] as PageUnit[],
+    /** 撤销栈：整份简历的深拷贝快照，栈顶是"最近一次改动前"的状态 */
+    undoStack: [] as Section[][],
+    /** 重做栈：被撤销掉的状态（出现新改动时清空） */
+    redoStack: [] as Section[][],
   }),
 
   getters: {
@@ -743,6 +750,40 @@ export const useResumeStore = defineStore('resume', {
       mergeStyle(content.style, patch.style)
       if (patch.tight === true) content.tight = true
       else if (patch.tight === false) delete content.tight
+    },
+
+    /* ==================== 撤销 / 重做 ==================== */
+
+    /**
+     * 把"当前这份简历"深拷贝压入撤销栈，作为一步可撤销的快照。
+     * 由 main.ts 的 $onAction 在每次改动前调用（结构操作每次一步；
+     * 文字编辑按字段分组，同字段连续输入只在开头调一次）。
+     * 出现新改动 = 旧的重做记录作废，清空 redoStack。
+     */
+    pushSnapshot() {
+      this.undoStack.push(JSON.parse(JSON.stringify(this.resume)))
+      if (this.undoStack.length > MAX_HISTORY) this.undoStack.shift()
+      this.redoStack = []
+    },
+
+    /** 撤销：弹回最近一步快照，当前状态压入重做栈（可重做） */
+    undo() {
+      const prev = this.undoStack.pop()
+      if (!prev) return
+      this.redoStack.push(JSON.parse(JSON.stringify(this.resume)))
+      if (this.redoStack.length > MAX_HISTORY) this.redoStack.shift()
+      this.resume.splice(0, this.resume.length, ...prev)
+      this.selectedId = null
+    },
+
+    /** 重做：恢复被撤销的一步 */
+    redo() {
+      const next = this.redoStack.pop()
+      if (!next) return
+      this.undoStack.push(JSON.parse(JSON.stringify(this.resume)))
+      if (this.undoStack.length > MAX_HISTORY) this.undoStack.shift()
+      this.resume.splice(0, this.resume.length, ...next)
+      this.selectedId = null
     },
 
     /* ==================== 分页 ==================== */

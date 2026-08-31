@@ -1,0 +1,424 @@
+[
+  {
+    "id": "b-mtgwnb2g-75-jftl",
+    "kind": "section",
+    "title": "",
+    "style": {
+      "fontSize": 15,
+      "gap": 10,
+      "lineHeight": 1.5,
+      "spaceBefore": 0
+    },
+    "rows": [
+      {
+        "id": "b-mtgwnb2g-6v-aex1",
+        "layout": "vertical",
+        "contents": [
+          {
+            "id": "b-mtgwnb2g-6t-aoxs",
+            "kind": "content",
+            "type": "iconText",
+            "content": {
+              "icon": "",
+              "text": "张三"
+            },
+            "style": {
+              "fontSize": 45,
+              "textAlign": "center"
+            }
+          },
+          {
+            "id": "b-mtgwnb2g-6u-4r76",
+            "kind": "content",
+            "type": "iconText",
+            "content": {
+              "icon": "👤",
+              "text": "Agent开发 | 三年"
+            },
+            "style": {
+              "textAlign": "center"
+            }
+          }
+        ]
+      },
+      {
+        "id": "b-mtgwnb2g-74-ewcy",
+        "layout": "horizontal",
+        "contents": [],
+        "rows": [
+          {
+            "id": "b-mtgwnb2g-6x-qfur",
+            "layout": "vertical",
+            "contents": [
+              {
+                "id": "b-mtgwnb2g-6w-qbns",
+                "kind": "content",
+                "type": "iconText",
+                "content": {
+                  "icon": "📞",
+                  "text": "138-0000-0000"
+                },
+                "style": {
+                  "textAlign": "right"
+                }
+              }
+            ]
+          },
+          {
+            "id": "b-mtgwnb2g-6z-zvg2",
+            "layout": "vertical",
+            "contents": [
+              {
+                "id": "b-mtgwnb2g-6y-vxwl",
+                "kind": "content",
+                "type": "iconText",
+                "content": {
+                  "icon": "📍",
+                  "text": "上海 · 浦东"
+                },
+                "style": {
+                  "textAlign": "left"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "b-mtgwpdqz-7t-6nlg",
+        "layout": "horizontal",
+        "contents": [],
+        "rows": [
+          {
+            "id": "b-mtgwpdqz-7s-ne4r",
+            "layout": "vertical",
+            "contents": [
+              {
+                "id": "b-mtgwnb2g-70-zgj0",
+                "kind": "content",
+                "type": "iconText",
+                "content": {
+                  "icon": "✉️",
+                  "text": "zhangsan@example.com"
+                },
+                "style": {
+                  "textAlign": "right"
+                }
+              }
+            ]
+          },
+          {
+            "id": "b-mtgwplbp-7u-hmlb",
+            "layout": "vertical",
+            "contents": [
+              {
+                "id": "b-mtgwnb2g-72-7q9z",
+                "kind": "content",
+                "type": "iconText",
+                "content": {
+                  "icon": "<svg viewBox=\"0 0 24 24\" width=\"1em\" height=\"1em\" xmlns=\"http://www.w3.org/2000/svg\" fill=\"#181717\" aria-hidden=\"true\"><path d=\"M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12\"/></svg>",
+                  "text": " github.com/123456"
+                },
+                "style": {
+                  "textAlign": "left"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "b-mtgwnb2g-7b-8tks",
+    "kind": "section",
+    "title": "教育经历",
+    "style": {
+      "lineHeight": 1.5,
+      "gap": 0,
+      "spaceBefore": 0,
+      "fontSize": 15
+    },
+    "rows": [
+      {
+        "id": "b-mtgwnb2g-7a-xzff",
+        "layout": "horizontal",
+        "contents": [],
+        "rows": [
+          {
+            "id": "b-mtgwnb2g-77-gjzf",
+            "layout": "vertical",
+            "contents": [
+              {
+                "id": "b-mtgwnb2g-76-6mp4",
+                "kind": "content",
+                "type": "iconText",
+                "content": {
+                  "icon": "",
+                  "text": "XX大学",
+                  "tags": [
+                    "985",
+                    "211"
+                  ]
+                },
+                "style": {
+                  "lineHeight": 1.5
+                }
+              }
+            ]
+          },
+          {
+            "id": "b-mtgwnb2g-79-2rvu",
+            "layout": "vertical",
+            "contents": [
+              {
+                "id": "b-mtgwnb2g-78-fcys",
+                "kind": "content",
+                "type": "twoColumn",
+                "content": {
+                  "columns": [
+                    "本科",
+                    "软件工程",
+                    "2023.04 - 2025.04"
+                  ],
+                  "separator": "|"
+                },
+                "style": {
+                  "textAlign": "right"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "b-mtgwnb2g-7e-h6hm",
+    "kind": "section",
+    "title": "个人介绍",
+    "style": {
+      "lineHeight": 1.3,
+      "fontSize": 16,
+      "spaceBefore": 0
+    },
+    "rows": [
+      {
+        "id": "b-mtgwnb2g-7d-5dg6",
+        "layout": "vertical",
+        "contents": [
+          {
+            "id": "b-mtgwnb2g-7c-4cai",
+            "kind": "content",
+            "type": "iconText",
+            "content": {
+              "icon": "",
+              "text": ">3 年 Java 后端研发 + 近 1 年大模型 Agent 工程化落地经验。具备 Java (Spring Boot/WebFlux/Spring AI) + Python (FastAPI) + LangChain/LangGraph 双栈开发能力。主导企业级智能 Agent 应用从 0 到 1 研发与上线，精通单 Agent + 多 Skill 路由架构，贯通 RAG 混合检索、多级记忆体系、动态工具挂载与安全沙箱全链路设计。自研 5 级上下文压缩策略与分层记忆体系，在保留推理逻辑完整性的前提下显著降低 token 成本、抑制幻觉。熟悉 MCP 生态及标准协议接入，擅长模型网关式多模型分工调度，具备端到端复杂任务自动化解决能力。"
+            },
+            "style": {}
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "b-mtgwnb2g-7h-afpj",
+    "kind": "section",
+    "title": "职业技能",
+    "style": {
+      "fontSize": 16,
+      "lineHeight": 1.2,
+      "textAlign": "left",
+      "gap": 0,
+      "spaceBefore": 0
+    },
+    "rows": [
+      {
+        "id": "b-mtgwnb2g-7g-k7eq",
+        "layout": "vertical",
+        "contents": [
+          {
+            "id": "b-mtgwnb2g-7f-0kuf",
+            "kind": "content",
+            "type": "listText",
+            "content": {
+              "listType": "bullet",
+              "items": [
+                {
+                  "text": "AI / LLM 专项",
+                  "indent": 0
+                },
+                {
+                  "text": "Agent 编排：LangChain 1.x（create_agent）、AgentScope、ReAct / Plan-and-Execute 规划范式、多 Agent 模式、动态工具挂载与渐进式披露",
+                  "indent": 1
+                },
+                {
+                  "text": "RAG 检索增强：文本切块策略、Embedding 模型选型、混合检索（向量+全文）、Rerank 重排序、Milvus 向量数据库",
+                  "indent": 1
+                },
+                {
+                  "text": "记忆与上下文工程：上下文压缩、短期记忆（Checkpoint 会话持久化）、长期记忆（向量库 + 关系库混合存储与溯源）、长短期记忆冲突消解、记忆溯源",
+                  "indent": 1
+                },
+                {
+                  "text": "模型与推理：Transformer / KV Cache / vLLm部署（了解）、LoRA（LLaMA Factory）",
+                  "indent": 1
+                },
+                {
+                  "text": "评测与可观测：Golden Set 评测集、LLM-as-Judge 自动评估、LangFuse 部署与链路追踪、回归测试、语义缓存",
+                  "indent": 1
+                },
+                {
+                  "text": "安全与沙箱：Prompt Injection 防护、安全沙箱、工具鉴权、用户目录隔离、敏感数据脱敏",
+                  "indent": 1
+                },
+                {
+                  "text": "Agent 协议：MCP（FastMCP Server / Claude Code 集成）、A2A 概念与选型对比",
+                  "indent": 1
+                },
+                {
+                  "text": "工程底座",
+                  "indent": 0
+                },
+                {
+                  "text": " Java 核心与微服务：JUC/AQS/线程池、JVM 调优与 OOM 排查、Spring Boot/Cloud、Nacos、Seata、Redisson",
+                  "indent": 1
+                },
+                {
+                  "text": "数据与中间件：MySQL（调优/分库分表/MVCC）、Redis 缓存架构（穿透/雪崩/击穿）、RocketMQ/Kafka 消息可靠性",
+                  "indent": 1
+                },
+                {
+                  "text": "云原生与 DevOps：Linux 性能诊断、Docker/K8s 生产运维、CI/CD 流水线深度调优、华为云生态",
+                  "indent": 1
+                }
+              ]
+            },
+            "style": {}
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "b-mtgwnb2g-7r-vdx6",
+    "kind": "section",
+    "title": "工作经历",
+    "style": {
+      "gap": 4
+    },
+    "rows": [
+      {
+        "id": "b-mtgwnb2g-7m-sont",
+        "layout": "horizontal",
+        "contents": [],
+        "rows": [
+          {
+            "id": "b-mtgwnb2g-7j-upvv",
+            "layout": "vertical",
+            "contents": [
+              {
+                "id": "b-mtgwnb2g-7i-eqki",
+                "kind": "content",
+                "type": "twoColumn",
+                "content": {
+                  "columns": [
+                    "XX公司",
+                    "Web开发"
+                  ],
+                  "separator": "|"
+                },
+                "style": {}
+              }
+            ]
+          },
+          {
+            "id": "b-mtgwnb2g-7l-jni7",
+            "layout": "vertical",
+            "contents": [
+              {
+                "id": "b-mtgwnb2g-7k-rp3a",
+                "kind": "content",
+                "type": "timeRange",
+                "content": {
+                  "start": "2022.07",
+                  "end": "至今"
+                },
+                "style": {
+                  "textAlign": "right"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "b-mtgwnb2g-7q-oy43",
+        "layout": "vertical",
+        "contents": [
+          {
+            "id": "b-mtgwnb2g-7n-jdto",
+            "kind": "content",
+            "type": "tag",
+            "content": {
+              "tags": [
+                "Spring",
+                "Mysql",
+                "Redis"
+              ]
+            },
+            "style": {
+              "textAlign": "left"
+            }
+          },
+          {
+            "id": "b-mtgwnb2g-7o-or7e",
+            "kind": "content",
+            "type": "iconText",
+            "content": {
+              "icon": "",
+              "text": "公司原有办公系统分散、信息孤岛严重，跨部门协作依赖线下沟通和纸质审批，流程效率低、数据难以沉淀。为提升运营管理效率、推进数字化转型，公司立项建设智慧企业综合管理平台，整合OA、人事、财务、项目管理等核心业务系统。"
+            },
+            "style": {}
+          },
+          {
+            "id": "b-mtgwnb2g-7p-j2rr",
+            "kind": "content",
+            "type": "listText",
+            "content": {
+              "listType": "bullet",
+              "items": [
+                {
+                  "text": "需求调研与分析：主导前期业务调研工作，深入走访行政、人力、财务、采购等8个核心部门，通过一对一访谈、问卷调研、流程跟岗等方式收集原始需求120余条；组织跨部门需求评审会议10余场，梳理并标准化业务流程20余条，输出《需求规格说明书》《业务流程图》等文档，为后续开发奠定坚实基础。",
+                  "indent": 0
+                },
+                {
+                  "text": "系统架构设计：参与平台整体架构设计与技术选型工作，对比评估多套技术方案的优劣，最终确定前后端分离的微服务架构方案；参与制定数据库设计规范、接口设计规范和代码规范，完成核心业务模块的数据库表结构设计与ER图绘制，确保系统具备良好的扩展性和可维护性。",
+                  "indent": 0
+                },
+                {
+                  "text": "核心模块开发：负责流程审批引擎和协同办公模块的开发工作，基于工作流引擎实现请假、报销、采购、用章等30余条线上审批流程的可视化配置；开发公告发布、文档管理、会议管理等子功能20余项，累计编写代码3万余行，按时保质完成开发任务。",
+                  "indent": 0
+                },
+                {
+                  "text": "系统集成与对接：负责与第三方系统的集成对接工作，编写标准化接口文档40余份，完成与企业微信、财务系统、考勤设备的接口联调；设计统一身份认证（SSO）方案，解决多系统间账号互通、数据同步与权限统一等关键问题，打通数据孤岛。",
+                  "indent": 0
+                },
+                {
+                  "text": "测试与质量保障：组织功能测试、集成测试与性能压测工作，编写测试用例300余条；建立缺陷跟踪机制，对发现的100余个缺陷进行分级管理和闭环处理；针对高并发场景进行性能优化，将核心页面响应时间控制在500毫秒以内，保障系统平稳上线。",
+                  "indent": 0
+                },
+                {
+                  "text": "上线推广与运维：牵头用户培训工作，制作操作手册和培训视频，开展线下培训8场次，覆盖员工500余人；建立试点反馈快速响应机制，上线后一个月内收集优化建议60余条并完成迭代；制定系统运维应急预案，7×24小时监控系统运行状态，系统可用性达到99.9%。",
+                  "indent": 0
+                }
+              ]
+            },
+            "style": {}
+          }
+        ]
+      }
+    ],
+    "pageBreakBefore": true
+  }
+]

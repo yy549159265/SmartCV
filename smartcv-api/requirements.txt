@@ -1,31 +1,34 @@
 # SmartCV 后端依赖
 # 说明：docling（PDF 解析）会连带安装 torch/transformers/opencv 等大型包，镜像较大、首次拉取较慢。
-# 模型：docling 首次解析会自动从 HF 下载模型（main.py 里已把 HF_ENDPOINT 指到 hf-mirror 国内镜像）。
+# 版本：全部锁定为当前开发机（.venv）实际跑通并已下载好 docling 模型的版本。
+#       尤其 docling==2.123.0 不能动——docling-models/ 里的模型文件夹名就是它生成的，
+#       升级 docling 后模型名对不上，会离线找不到模型直接报错。
+# 模型：docling 完全离线读 docling-models/（HF_ENDPOINT 等镜像配置只在 Dockerfile，见那里）。
 
 # Web 框架
-fastapi
-uvicorn[standard]
-python-multipart
-pydantic
-cachetools
+fastapi==0.141.1
+uvicorn[standard]==0.52.4
+python-multipart==0.0.32
+pydantic==2.13.4
+cachetools==7.1.7
 
 # LLM 框架（LangGraph 编排多 Agent）
-langchain
-langchain-core
-langchain-openai
-langgraph
-langgraph-checkpoint-sqlite
-aiosqlite
+langchain==1.3.15
+langchain-core==1.6.0
+langchain-openai==1.6.0
+langgraph==1.2.11
+langgraph-checkpoint-sqlite==3.1.1
+aiosqlite==0.22.1
 
 # 供应商/技能模块
-pyyaml
-httpx
+pyyaml==6.0.3
+httpx==0.28.1
 
-# PDF 解析（docling / pypdfium2）
-docling
-pypdfium2
-# OCR 引擎：扫描件路径用 EasyOCR（中文 ch_sim + en），docling 运行时要它，必须显式装
-easyocr
+## PDF 解析（docling / pypdfium2）
+#docling==2.123.0
+#pypdfium2==5.13.0
+## OCR 引擎：扫描件路径用 EasyOCR（中文 ch_sim + en），docling 运行时要它，必须显式装
+#easyocr==1.7.2
 
 # PDF 导出（无头 Chromium 打印 HTML）
-playwright
+playwright==1.62.0

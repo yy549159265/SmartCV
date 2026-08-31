@@ -30,8 +30,8 @@ const hasResume = () => store.resume.length > 0
 const docInputEl = ref<HTMLInputElement | null>(null)
 /** 导入对话框：点「导入 PDF / Word」先在这里选解析引擎，再选文件 */
 const showImportDialog = ref(false)
-/** 默认 docling（本地解析）；mineru 走云 API */
-const parser = ref<'docling' | 'mineru'>('docling')
+/** 默认 mineru（云解析）；docling 本地解析太耗服务器资源，前端已停用 */
+const parser = ref<'docling' | 'mineru'>('mineru')
 /** MinerU token，useStorage 记忆到 localStorage，下次免填 */
 const mineruToken = useStorage('smartcv-mineru-token', '')
 
@@ -197,16 +197,16 @@ function onNew() {
     >
       <div class="import-dialog-body">
         <p class="import-tip">
-          💡 目前 AI 识别还不够准，解析结果可能出错。若要用解析，建议优先选
-          MinerU；最稳的方式是直接「新建」手动搭建简历。
+          💡 目前 AI 识别还不够准，解析结果可能出错；最稳的方式是直接「新建」手动搭建简历。
         </p>
         <div class="import-dialog-row">
           <span class="import-dialog-label">解析引擎</span>
           <n-radio-group v-model:value="parser" size="small">
-            <n-radio-button value="docling">docling（本地解析）</n-radio-button>
             <n-radio-button value="mineru">MinerU（云解析）</n-radio-button>
+            <n-radio-button value="docling" disabled>docling（本地解析）</n-radio-button>
           </n-radio-group>
         </div>
+        <p class="import-docling-note">⚠️ docling 本地解析太耗服务器资源，已停用，请用 MinerU 云解析</p>
         <n-input
           v-if="parser === 'mineru'"
           v-model:value="mineruToken"
@@ -249,9 +249,6 @@ function onNew() {
         <div class="progress-actions">
           <n-button size="small" @click="onCancelParse">取消</n-button>
         </div>
-        <p v-if="parser === 'docling'" class="progress-advice">
-          建议使用 MinerU 以及更强的推理模型加速解析
-        </p>
       </div>
     </n-modal>
 
@@ -354,6 +351,11 @@ function onNew() {
   font-size: 13px;
   color: #374151;
 }
+.import-docling-note {
+  margin: 0;
+  font-size: 12px;
+  color: #9ca3af;
+}
 .home-card {
   display: flex;
   flex-direction: column;
@@ -445,12 +447,6 @@ function onNew() {
 .progress-actions {
   display: flex;
   justify-content: flex-end;
-}
-.progress-advice {
-  margin: 0;
-  font-size: 12px;
-  color: #9ca3af;
-  line-height: 1.5;
 }
 
 .hidden-input {

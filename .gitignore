@@ -32,3 +32,4 @@ smartcv-api/chat_checkpoints.sqlite-*
 # docker compose 本地环境变量（Windows 测试时覆盖 SMARTCV_STATS_DIR 等）
 .env
 smartcv-data/stats.json
+docling-models

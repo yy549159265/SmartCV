@@ -10,21 +10,7 @@ SmartCV 后端 —— FastAPI 应用（所有接口写在一个文件）
       （8000 在 Windows 的 Hyper-V/WSL 预留端口段里，bind 会失败，用 8600）
 也可以直接跑本文件（PyCharm 调试用）：python main.py
 """
-# 必须放在所有 import 之前：huggingface_hub 在 import 时就把这些读死了，
-# 放后面（docling → huggingface_hub 已导入）就来不及了，会仍连 huggingface.co。
-# 1) HF_ENDPOINT：国内连不上 huggingface.co，用 hf-mirror 镜像下载 docling 模型。
-# 2) HF_HUB_DISABLE_XET：大文件走 Xet 存储（独立域名 *.xethub.hf.co，镜像代理不了），
-#    会 401，关掉后退回普通 HTTP 下载，就能走镜像了。
-import os
-
 from agents.md2json.schemas.resume import Resume
-
-os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
-os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
-# docling 加载模型时 PyTorch 会打两类无害告警（量化接口将来弃用 / 无 GPU 时
-# pin_memory 无效），不是我们代码的问题；还有 transformers 的模型加载进度条。
-# 都在这里静音，避免污染服务日志。要放在 import docling 之前。
-os.environ.setdefault("TQDM_DISABLE", "1")  # 关掉 "Loading weights" 进度条
 
 import warnings
 

@@ -7,11 +7,6 @@
 services:
   backend:
     image: registry.cn-hangzhou.aliyuncs.com/smartcv/smartcv-backend:v1
-    environment:
-      HF_ENDPOINT: https://hf-mirror.com
-      HF_HUB_DISABLE_XET: "1"
-      # 统计文件固定写到挂载目标 /app/data，不依赖镜像里应用根目录是 /app 还是 /app/services
-      SMARTCV_STATS_FILE: /app/data/stats.json
     ports:
       - "8600:8600"
     volumes:

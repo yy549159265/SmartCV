@@ -13,6 +13,7 @@ import { nextTick, ref, computed } from 'vue'
 import PreviewSection from '@/components/PreviewSection.vue'
 import { useResumeStore } from '@/stores/resume'
 import { useOptimizeStore, type ChatItem, type ChatStep } from '@/stores/optimize'
+import { useStatsStore } from '@/stores/stats'
 
 /** 各 agent 生命周期的友好文案：running（进行中）/ done（完成） */
 const AGENT_STATUS: Record<string, { running: string; done: string }> = {
@@ -73,6 +74,7 @@ import { getAgentSessionId, resetAgentSessionId } from '@/api/session'
 
 const resumeStore = useResumeStore()
 const optimizeStore = useOptimizeStore()
+const statsStore = useStatsStore()
 
 /* ---------- 隐藏测量层：和预览同款，算出与预览一致的分页方案 ---------- */
 const measureFlowEl = ref<HTMLElement | null>(null)
@@ -105,9 +107,10 @@ const pageStyle = computed(() => ({
 
 /* ---------- 导出 ---------- */
 
-/** 导出 JSON：下载当前简历数据文件 */
+/** 导出 JSON：下载当前简历数据文件（下载成功后计数 +1） */
 function onExportJson() {
   downloadJson(resumeStore.resume, 'smartcv-resume.json')
+  statsStore.inc('json')
 }
 
 /** 是否正在导出 PDF（按钮转圈，防止重复点击） */
@@ -139,6 +142,7 @@ async function onExportPdf() {
     }
 
     await exportResumePdf(exportFlowEl.value)
+    await statsStore.inc('pdf')
     message.success('PDF 已导出（后端生成，与预览一致）')
   } catch (err) {
     console.error(err)

@@ -7,6 +7,7 @@
  * 所有页面读写同一个 Pinia store（stores/resume.ts）—— 单一数据源。
  */
 import { ref } from 'vue'
+import { siGithub } from 'simple-icons'
 import HomePage from '@/pages/HomePage.vue'
 import EditorPage from '@/pages/EditorPage.vue'
 import OptimizePage from '@/pages/OptimizePage.vue'
@@ -14,8 +15,12 @@ import ProviderSettingsPage from '@/pages/ProviderSettingsPage.vue'
 import { useResumeStore } from '@/stores/resume'
 import { useClickPopover } from '@/composables/useClickPopover'
 import { message } from '@/utils/feedback'
+import { brandSvg } from '@/data/icons'
 
 const store = useResumeStore()
+
+/** GitHub 仓库跳转图标（头部右侧，新标签打开） */
+const githubSvg = brandSvg(siGithub)
 
 /** 清空确认弹层（受控，点外部自动关闭） */
 const { show: clearConfirmShow, triggerRef: clearTriggerRef } = useClickPopover()
@@ -65,6 +70,14 @@ function onSave() {
       </nav>
 
       <div class="header-actions">
+        <a
+          class="github-link"
+          href="https://github.com/yy549159265/SmartCV"
+          target="_blank"
+          rel="noopener"
+          title="GitHub 仓库"
+          v-html="githubSvg"
+        />
         <n-button size="small" quaternary @click="onSave">保存</n-button>
         <n-popconfirm
           v-model:show="clearConfirmShow"
@@ -161,5 +174,18 @@ function onSave() {
 /* 触发器包装：给 ref 一个原生元素（n-button 的实例没有 contains） */
 .trigger-wrap {
   display: inline-flex;
+}
+/* GitHub 跳转图标：内联 SVG 1.1em，hover 加深，去掉链接下划线 */
+.github-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 6px;
+  color: #6b7280;
+  text-decoration: none;
+  font-size: 1.1em;
+  transition: color 0.2s;
+}
+.github-link:hover {
+  color: #24292f;
 }
 </style>

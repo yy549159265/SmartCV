@@ -30,7 +30,7 @@ export interface IconGroup {
 /* ---------- 品牌 logo：把 simple-icons 的路径拼成内联 SVG ---------- */
 
 /** 单个品牌图标 → 内联 SVG 字符串（填官方品牌色，24×24 视口，1em 大小随字号缩放） */
-function brandSvg(icon: { path: string; hex: string }): string {
+export function brandSvg(icon: { path: string; hex: string }): string {
   // 注意：必须写死 width/height（1em），否则 SVG 在 v-html / flex 布局里会被算成 0×0（空白）
   return `<svg viewBox="0 0 24 24" width="1em" height="1em" xmlns="http://www.w3.org/2000/svg" fill="#${icon.hex}" aria-hidden="true"><path d="${icon.path}"/></svg>`
 }

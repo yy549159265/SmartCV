@@ -12,6 +12,12 @@ services:
       HF_HUB_DISABLE_XET: "1"
     ports:
       - "8600:8600"
+    volumes:
+      # 导出统计文件（/app/data/stats.json）持久化到宿主机，重建容器不丢。
+      # 宿主机路径用环境变量 SMARTCV_STATS_DIR 覆盖：
+      #   Linux 生产：不设，默认 /opt/smartcv/stats
+      #   Windows 本机测试：仓库根目录建 .env 写 SMARTCV_STATS_DIR=./smartcv-data
+      - ${SMARTCV_STATS_DIR:-/opt/smartcv/stats}:/app/data
     healthcheck:
       # 纯 TCP 拨号检测：端口能连上即认为就绪（uvicorn 已监听）
       test: ["CMD", "python", "-c", "import socket,sys; s=socket.socket(); s.settimeout(3); s.connect(('127.0.0.1',8600)); s.close()"]

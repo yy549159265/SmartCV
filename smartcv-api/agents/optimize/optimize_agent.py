@@ -54,7 +54,7 @@ async def run(
     async for item in agent.astream(
         {"messages": [{"type": "system", "content": _SYSTEM_PROMPT}, {"type": "human", "content": message}]},
         stream_mode=["messages", "custom"],
-        config={"recursion_limit": 40, "configurable": {"session_id": session_id}},
+        config={"recursion_limit": 20, "configurable": {"session_id": session_id}},
     ):
         if not isinstance(item, tuple):
             continue

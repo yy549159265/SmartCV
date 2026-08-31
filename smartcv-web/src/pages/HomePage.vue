@@ -7,13 +7,20 @@
  *   3. 新建 —— 空白简历。
  * 任一种完成后 emit('enter')，由 App.vue 切到编辑页展示/编辑。
  */
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useStorage } from '@vueuse/core'
 import { useResumeStore } from '@/stores/resume'
+import { useStatsStore } from '@/stores/stats'
 import { parseResumeFile, type ParseProgress, type ParseStep } from '@/api/document'
 import { message } from '@/utils/feedback'
 
 const store = useResumeStore()
+const statsStore = useStatsStore()
+
+/** 打开主页时拉一次导出统计（失败静默，不打扰） */
+onMounted(() => {
+  statsStore.load()
+})
 const emit = defineEmits<{ enter: [] }>()
 
 /** 当前是否已有简历（用于提示可直接继续编辑） */
@@ -171,7 +178,11 @@ function onNew() {
     </div>
 
     <p class="home-privacy">
-      🔒 你的简历只存在本机浏览器里，不收集任何数据；仅在使用 AI 功能时，内容才会发送到你配置的模型服务商
+      🔒 你的简历只存在本机浏览器里，不收集任何数据；仅在使用 AI 功能时，内容才会发送到你配置的模型服务商（仅匿名统计导出次数，不涉及简历内容）
+    </p>
+
+    <p class="home-stats">
+      📊 已导出 PDF {{ statsStore.pdf }} 次 · JSON {{ statsStore.json }} 次
     </p>
 
     <!-- 导入 PDF / Word 对话框：选解析引擎 → 选文件 -->
@@ -302,6 +313,12 @@ function onNew() {
   text-align: center;
   line-height: 1.6;
   max-width: 460px;
+}
+.home-stats {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: #b8bcc4;
+  text-align: center;
 }
 
 .home-cards {

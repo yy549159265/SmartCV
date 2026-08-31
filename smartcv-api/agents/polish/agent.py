@@ -45,7 +45,7 @@ def run_polish_agent(
             ]
         },
         # session_id 通过 configurable 传给 agent，同一会话的多次调用才能串成一条会话
-        config={"recursion_limit": 20, "configurable": {"session_id": session_id}},
+        config={"recursion_limit": 5, "configurable": {"session_id": session_id}},
     )
 
     items = _to_items(result.get("structured_response"))

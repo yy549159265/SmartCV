@@ -41,6 +41,7 @@ import logging
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Literal
 from uuid import UUID
 
 # 开启致命错误转储：docling 里是 C++/PyTorch/OpenCV 原生代码，万一访问违规
@@ -68,6 +69,7 @@ from agents.polish.agent import run_polish_agent
 from schemas.provider import ProviderConfig, provider_config
 from schemas.response import error, ok
 from services.pdf2json import parse_resume_document
+from services.stats import increment_stats, load_stats
 from services.html2pdf import close_browser, resume_html_to_pdf
 
 
@@ -228,6 +230,10 @@ class PdfRequest(BaseModel):
     html: str
 
 
+class StatsIncRequest(BaseModel):
+    kind: Literal["pdf", "json"]
+
+
 
 
 # ---------- 接口 ----------
@@ -347,6 +353,21 @@ def _agent_md_payload() -> dict:
 async def agent_md():
     """返回后端 agent 用到的提示词与技能 md，前端分组展示，只读不可改。"""
     return ok(_agent_md_payload())
+
+
+# ---------- /api/stats：导出统计（PDF / JSON 次数，存后端文件） ----------
+
+
+@app.get("/api/stats")
+async def stats_get():
+    """读取累计导出次数：{pdf, json}。"""
+    return ok(await asyncio.to_thread(load_stats))
+
+
+@app.post("/api/stats/inc")
+async def stats_inc(req: StatsIncRequest):
+    """对应类型导出计数 +1，返回最新 {pdf, json}。"""
+    return ok(await asyncio.to_thread(increment_stats, req.kind))
 
 
 # ---------- /api/chat：优化对话（SSE 流式） ----------

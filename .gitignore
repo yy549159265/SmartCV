@@ -29,3 +29,6 @@ npm-debug.log*
 # chat 流水线的 LangGraph sqlite 检查点（含 -wal/-shm/-sh 伴生文件）
 smartcv-api/chat_checkpoints.sqlite
 smartcv-api/chat_checkpoints.sqlite-*
+# docker compose 本地环境变量（Windows 测试时覆盖 SMARTCV_STATS_DIR 等）
+.env
+smartcv-data/stats.json

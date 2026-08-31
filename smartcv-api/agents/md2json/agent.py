@@ -50,7 +50,7 @@ def run_resume_agent(
         # session_id 通过 configurable 传给 agent，同一会话的多次调用才能串成一条会话；
         # recursion_limit 放宽：整理 + 工具构造一轮 = 模型 + 工具两个节点，加技能加载与重试
         config={
-            "recursion_limit": 5,
+            "recursion_limit": 20,
             "configurable": {"session_id": session_id},
         },
     )

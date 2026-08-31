@@ -32,13 +32,11 @@ ENV HF_ENDPOINT=https://hf-mirror.com \
 
 # 后端代码
 COPY . /app/
+RUN rm -rf /app/easyocr-models
 
 # EasyOCR 模型：直接 COPY 进镜像默认缓存路径（/root/.EasyOCR/model/），
-# 运行时跑 OCR 不再联网下载。模型文件就在项目 easyocr-models/ 目录里，
-# 方便其他人直接复用（不用再等 GitHub 慢慢下载）。
-# 注意：COPY . /app/ 会把 easyocr-models/ 也带进 /app/，下面删掉避免镜像重复。
 COPY easyocr-models/ /root/.EasyOCR/model/
-RUN rm -rf /app/easyocr-models
+
 
 EXPOSE 8600
 

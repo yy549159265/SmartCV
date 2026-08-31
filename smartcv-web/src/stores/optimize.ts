@@ -30,7 +30,7 @@ export type ChatItem =
   | { kind: 'user'; text: string }
   | { kind: 'error'; text: string }
   | { kind: 'status'; text: string; done: boolean }
-  | { kind: 'agent'; agent: string; label: string; text: string; thinking: string; steps: ChatStep[]; thinkingOpen: boolean; toolsOpen: boolean; status: 'running' | 'done' }
+  | { kind: 'agent'; agent: string; label: string; text: string; thinking: string; steps: ChatStep[]; thinkingOpen: boolean; toolsOpen: boolean; answerOpen: boolean; status: 'running' | 'done' }
 
 /** 把 patch_content 的坐标参数格式化成可读串：[s:0 r:0 c:0 i:0] 新文字（超长截断） */
 function formatToolArgs(tool: string, args: Record<string, unknown>): string {
@@ -98,7 +98,7 @@ export const useOptimizeStore = defineStore('optimize', {
           // 每个 agent 单独开一个块。生命周期用 status：running → done；
           // 思考(reasoning_content) 进 thinking，正文(content) 进 text，前端分区展示。
           onAgentStart: (agent, label) => {
-            this.messages.push({ kind: 'agent', agent, label, text: '', thinking: '', steps: [], thinkingOpen: false, toolsOpen: false, status: 'running' })
+            this.messages.push({ kind: 'agent', agent, label, text: '', thinking: '', steps: [], thinkingOpen: false, toolsOpen: false, answerOpen: true, status: 'running' })
           },
           onDelta: (_stage, tok, kind) => {
             const b = lastAgent()

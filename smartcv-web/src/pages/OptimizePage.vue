@@ -69,6 +69,7 @@ import { pageRunSpecs, type PageUnit, type RunSpec } from '@/utils/pagination'
 import { exportResumePdf } from '@/api/pdf'
 import type { Section } from '@/types'
 import { downloadJson } from '@/utils/download'
+import { renderMarkdown } from '@/utils/markdown'
 import { message } from '@/utils/feedback'
 import { getAgentSessionId, resetAgentSessionId } from '@/api/session'
 
@@ -392,10 +393,13 @@ function onNewConversation() {
                   </div>
                 </div>
 
-                <!-- 💬 回答：模型 content 字段，常显不折叠 -->
+                <!-- 💬 回答：模型 content 字段，折叠；内容按 Markdown 渲染 -->
                 <div v-if="m.text" class="agent-block">
-                  <div class="agent-block-title">💬 回答</div>
-                  <div class="agent-think">{{ m.text }}</div>
+                  <button class="agent-sub-toggle" @click="m.answerOpen = !m.answerOpen">
+                    <span class="chevron">{{ m.answerOpen ? '▾' : '▸' }}</span>
+                    <span>💬 回答</span>
+                  </button>
+                  <div v-if="m.answerOpen" class="agent-answer" v-html="renderMarkdown(m.text)"></div>
                 </div>
               </div>
             </div>
@@ -725,14 +729,6 @@ function onNewConversation() {
   border-top: 1px solid #eef0f4;
   padding-top: 6px;
 }
-.agent-block-title {
-  font-size: 11px;
-  font-weight: 600;
-  color: #9ca3af;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
 /* 思考/工具的折叠开关行（标题可点） */
 .agent-sub-toggle {
   display: inline-flex;
@@ -808,6 +804,62 @@ function onNewConversation() {
   overflow-wrap: anywhere;
   border-top: 1px dashed #eef0f4;
   padding-top: 6px;
+}
+/* 回答：Markdown 渲染结果，样式收敛一点更紧凑 */
+.agent-answer {
+  font-size: 12px;
+  line-height: 1.7;
+  color: #374151;
+  overflow-wrap: anywhere;
+  border-top: 1px dashed #eef0f4;
+  padding-top: 6px;
+}
+.agent-answer :deep(p) {
+  margin: 0 0 6px;
+}
+.agent-answer :deep(ul),
+.agent-answer :deep(ol) {
+  margin: 0 0 6px;
+  padding-left: 18px;
+}
+.agent-answer :deep(li) {
+  margin: 2px 0;
+}
+.agent-answer :deep(li + li) {
+  margin-top: 2px;
+}
+.agent-answer :deep(h1),
+.agent-answer :deep(h2),
+.agent-answer :deep(h3),
+.agent-answer :deep(h4) {
+  margin: 6px 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #111827;
+}
+.agent-answer :deep(code) {
+  background: #f3f4f6;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 11px;
+}
+.agent-answer :deep(pre) {
+  background: #f8fafc;
+  border: 1px solid #eef0f4;
+  border-radius: 6px;
+  padding: 8px 10px;
+  overflow-x: auto;
+  margin: 0 0 6px;
+}
+.agent-answer :deep(a) {
+  color: #2563eb;
+  text-decoration: none;
+}
+.agent-answer :deep(blockquote) {
+  margin: 0 0 6px;
+  padding-left: 10px;
+  border-left: 3px solid #e5e7eb;
+  color: #6b7280;
 }
 .steps {
   display: flex;

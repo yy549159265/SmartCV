@@ -33,3 +33,4 @@ smartcv-api/chat_checkpoints.sqlite-*
 .env
 smartcv-data/stats.json
 docling-models
+/smartcv-api/data/stats.json

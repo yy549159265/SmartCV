@@ -11,6 +11,7 @@
  */
 import { apiErrorMessage } from '@/api/error'
 import { apiFetch } from '@/api/http'
+import { PAGE_HEIGHT, PAGE_WIDTH } from '@/utils/constants'
 
 /**
  * 把简历流元素序列化成一份完整 HTML（内联全部样式表）。
@@ -47,6 +48,13 @@ export function buildResumeHtml(flowEl: HTMLElement): string {
         margin: 0;
         padding: 0;
         background: #fff;
+      }
+      /* 纸面=前端预览的 A4 画布（constants：794 × 1123px，四边留白 0）。
+         后端用 prefer_css_page_size 采用这里的纸面尺寸，避免 Chromium 按浮点 A4 换算，
+         让导出的物理页 = 预览页，整页块不会再被硬拆成两页。 */
+      @page {
+        size: ${PAGE_WIDTH}px ${PAGE_HEIGHT}px;
+        margin: 0;
       }
       /* 防呆：不管复制进来什么样式，导出内容必须可见 */
       #print-root, #print-root * {

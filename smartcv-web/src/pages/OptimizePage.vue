@@ -204,7 +204,7 @@ function onNewConversation() {
         :key="i"
         class="export-page"
         :style="{
-          minHeight: `${PAGE_HEIGHT}px`,
+          height: `${PAGE_HEIGHT}px`,
           padding: `${PAGE_PADDING}px`,
           breakAfter: i === pages.length - 1 ? 'auto' : 'page',
         }"
@@ -469,11 +469,16 @@ function onNewConversation() {
   background: #fff;
 }
 /* 每一页是一个 A4 纸块：纸宽、四周留白由 inline style 提供，
-   靠 min-height 撑满一整页 + break-after 独占一页，避免 Chromium 重新排版 */
+   固定高度 + overflow hidden + break-inside avoid + break-after 独占一页，
+   确保 Chromium 打 PDF 时把"一页的块"当成一整页，绝不硬拆成两页；
+   块比物理页多出来的零点几像素（取整测量误差）被裁掉，而不是多出一页。
+   高度由 inline style 固定为 PAGE_HEIGHT，配合 @page size 与纸面一致 */
 .export-page {
   box-sizing: border-box;
   width: 100%;
   background: #fff;
+  overflow: hidden;
+  break-inside: avoid;
 }
 .panel-header {
   display: flex;

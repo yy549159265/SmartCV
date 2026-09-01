@@ -206,7 +206,7 @@ function indentItem(index: number, delta: 1 | -1) {
   saveListItems(items)
 }
 
-/* ---------- 润色（只有 listText 类型会显示按钮） ---------- */
+/* ---------- 润色（listText / iconText 类型会显示按钮） ---------- */
 
 async function polish() {
   const items = listItems.value
@@ -225,6 +225,26 @@ async function polish() {
         indent: items[i]?.indent ?? 0,
       })),
     )
+    message.success('润色完成')
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '润色失败')
+  } finally {
+    loading?.destroy()
+  }
+}
+
+/** 图标文字型：润色单段文字（文字在 text 字段），复用同一 /api/polish 接口 */
+async function polishIconText() {
+  const orig = textModel.value ?? ''
+  if (!orig.trim()) {
+    message.warning('先写点内容再润色吧')
+    return
+  }
+  const loading = message.loading('正在润色…', { duration: 0 })
+  try {
+    const polished = await polishTexts([orig])
+    // 单条输入对应单条输出；模型返回空了就保留原文
+    textModel.value = polished[0]?.trim() || orig
     message.success('润色完成')
   } catch (e) {
     message.error(e instanceof Error ? e.message : '润色失败')
@@ -335,6 +355,12 @@ function onRemove() {
     <div class="content-editor">
       <!-- 图标文字型：图标（点击弹出图标选择器）+ 文字 + 可选标签（跟在文字后面） -->
       <template v-if="content.type === 'iconText'">
+        <div class="icontext-toolbar">
+          <span class="editor-hint">图标文字内容</span>
+          <n-button size="tiny" quaternary type="warning" @click.stop="polishIconText">
+            ✨ 润色
+          </n-button>
+        </div>
         <div class="icontext-row">
           <n-popover v-model:show="iconPopoverShow" trigger="click" placement="bottom-start" :width="320">
             <template #trigger>
@@ -644,6 +670,18 @@ function onRemove() {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+/* 图标文字型：标志 + 润色按钮 */
+.icontext-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.editor-hint {
+  font-size: 12px;
+  color: #6b7280;
 }
 
 /* 图标文字型：图标按钮 + 文字输入框 */

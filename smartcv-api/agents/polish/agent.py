@@ -3,7 +3,7 @@ from pathlib import Path
 
 from langchain.agents import create_agent
 
-from agents.polish.polish import PolishedItems
+from agents.polish.schemas.polish import PolishedItems
 from agents.utils.choose_llm import choose_llm
 from schemas.provider import ProviderConfig
 
@@ -37,11 +37,14 @@ def run_polish_agent(
         tools=[],
         response_format=PolishedItems,
     )
+
+    human_content = f"请润色以下简历要点：\n{'\n'.join(texts)}"
+
     result = agent.invoke(
         {
             "messages": [
                 {"type": "system", "content": _SYSTEM_PROMPT},
-                {"type": "human", "content": "\n".join(texts)},
+                {"type": "human", "content": human_content},
             ]
         },
         # session_id 通过 configurable 传给 agent，同一会话的多次调用才能串成一条会话

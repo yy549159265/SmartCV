@@ -12,7 +12,7 @@ from pathlib import Path
 
 from langchain.agents import create_agent
 
-from agents.md2json.tools import make_section_tools
+from agents.md2json.utils.tools import make_section_tools
 from agents.md2json.schemas.store import PDF2ResumeStore, Step
 from agents.utils.skillmiddleware import SkillMiddleware
 from agents.utils.choose_llm import choose_llm

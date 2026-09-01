@@ -27,9 +27,9 @@ from langgraph.graph import StateGraph
 from typing_extensions import TypedDict
 
 from agents.optimize import diagnose_agent, optimize_agent, summarize_agent
-from agents.optimize.checkpointer import get_checkpointer
-from agents.optimize.markdown import resume_to_markdown
-from agents.optimize.tools import OptimizeStore
+from agents.optimize.utils.checkpointer import get_checkpointer
+from agents.optimize.utils.markdown import resume_to_markdown
+from agents.optimize.utils.tools import OptimizeStore
 from agents.utils.choose_llm import choose_llm
 from schemas.provider import ProviderConfig
 

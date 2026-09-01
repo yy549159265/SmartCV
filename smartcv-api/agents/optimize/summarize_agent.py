@@ -12,7 +12,7 @@ from langgraph.config import get_stream_writer
 
 logger = logging.getLogger("smartcv")
 
-_SYSTEM_PROMPT = (Path(__file__).resolve().parent / "system_prompt_main.md").read_text(encoding="utf-8")
+_SYSTEM_PROMPT = (Path(__file__).resolve().parent / "system_prompt_summarize.md").read_text(encoding="utf-8")
 
 
 def build_agent(llm):

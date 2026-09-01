@@ -10,7 +10,6 @@ SmartCV 后端 —— FastAPI 应用（所有接口写在一个文件）
       （8000 在 Windows 的 Hyper-V/WSL 预留端口段里，bind 会失败，用 8600）
 也可以直接跑本文件（PyCharm 调试用）：python main.py
 """
-from agents.md2json.schemas.resume import Resume
 
 import warnings
 
@@ -48,7 +47,7 @@ from pydantic import BaseModel, Field
 
 from agents.md2json.schemas.resume import Section
 from agents.md2json.schemas.store import create_store, get_store
-from agents.optimize.checkpointer import clear_checkpoints, close_checkpointer, open_checkpointer
+from agents.optimize.utils.checkpointer import clear_checkpoints, close_checkpointer, open_checkpointer
 from agents.optimize.graph import run_chat_stream
 from agents.optimize.schemas.task import create_chat_task
 from agents.polish.agent import run_polish_agent

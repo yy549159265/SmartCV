@@ -13,7 +13,7 @@ from langchain.agents import create_agent
 from langgraph.config import get_stream_writer
 
 from agents.utils.skillmiddleware import SkillMiddleware
-from agents.optimize.tools import OptimizeStore, make_patch_tools
+from agents.optimize.utils.tools import OptimizeStore, make_patch_tools
 
 logger = logging.getLogger("smartcv")
 

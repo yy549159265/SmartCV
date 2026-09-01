@@ -77,6 +77,10 @@ async def resume_html_to_pdf(html: str) -> bytes:
             format="A4",
             print_background=True,
             margin={"top": "0", "bottom": "0", "left": "0", "right": "0"},
+            # 前端在 HTML 里注入了 @page { size: 794px 1123px; margin: 0 }，
+            # 用 CSS 声明的纸面大小，而不是 Chromium 对 A4 的浮点换算（793.7 × 1122.5），
+            # 物理纸面才能和前端预览的 A4 画布完全一致，避免整页块被 Chromium 硬拆成两页。
+            prefer_css_page_size=True,
         )
         return pdf
     finally:

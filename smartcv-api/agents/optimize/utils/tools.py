@@ -11,7 +11,7 @@
 from langchain_core.tools import tool
 from langgraph.config import get_stream_writer
 
-from agents.optimize.markdown import locate_unit, resume_to_markdown, write_text_unit
+from agents.optimize.utils.markdown import locate_unit, resume_to_markdown, write_text_unit
 
 
 class OptimizeStore:

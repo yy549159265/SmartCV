@@ -6,7 +6,7 @@ import yaml
 from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import SystemMessage
 from langchain_core.runnables import RunnableConfig
-from langchain_core.tools import BaseTool, ToolException, tool
+from langchain_core.tools import BaseTool, tool
 from langgraph.prebuilt import ToolRuntime
 from langgraph.runtime import Runtime
 
@@ -33,35 +33,35 @@ def _make_load_skill_tool(allowed_names: Sequence[str]) -> BaseTool:
                        如果为 None，返回 SKILL.md 全文。
                        如果指定路径，返回该路径文件内容。
         """
+        if skill_name not in allowed_names:
+            return f"技能 '{skill_name}' 不在当前 Agent 的白名单中，可用技能：{', '.join(allowed_names)}"
+
+        skill_dir = SKILL_ROOT / skill_name
+
+        # 不传 file_path → 加载 SKILL.md
+        if file_path is None:
+            skill_file = skill_dir / "SKILL.md"
+            if not skill_file.exists():
+                return f"技能 '{skill_name}' 的 SKILL.md 缺失"
+            return skill_file.read_text(encoding="utf-8")
+
+        # 传了 file_path → 加载指定文件（类似 cat）
+        target_file = skill_dir / file_path
+
+        # 路径安全验证，防止 ../../../etc/passwd
+        if not str(target_file.resolve()).startswith(str(skill_dir.resolve())):
+            return "非法路径访问：file_path 必须是技能目录内的相对路径"
+
+        if not target_file.exists():
+            return (
+                f"文件 '{file_path}' 在技能 '{skill_name}' 中不存在。"
+                "请先调用 load_skill_through_path(skill_name) 加载 SKILL.md，按其中列出的文件名再试。"
+            )
+
         try:
-            if skill_name not in allowed_names:
-                raise ToolException(f"技能 '{skill_name}' 不在当前 Agent 的白名单中")
-
-            skill_dir = SKILL_ROOT / skill_name
-
-            # 不传 file_path → 加载 SKILL.md
-            if file_path is None:
-                skill_file = skill_dir / "SKILL.md"
-                if not skill_file.exists():
-                    raise ToolException(f"技能 '{skill_name}' 的 SKILL.md 缺失")
-                return skill_file.read_text(encoding="utf-8")
-
-            # 传了 file_path → 加载指定文件（类似 cat）
-            target_file = skill_dir / file_path
-
-            # 路径安全验证，防止 ../../../etc/passwd
-            if not str(target_file.resolve()).startswith(str(skill_dir.resolve())):
-                raise ToolException("非法的文件路径访问")
-
-            if not target_file.exists():
-                raise ToolException(f"文件 '{file_path}' 在技能 '{skill_name}' 中不存在")
-
             return target_file.read_text(encoding="utf-8")
-
-        except ToolException:
-            raise
         except Exception as e:
-            raise ToolException(str(e))
+            return f"读取文件失败：{e}"
 
     return load_skill_through_path
 
@@ -107,8 +107,8 @@ class SkillMiddleware(AgentMiddleware):
         skills_prompt = "\n".join(lines)
         return (
             f"\n\n## 你可用的专属技能\n\n{skills_prompt}\n\n"
-            "如需使用某个技能的详细指令，请调用 `load_skill_through_path(skill_name)` 加载完整说明。\n"
-            "如需查看技能内的参考文档，请调用 `load_skill_through_path(skill_name, 'xxx')`。\n"
+            "如需使用某个技能的详细指令，请调用 `load_skill_through_path(skill_name)` 加载其 SKILL.md 全文。\n"
+            "除非你在技能内容里明确看到了某个具体文件名，否则只传 skill_name 即可，不要传 file_path，也不要编造文件名。\n"
         )
 
     def before_agent(

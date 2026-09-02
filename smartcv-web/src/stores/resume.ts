@@ -457,13 +457,14 @@ export const useResumeStore = defineStore('resume', {
     /** 修改章节的标题/强制分页/样式（style 里 undefined 的字段 = 清除该字段） */
     updateSection(
       id: string,
-      patch: Partial<Pick<Section, 'title' | 'pageBreakBefore'>> & {
+      patch: Partial<Pick<Section, 'title' | 'icon' | 'pageBreakBefore'>> & {
         style?: Partial<SectionStyle>
       },
     ) {
       const g = this.resume.find((x) => x.id === id)
       if (!g) return
       if (patch.title !== undefined) g.title = patch.title
+      if (patch.icon !== undefined) g.icon = patch.icon
       if (patch.pageBreakBefore !== undefined) g.pageBreakBefore = patch.pageBreakBefore
       mergeStyle(g.style, patch.style)
     },

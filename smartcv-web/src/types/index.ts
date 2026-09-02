@@ -95,6 +95,8 @@ export interface SectionStyle extends BaseStyle {
   gap?: number
   /** 本章节与上一个章节之间的间距（px，默认 0） */
   spaceBefore?: number
+  /** 标题下方是否显示横线（默认开启，true = 显示；恒为满行长度） */
+  titleUnderline?: boolean
 }
 
 /** 内容样式：字段优先于章节的继承值；不设置（undefined）就跟随章节 */
@@ -153,6 +155,8 @@ export interface Section {
   kind: 'section'
   /** 章节标题 */
   title: string
+  /** 章节标题前的可选图标（emoji 或品牌 SVG，处理方式同 iconText 内容） */
+  icon?: string
   /** 样式设置 */
   style: SectionStyle
   /** 布局窗口：章节内可放多个，上下堆叠 */

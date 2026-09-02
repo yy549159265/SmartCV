@@ -23,6 +23,7 @@ import {
   DEFAULT_LINE_HEIGHT,
   DEFAULT_TEXT_ALIGN,
   DEFAULT_TITLE_SIZE,
+  DEFAULT_TITLE_UNDERLINE,
 } from '@/utils/constants'
 import type { Content, LayoutWindow, ContentStyle, SectionStyle, TextAlign } from '@/types'
 
@@ -132,6 +133,20 @@ const colorPresets = [
               @update:value="(v: number) => setStyle('titleSize', v)"
             />
             <span class="style-value">{{ sectionStyle?.titleSize ?? DEFAULT_TITLE_SIZE }}px</span>
+          </div>
+        </div>
+
+        <!-- 标题横线：默认开启；横线恒为满行长度 -->
+        <div v-if="mode === 'section'" class="style-row">
+          <span class="style-label">标题横线</span>
+          <div class="style-control">
+            <n-switch
+              :value="sectionStyle?.titleUnderline ?? DEFAULT_TITLE_UNDERLINE"
+              @update:value="(v: boolean) => setStyle('titleUnderline', v)"
+            >
+              <template #checked>开</template>
+              <template #unchecked>关</template>
+            </n-switch>
           </div>
         </div>
 

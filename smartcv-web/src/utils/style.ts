@@ -16,6 +16,7 @@ import {
   DEFAULT_LINE_HEIGHT,
   DEFAULT_TEXT_ALIGN,
   DEFAULT_TITLE_SIZE,
+  DEFAULT_TITLE_UNDERLINE,
 } from './constants'
 import type { Content, Section, LayoutWindow, ContentStyle, SectionStyle, TextAlign } from '@/types'
 
@@ -32,6 +33,8 @@ export interface EffectiveSectionStyle extends EffectiveContentStyle {
   titleSize: number
   /** 本章节与上一个章节之间的间距（px） */
   spaceBefore: number
+  /** 标题下方是否显示横线（恒为满行长度） */
+  titleUnderline: boolean
 }
 
 /** 计算章节的最终样式（标题字号独立，其余字段用于继承） */
@@ -45,6 +48,7 @@ export function effectiveSectionStyle(section: Section): EffectiveSectionStyle {
     gap: s.gap ?? DEFAULT_GAP,
     textAlign: s.textAlign ?? DEFAULT_TEXT_ALIGN,
     spaceBefore: s.spaceBefore ?? DEFAULT_CHAPTER_GAP,
+    titleUnderline: s.titleUnderline ?? DEFAULT_TITLE_UNDERLINE,
   }
 }
 

@@ -24,6 +24,8 @@ export const CONTENT_HEIGHT = PAGE_HEIGHT - PAGE_PADDING * 2
 export const DEFAULT_FONT_SIZE = 15
 /** 默认标题字号 */
 export const DEFAULT_TITLE_SIZE = 25
+/** 默认：标题下方显示横线（恒为满行长度） */
+export const DEFAULT_TITLE_UNDERLINE = true
 /** 默认文字颜色 */
 export const DEFAULT_COLOR = '#334155'
 /** 默认行距倍数 */

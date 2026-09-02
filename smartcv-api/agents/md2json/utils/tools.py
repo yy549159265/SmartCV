@@ -252,12 +252,15 @@ def make_section_tools(store: PDF2ResumeStore) -> BaseTool:
     generate_resume(markdown) 直接构造 JSON。
     """
 
-    @tool()
+    @tool
     def generate_resume(markdown: str) -> str:
-        """把「# 章节标题 + <start> 标记行」的标准标记文本解析成骨架 JSON 存进 store，返回状态。
+        """将带标记的简历文本解析成简历骨架 JSON。
 
-        Args:
-            markdown: agent 用 md2md 技能整理好的标记文本。
+        什么时候用：原始文本已用 md2md 技能整理成标准标记格式，需要生成简历骨架时调用。
+
+        输入内容：逐行排布的纯文本，每行只能是下面两种之一——
+            `# 章节标题`，或一条 `<start> 字段1 <windows> 字段2 <end>` 记录行。
+        返回：一句状态（如「转换完成，共 N 个章节」）；生成的 JSON 已存入 store，不回传。
         """
         store.markdown = markdown
         store.finish_step(Step.ORGANIZE)

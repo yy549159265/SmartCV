@@ -77,7 +77,17 @@ const padStyle = computed(() => ({
 
 <template>
   <section class="preview-section" :style="[sectionStyle, padStyle]">
-    <h3 v-if="showTitle !== false" class="preview-section-title" :style="titleStyle">{{ section.title }}</h3>
+    <div
+      v-if="showTitle !== false"
+      class="preview-section-title"
+      :class="{ 'has-underline': eff.titleUnderline }"
+      :style="titleStyle"
+    >
+      <span class="preview-title-row">
+        <span v-if="section.icon" class="preview-title-icon" v-html="section.icon"></span>
+        <span class="preview-title-text">{{ section.title }}</span>
+      </span>
+    </div>
     <!-- 布局窗口树（递归渲染） -->
     <div class="preview-rows">
       <PreviewLayoutWindow
@@ -99,6 +109,39 @@ const padStyle = computed(() => ({
 .preview-section-title {
   margin: 0 0 8px;
   font-weight: 600;
+}
+/* 标题 + 可选图标：整行用 flex 垂直居中，图标（emoji / 品牌 SVG）和标题文字对齐到同一光学中心。
+   品牌 SVG 没有文字基线，用 vertical-align 或 baseline 都会和 emoji 错位，居中最稳。 */
+.preview-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.preview-title-icon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1em;
+  height: 1em;
+  line-height: 1;
+}
+.preview-title-icon :deep(svg) {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.preview-title-text {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+/* 标题下横线：直接画成 title 底边框（border 会被浏览器按物理像素摊平，粗细在各缩放档位都一致，
+   不像 2px 背景块在 zoom 下会被压成 1~2px 之间跳变）。横线宽度=完整内容宽（恒为满行），颜色=标题颜色。 */
+.preview-section-title.has-underline {
+  padding-bottom: 4px;
+  border-bottom: 2px solid currentColor;
 }
 
 /* 顶层窗口上下堆叠；章节间距由 spaceBefore（marginTop）控制，不用固定 gap */

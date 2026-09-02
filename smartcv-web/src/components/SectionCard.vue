@@ -18,6 +18,7 @@ import { useResumeStore } from '@/stores/resume'
 import { useClickPopover } from '@/composables/useClickPopover'
 import { DEFAULT_CHAPTER_GAP, DEFAULT_TITLE_SIZE } from '@/utils/constants'
 import { createRowFromPreset } from '@/data/presets'
+import { ICON_GROUPS } from '@/data/icons'
 import { computeTableCols } from '@/utils/layout'
 import type { Section, LayoutWindow } from '@/types'
 import { message } from '@/utils/feedback'
@@ -35,12 +36,33 @@ const tableCols = computed(() => computeTableCols(props.section.rows))
 /** 样式弹层（受控，点外部自动关闭） */
 const { show: styleShow, triggerRef: styleTriggerRef } = useClickPopover()
 
+/** 章节标题图标选择器弹层（受控，点外部自动关闭） */
+const { show: iconPopoverShow, triggerRef: iconTriggerRef } = useClickPopover()
+
 /* ---------- 标题编辑 ---------- */
 
 const titleModel = computed({
   get: () => props.section.title,
   set: (v: string) => store.updateSection(props.section.id, { title: v }),
 })
+
+/** 章节标题前的可选图标（读 = section.icon；写 = 存入 store） */
+const iconModel = computed({
+  get: () => props.section.icon ?? '',
+  set: (v: string) => store.updateSection(props.section.id, { icon: v }),
+})
+
+/** 从选择器点选一个图标：写入并立即关闭 */
+function pickIcon(icon: string) {
+  iconModel.value = icon
+  iconPopoverShow.value = false
+}
+
+/** 清除图标（留空 = 标题前不显示图标） */
+function clearIcon() {
+  iconModel.value = ''
+  iconPopoverShow.value = false
+}
 
 /* ---------- 布局行拖拽（vue-draggable-plus） ---------- */
 
@@ -152,6 +174,53 @@ function onRemove() {
       <span class="section-drag-handle" title="按住拖动章节排序">
         ⋮⋮
       </span>
+      <!-- 章节标题前的图标：点它打开图标选择器（与内容"图标文字"同款选择器） -->
+      <n-popover
+        v-model:show="iconPopoverShow"
+        trigger="click"
+        placement="bottom-start"
+        :width="320"
+      >
+        <template #trigger>
+          <button
+            ref="iconTriggerRef"
+            class="section-icon-trigger"
+            :class="{ empty: !section.icon }"
+            title="章节标题前的图标（留空则不显示）"
+            @click.stop
+          >
+            <!-- 图标可能是 emoji，也可能是品牌 SVG（v-html 两种都能渲染） -->
+            <span v-if="section.icon" class="section-icon-content" v-html="section.icon" />
+            <span v-else>＋</span>
+          </button>
+        </template>
+        <template #default>
+          <div class="section-icon-picker">
+            <div v-for="g in ICON_GROUPS" :key="g.name" class="icon-group">
+              <div class="icon-section-name">{{ g.name }}</div>
+              <div class="icon-grid">
+                <button
+                  v-for="ic in g.icons"
+                  :key="ic"
+                  class="icon-cell"
+                  :class="{ active: section.icon === ic }"
+                  @click="pickIcon(ic)"
+                >
+                  <span v-html="ic" />
+                </button>
+              </div>
+            </div>
+            <div class="pick-actions">
+              <n-input
+                v-model:value="iconModel"
+                size="small"
+                placeholder="或输入任意 emoji / 留空则不显示"
+              />
+              <n-button size="tiny" quaternary type="error" @click.stop="clearIcon">清除</n-button>
+            </div>
+          </div>
+        </template>
+      </n-popover>
       <input
         v-model="titleModel"
         class="section-title-input"
@@ -315,6 +384,97 @@ function onRemove() {
 .section-title-input:hover,
 .section-title-input:focus {
   background: #eef2f8;
+}
+
+/* 标题前的图标触发按钮：点它打开图标选择器（始终可见，便于一眼看到可加图标） */
+.section-icon-trigger {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 24px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background 0.12s,
+    border-color 0.12s;
+}
+.section-icon-trigger:hover {
+  border-color: var(--primary);
+  background: #eef3ff;
+}
+.section-icon-trigger.empty {
+  border-style: dashed;
+  background: #f7f9fc;
+  color: #b6bdc9;
+}
+.section-icon-content {
+  display: inline-flex;
+}
+.section-icon-trigger :deep(svg) {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+/* 图标选择器：与"图标文字"内容的图标选择器同款 */
+.section-icon-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 320px;
+  overflow: auto;
+  padding: 2px;
+}
+.icon-section-name {
+  font-size: 11px;
+  color: #9ca3af;
+  margin-bottom: 4px;
+}
+.icon-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.icon-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background 0.12s,
+    border-color 0.12s;
+}
+.icon-cell :deep(svg) {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+.icon-cell:hover {
+  background: #eef3ff;
+}
+.icon-cell.active {
+  background: #eef3ff;
+  border-color: var(--primary);
+}
+.pick-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pick-actions :deep(.n-input) {
+  flex: 1;
 }
 .section-toolbar {
   flex: none;

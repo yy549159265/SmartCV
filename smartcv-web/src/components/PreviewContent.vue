@@ -191,17 +191,18 @@ const imageStyle = computed<CSSProperties>(() => {
 /* ---- 图标文字型 ---- */
 .pb-icontext {
   display: flex;
-  /* 用基线对齐：文字、图标、标签都锚在同一条基线上，
-     行距（line-height）变大时三者一起下移，不会出现"文字下沉、标签留在上面"的错位。
-     与 twoColumn / timeRange / listText 保持一致 */
-  align-items: baseline;
+  /* 垂直居中：图标（emoji / 品牌 SVG）与文字都对齐到同一光学中心。
+     品牌 SVG 没有文字基线，按 baseline 对齐会让它"贴底上浮"、与 emoji 错位；
+     居中后两者和文字都对齐，且行距变大时一起移动，不会出现"文字下沉、标签留在上面"。 */
+  align-items: center;
   flex-wrap: wrap; /* 文字后面的标签放不下时换到下一行，而不是把文字挤扁 */
-  gap: 8px;
+  gap: 10px;
 }
 .pb-icon {
   flex: none;
   /* 统一图标占位：emoji 和品牌 SVG 都用同样大小的盒子居中显示，
-     这样"图标到文字"的间距两种图标完全一致，不会对不上 */
+     这样"图标到文字"的间距两种图标完全一致，不会对不上。
+     垂直居中由外层 .pb-icontext 的 align-items:center 统一负责 */
   display: inline-flex;
   align-items: center;
   justify-content: center;

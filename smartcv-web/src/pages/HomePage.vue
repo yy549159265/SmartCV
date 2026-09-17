@@ -1,10 +1,11 @@
 <script setup lang="ts">
 /**
  * 主页：简历的唯一入口。
- * 三种方式开始编辑：
+ * 四种方式开始编辑：
  *   1. 导入 PDF / Word —— 后端 agent 解析成简历 JSON（api/document.ts 占位）；
  *   2. 导入 JSON —— 读取本地 .json 简历文件；
- *   3. 新建 —— 空白简历。
+ *   3. 新建 —— 空白简历；
+ *   4. 加载示例 —— 从仓库 example/ 目录挑一份现成的（见 ExampleGallery.vue）。
  * 任一种完成后 emit('enter')，由 App.vue 切到编辑页展示/编辑。
  */
 import { onMounted, ref } from 'vue'
@@ -13,6 +14,7 @@ import { useResumeStore } from '@/stores/resume'
 import { useStatsStore } from '@/stores/stats'
 import { parseResumeFile, type ParseProgress, type ParseStep } from '@/api/document'
 import { message } from '@/utils/feedback'
+import ExampleGallery from '@/components/ExampleGallery.vue'
 
 const store = useResumeStore()
 const statsStore = useStatsStore()
@@ -139,6 +141,10 @@ function onNew() {
   store.clearAll()
   emit('enter')
 }
+
+/* ---------- 加载示例 ---------- */
+/** 示例画廊弹层（清单与缩略图都在子组件里按需加载） */
+const showGallery = ref(false)
 </script>
 
 <template>
@@ -175,6 +181,13 @@ function onNew() {
         <span class="home-card-title">新建空白简历</span>
         <span class="home-card-desc">从零开始搭建</span>
       </button>
+
+      <!-- 加载示例 -->
+      <button class="home-card" @click="showGallery = true">
+        <span class="home-card-icon">🖼️</span>
+        <span class="home-card-title">加载示例</span>
+        <span class="home-card-desc">看看现成的简历长什么样</span>
+      </button>
     </div>
 
     <p class="home-privacy">
@@ -184,6 +197,9 @@ function onNew() {
     <p class="home-stats">
       📊 已导出 PDF {{ statsStore.pdf }} 次 · JSON {{ statsStore.json }} 次
     </p>
+
+    <!-- 示例模板画廊；载入成功后直接进编辑器 -->
+    <ExampleGallery v-model:show="showGallery" @enter="emit('enter')" />
 
     <!-- 导入 PDF / Word 对话框：选解析引擎 → 选文件 -->
     <n-modal

@@ -88,6 +88,11 @@ onKeyStroke('Delete', () => {
     <div class="canvas-toolbar">
       <span class="canvas-title">编辑画布</span>
       <span class="canvas-hint">从左侧拖入内容 · 拖动 ⋮⋮ 手柄排序</span>
+      <!-- 快捷键提示（见 main.ts 里的 keydown 监听）：靠 spacer 推到工具栏最右 -->
+      <span class="canvas-spacer" />
+      <span class="canvas-key-hint">
+        <kbd>Ctrl</kbd>+<kbd>Z</kbd> 撤回 · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> 还原
+      </span>
     </div>
 
     <div class="canvas-scroll">
@@ -148,6 +153,38 @@ onKeyStroke('Delete', () => {
 .canvas-hint {
   font-size: 12px;
   color: #9ca3af;
+  /* 画布列被拖窄时截断提示文字，而不是折行把工具栏撑高 */
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* 把右侧的快捷键提示推到工具栏最右 */
+.canvas-spacer {
+  flex: 1;
+}
+
+.canvas-key-hint {
+  flex: none;
+  font-size: 12px;
+  color: #9ca3af;
+  white-space: nowrap;
+}
+.canvas-key-hint kbd {
+  display: inline-block;
+  min-width: 16px;
+  margin: 0 3px;
+  padding: 1px 5px;
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 1.5;
+  text-align: center;
+  color: #6b7280;
+  background: #f6f7f9;
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 4px;
 }
 
 .canvas-scroll {

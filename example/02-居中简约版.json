@@ -1,6 +1,6 @@
 [
   {
-    "id": "b-mu5swn0a-e-stv4",
+    "id": "b-mu5szj5z-e-9j3h",
     "kind": "section",
     "title": "",
     "style": {
@@ -12,11 +12,11 @@
     },
     "rows": [
       {
-        "id": "b-mu5swn0a-3-gtvr",
+        "id": "b-mu5szj5z-3-5z1q",
         "layout": "vertical",
         "contents": [
           {
-            "id": "b-mu5swn0a-1-49rq",
+            "id": "b-mu5szj5z-1-kqva",
             "kind": "content",
             "type": "iconText",
             "content": {
@@ -29,7 +29,7 @@
             }
           },
           {
-            "id": "b-mu5swn0a-2-qsof",
+            "id": "b-mu5szj5z-2-7hym",
             "kind": "content",
             "type": "iconText",
             "content": {
@@ -43,16 +43,16 @@
         ]
       },
       {
-        "id": "b-mu5swn0a-8-6md7",
+        "id": "b-mu5szj5z-8-rj09",
         "layout": "horizontal",
         "contents": [],
         "rows": [
           {
-            "id": "b-mu5swn0a-5-4kbb",
+            "id": "b-mu5szj5z-5-cmee",
             "layout": "vertical",
             "contents": [
               {
-                "id": "b-mu5swn0a-4-cw27",
+                "id": "b-mu5szj5z-4-kwst",
                 "kind": "content",
                 "type": "iconText",
                 "content": {
@@ -66,11 +66,11 @@
             ]
           },
           {
-            "id": "b-mu5swn0a-7-33gi",
+            "id": "b-mu5szj5z-7-07o0",
             "layout": "vertical",
             "contents": [
               {
-                "id": "b-mu5swn0a-6-4xgn",
+                "id": "b-mu5szj5z-6-mdmv",
                 "kind": "content",
                 "type": "iconText",
                 "content": {
@@ -86,16 +86,16 @@
         ]
       },
       {
-        "id": "b-mu5swn0a-d-fe8z",
+        "id": "b-mu5szj5z-d-g7g0",
         "layout": "horizontal",
         "contents": [],
         "rows": [
           {
-            "id": "b-mu5swn0a-a-01ef",
+            "id": "b-mu5szj5z-a-t003",
             "layout": "vertical",
             "contents": [
               {
-                "id": "b-mu5swn0a-9-dic2",
+                "id": "b-mu5szj5z-9-b156",
                 "kind": "content",
                 "type": "iconText",
                 "content": {
@@ -109,11 +109,11 @@
             ]
           },
           {
-            "id": "b-mu5swn0a-c-3bpz",
+            "id": "b-mu5szj5z-c-wgjv",
             "layout": "vertical",
             "contents": [
               {
-                "id": "b-mu5swn0a-b-ooxm",
+                "id": "b-mu5szj5z-b-d56l",
                 "kind": "content",
                 "type": "iconText",
                 "content": {
@@ -131,7 +131,7 @@
     ]
   },
   {
-    "id": "b-mu5swn0a-k-af3h",
+    "id": "b-mu5szj5z-k-nv42",
     "kind": "section",
     "title": "教育经历",
     "style": {
@@ -142,16 +142,16 @@
     },
     "rows": [
       {
-        "id": "b-mu5swn0a-j-83z7",
+        "id": "b-mu5szj5z-j-dutl",
         "layout": "horizontal",
         "contents": [],
         "rows": [
           {
-            "id": "b-mu5swn0a-g-exqt",
+            "id": "b-mu5szj5z-g-ovtm",
             "layout": "vertical",
             "contents": [
               {
-                "id": "b-mu5swn0a-f-t7tp",
+                "id": "b-mu5szj5z-f-x3ti",
                 "kind": "content",
                 "type": "iconText",
                 "content": {
@@ -169,11 +169,11 @@
             ]
           },
           {
-            "id": "b-mu5swn0a-i-erfi",
+            "id": "b-mu5szj5z-i-5q7w",
             "layout": "vertical",
             "contents": [
               {
-                "id": "b-mu5swn0a-h-1th2",
+                "id": "b-mu5szj5z-h-6s3r",
                 "kind": "content",
                 "type": "twoColumn",
                 "content": {
@@ -195,7 +195,7 @@
     ]
   },
   {
-    "id": "b-mu5swn0a-n-7bjb",
+    "id": "b-mu5szj5z-n-nrti",
     "kind": "section",
     "title": "个人介绍",
     "style": {
@@ -205,11 +205,11 @@
     },
     "rows": [
       {
-        "id": "b-mu5swn0a-m-0y5k",
+        "id": "b-mu5szj5z-m-owda",
         "layout": "vertical",
         "contents": [
           {
-            "id": "b-mu5swn0a-l-yu30",
+            "id": "b-mu5szj5z-l-2bpj",
             "kind": "content",
             "type": "iconText",
             "content": {
@@ -223,7 +223,7 @@
     ]
   },
   {
-    "id": "b-mu5swn0a-q-kyms",
+    "id": "b-mu5szj5z-q-9014",
     "kind": "section",
     "title": "职业技能",
     "style": {
@@ -235,11 +235,11 @@
     },
     "rows": [
       {
-        "id": "b-mu5swn0a-p-7tei",
+        "id": "b-mu5szj5z-p-svmo",
         "layout": "vertical",
         "contents": [
           {
-            "id": "b-mu5swn0a-o-2tex",
+            "id": "b-mu5szj5z-o-zvev",
             "kind": "content",
             "type": "listText",
             "content": {
@@ -302,7 +302,7 @@
     ]
   },
   {
-    "id": "b-mu5swn0a-10-glfc",
+    "id": "b-mu5szj5z-10-dvpr",
     "kind": "section",
     "title": "工作经历",
     "style": {
@@ -310,16 +310,16 @@
     },
     "rows": [
       {
-        "id": "b-mu5swn0a-v-6vqh",
+        "id": "b-mu5szj5z-v-3s0l",
         "layout": "horizontal",
         "contents": [],
         "rows": [
           {
-            "id": "b-mu5swn0a-s-yklr",
+            "id": "b-mu5szj5z-s-1xs4",
             "layout": "vertical",
             "contents": [
               {
-                "id": "b-mu5swn0a-r-coma",
+                "id": "b-mu5szj5z-r-isit",
                 "kind": "content",
                 "type": "twoColumn",
                 "content": {
@@ -334,11 +334,11 @@
             ]
           },
           {
-            "id": "b-mu5swn0a-u-fv0l",
+            "id": "b-mu5szj5z-u-4sjj",
             "layout": "vertical",
             "contents": [
               {
-                "id": "b-mu5swn0a-t-8b6v",
+                "id": "b-mu5szj5z-t-2xl6",
                 "kind": "content",
                 "type": "timeRange",
                 "content": {
@@ -354,11 +354,11 @@
         ]
       },
       {
-        "id": "b-mu5swn0a-z-aqvz",
+        "id": "b-mu5szj5z-z-yl8p",
         "layout": "vertical",
         "contents": [
           {
-            "id": "b-mu5swn0a-w-5rax",
+            "id": "b-mu5szj5z-w-21k8",
             "kind": "content",
             "type": "tag",
             "content": {
@@ -373,7 +373,7 @@
             }
           },
           {
-            "id": "b-mu5swn0a-x-n6wu",
+            "id": "b-mu5szj5z-x-h8uc",
             "kind": "content",
             "type": "iconText",
             "content": {
@@ -383,7 +383,7 @@
             "style": {}
           },
           {
-            "id": "b-mu5swn0a-y-ss6p",
+            "id": "b-mu5szj5z-y-yqfd",
             "kind": "content",
             "type": "listText",
             "content": {

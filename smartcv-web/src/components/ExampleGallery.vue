@@ -12,7 +12,7 @@
  */
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { dialog, message } from '@/utils/feedback'
-import { listExamples, loadExample, toSections, type ExampleItem } from '@/api/examples'
+import { clearExampleCache, listExamples, loadExample, toSections, type ExampleItem } from '@/api/examples'
 import { useResumeStore } from '@/stores/resume'
 import { PAGE_HEIGHT, PAGE_PADDING, PAGE_WIDTH } from '@/utils/constants'
 import PreviewSection from './PreviewSection.vue'
@@ -94,11 +94,17 @@ async function loadCard(index: number) {
   }
 }
 
-/** 拉取示例清单（force = true 跳过缓存） */
+/** 拉取示例清单（force = true 跳过缓存，内容和清单一起作废） */
 async function refresh(force = false) {
   listState.value = 'loading'
   listError.value = ''
   cards.value = []
+  if (force) {
+    // 不这么做的话：清单刷了，缩略图还是旧 JSON（contentCache + raw 的 HTTP 缓存）
+    clearExampleCache()
+    observer?.disconnect()
+    observer = null
+  }
   try {
     const items = await listExamples(force)
     cards.value = items.map((item) => ({ item, state: 'pending', sections: [] }))
@@ -232,6 +238,18 @@ const formatSize = (bytes: number) => `${Math.max(1, Math.round(bytes / 1024))} 
         </button>
       </div>
     </div>
+
+    <!-- 刷新：作废清单 + 已下载内容，用于刚往 example/ 推了新示例 / 改了示例之后 -->
+    <template #header-extra>
+      <n-button
+        size="small"
+        quaternary
+        :loading="listState === 'loading'"
+        @click="refresh(true)"
+      >
+        刷新
+      </n-button>
+    </template>
 
     <template #footer>
       <span class="example-footer-tip">点击缩略图直接使用，载入后可以继续编辑</span>

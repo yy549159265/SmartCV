@@ -92,7 +92,11 @@ export async function listExamples(force = false): Promise<ExampleItem[]> {
 
   let res: Response
   try {
-    res = await fetch(LIST_URL, { headers: { Accept: 'application/vnd.github+json' } })
+    // force 时绕过浏览器 HTTP 缓存，否则刚推上去的示例目录可能还是旧的
+    res = await fetch(LIST_URL, {
+      headers: { Accept: 'application/vnd.github+json' },
+      cache: force ? 'reload' : 'default',
+    })
   } catch {
     throw new Error('连接 GitHub 失败，请检查网络后重试')
   }
@@ -117,14 +121,29 @@ export async function listExamples(force = false): Promise<ExampleItem[]> {
 /** 已拉取过的示例内容（key = 文件名）—— 点「使用」时不用再请求一次 */
 const contentCache = new Map<string, unknown>()
 
+/**
+ * 冷启动计数：点「刷新」后自增，给下载地址挂个变化的查询参数，
+ * 强制绕过 raw.githubusercontent.com 的浏览器 HTTP 缓存（它只给几分钟有效期，
+ * 刚改完示例时缩略图会一直是旧的）。
+ */
+let contentVersion = 0
+
+/** 作废已下载的示例内容 —— 刷新时必须调，否则缩略图还是旧 JSON */
+export function clearExampleCache(): void {
+  contentCache.clear()
+  contentVersion += 1
+}
+
 /** 下载并解析一份示例文件，返回原始 JSON（结构校验交给 toSections / store） */
 export async function loadExample(item: ExampleItem): Promise<unknown> {
   const hit = contentCache.get(item.name)
   if (hit !== undefined) return hit
 
+  const url = contentVersion > 0 ? `${item.url}?v=${contentVersion}` : item.url
+
   let res: Response
   try {
-    res = await fetch(item.url)
+    res = await fetch(url, { cache: 'no-store' })
   } catch {
     throw new Error('下载失败，请检查网络')
   }

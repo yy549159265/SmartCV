@@ -11,6 +11,7 @@
  */
 import { nextTick, ref, computed } from 'vue'
 import PreviewSection from '@/components/PreviewSection.vue'
+import ResumeDiffDialog from '@/components/ResumeDiffDialog.vue'
 import { useResumeStore } from '@/stores/resume'
 import { useOptimizeStore, type ChatItem, type ChatStep } from '@/stores/optimize'
 import { useStatsStore } from '@/stores/stats'
@@ -181,6 +182,18 @@ function onNewConversation() {
   sessionId.value = resetAgentSessionId()
   message.success('已清空会话，并新建会话 id')
 }
+
+/* ---------- AI 修改对比 ---------- */
+
+/**
+ * 应用对比弹窗里的修改：这时候才真正把 AI 改好的简历写回 store。
+ * importResume 会重生成 id 并整体替换，同时被 main.ts 的 $onAction 记一次撤销快照，
+ * 所以提示里告诉用户可以 Ctrl+Z 撤回。
+ */
+function onApplyDiff() {
+  optimizeStore.applyPendingDiff()
+  message.success('已应用 AI 修改，可用 Ctrl+Z 撤销')
+}
 </script>
 
 <template>
@@ -298,6 +311,16 @@ function onNewConversation() {
       <div class="chat-header">
         <span class="panel-title">💬 简历修改对话</span>
         <span class="panel-spacer" />
+        <!-- 对比弹窗关掉后简历仍是旧的，这里留个入口，想好了再点开应用 -->
+        <n-button
+          v-if="optimizeStore.pendingDiff"
+          size="tiny"
+          type="primary"
+          ghost
+          @click="optimizeStore.openDiff()"
+        >
+          📝 查看修改对比
+        </n-button>
         <span
           class="session-id"
           :title="`会话 id：${sessionId}（诊断 / 优化 / 摘要等 agent 共用）`"
@@ -427,6 +450,15 @@ function onNewConversation() {
       </div>
     </section>
   </main>
+
+  <!-- AI 修改对比弹窗：后端返回改好的简历后自动弹出，用户确认才写回简历 -->
+  <ResumeDiffDialog
+    :show="optimizeStore.diffOpen && !!optimizeStore.pendingDiff"
+    :before="optimizeStore.pendingDiff?.before ?? []"
+    :after="optimizeStore.pendingDiff?.after ?? []"
+    @update:show="(v: boolean) => { if (!v) optimizeStore.dismissDiff() }"
+    @apply="onApplyDiff"
+  />
 </template>
 
 <style scoped>

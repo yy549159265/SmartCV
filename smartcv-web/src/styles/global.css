@@ -130,6 +130,62 @@ button {
 }
 
 /* ============================================================
+ * 「优化简历」对比弹窗的改动标记
+ *
+ * 标记是 data-diff 属性，由预览的三个组件（PreviewSection / PreviewLayoutWindow /
+ * PreviewContent）挂在各自已有的元素上；三处要命中同一套配色，所以放全局，
+ * 各组件只负责把属性挂上去、不重复写样式。
+ *
+ * 【关键】下面只用"不影响布局"的属性：background / box-shadow / 绝对定位的伪元素。
+ * 这些元素同时被分页测量层量 offsetHeight，也可能进 PDF 导出模板 ——
+ * 一旦用了 border / padding / margin，页数和导出结果就会跟着变。
+ * ============================================================ */
+[data-diff] {
+  /* 默认档 = 修改（琥珀）；新增/删除在下面各自覆盖这两个变量 */
+  --diff-color: #f59e0b;
+  --diff-bg: rgba(245, 158, 11, 0.14);
+  position: relative;
+  border-radius: 3px;
+  background: var(--diff-bg);
+  /* 左侧色条：负向偏移画在盒子外面，不占空间、不挤压文字 */
+  box-shadow: -3px 0 0 0 var(--diff-color);
+}
+[data-diff='added'] {
+  --diff-color: #10b981;
+  --diff-bg: rgba(16, 185, 129, 0.13);
+}
+[data-diff='removed'] {
+  --diff-color: #ef4444;
+  --diff-bg: rgba(239, 68, 68, 0.13);
+  /* 删除再多一道删除线：颜色之外多个形状通道，色盲用户也能分辨。
+     text-decoration 会向流内后代传播，所以整块被删时里面的文字都会划掉，
+     且它不改变任何盒子的尺寸（只影响绘制）。 */
+  text-decoration: line-through;
+  text-decoration-color: var(--diff-color);
+}
+
+/* 角标：＋ 新增 / － 删除 / ✎ 修改。绝对定位，不占布局、不挡正文 */
+[data-diff]::after {
+  position: absolute;
+  top: -2px;
+  right: 0;
+  font-size: 10px;
+  line-height: 1.2;
+  color: var(--diff-color);
+  opacity: 0.75;
+  pointer-events: none;
+}
+[data-diff='added']::after {
+  content: '＋';
+}
+[data-diff='removed']::after {
+  content: '－';
+}
+[data-diff='changed']::after {
+  content: '✎';
+}
+
+/* ============================================================
  * 预览选中高亮：画布点了章节/内容后，预览里对应渲染块持续闪烁
  * （类名是动态加在预览组件元素上的，必须全局生效，不能写在 scoped 里）
  * ============================================================ */

@@ -7,13 +7,23 @@
  * 文本内容统一走 Markdown 渲染（utils/markdown.ts）。
  * 样式按"内容自己 > 章节继承 > 默认"计算（utils/style.ts）。
  * 横向/竖向的块间距取决于内容【所在布局窗口】的方向（row.layout）。
+ *
+ * 另外支持可选的 diffMark：「优化简历」页的对比弹窗用它把改动过的内容块高亮出来。
+ * 不传（预览、分页测量层、PDF 导出三处都不传）时，渲染结果与没有这个属性时完全一致。
  */
 import { computed, type CSSProperties } from 'vue'
 import { effectiveContentStyle } from '@/utils/style'
 import { renderMarkdown } from '@/utils/markdown'
+import type { DiffMark } from '@/utils/resumeDiff'
 import type { Content, Section, LayoutWindow } from '@/types'
 
-const props = defineProps<{ section: Section; row: LayoutWindow; content: Content }>()
+const props = defineProps<{
+  section: Section
+  row: LayoutWindow
+  content: Content
+  /** 差异标记：'added' | 'removed' | 'changed'；不传 = 未改动 */
+  diffMark?: DiffMark
+}>()
 
 /** 最终生效样式（已处理继承） */
 const eff = computed(() => effectiveContentStyle(props.row, props.section, props.content))
@@ -88,7 +98,7 @@ const imageStyle = computed<CSSProperties>(() => {
 </script>
 
 <template>
-  <div class="preview-content md-body" :style="rootStyle">
+  <div class="preview-content md-body" :data-diff="diffMark" :style="rootStyle">
     <!-- 图标文字型：图标 + 文字 + 可选标签（整体随"文字位置"设置左右移动） -->
     <div
       v-if="content.type === 'iconText'"

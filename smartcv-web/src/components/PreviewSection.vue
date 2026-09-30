@@ -18,6 +18,7 @@ import { computed } from 'vue'
 import PreviewLayoutWindow from './PreviewLayoutWindow.vue'
 import { effectiveSectionStyle } from '@/utils/style'
 import { computeTableCols } from '@/utils/layout'
+import type { DiffMarks } from '@/utils/resumeDiff'
 import type { Section } from '@/types'
 
 const props = withDefaults(
@@ -34,6 +35,8 @@ const props = withDefaults(
     bottomPad?: boolean
     /** 强制 margin-top（每页第一片由调用方置 0，避免页首额外留白） */
     spaceBefore?: number
+    /** 差异标记表（对比弹窗用）；不传 = 不做任何高亮 */
+    marks?: DiffMarks
   }>(),
   {
     showTitle: true,
@@ -81,6 +84,7 @@ const padStyle = computed(() => ({
       v-if="showTitle !== false"
       class="preview-section-title"
       :class="{ 'has-underline': eff.titleUnderline }"
+      :data-diff="marks?.sections[section.id]"
       :style="titleStyle"
     >
       <span class="preview-title-row">
@@ -96,6 +100,7 @@ const padStyle = computed(() => ({
         :section="section"
         :row="row"
         :table-cols="tableCols"
+        :marks="marks"
       />
     </div>
   </section>

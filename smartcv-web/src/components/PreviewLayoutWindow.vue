@@ -4,10 +4,14 @@
  *
  * 叶子窗口：渲染内容列表；容器窗口：递归渲染子窗口。
  * 只做展示，高度与 A4 成品一致（测量层靠它算分页）。
+ *
+ * 另外支持可选的 marks：「优化简历」页的对比弹窗用它把改动过的块高亮出来。
+ * 不传时（预览 / 测量层 / 导出）渲染结果与没有这个属性时完全一致。
  */
 import { computed, type CSSProperties } from 'vue'
 import PreviewContent from './PreviewContent.vue'
 import { computeTableCols, spanForIndex } from '@/utils/layout'
+import type { DiffMarks } from '@/utils/resumeDiff'
 import type { Section, LayoutWindow } from '@/types'
 
 const props = defineProps<{
@@ -15,6 +19,8 @@ const props = defineProps<{
   row: LayoutWindow
   /** 父级"纵向堆叠"列表算出的全局列数（表格行对齐用）；不传则自己算 */
   tableCols?: number
+  /** 差异标记表（对比弹窗用）；不传 = 不做任何高亮 */
+  marks?: DiffMarks
 }>()
 
 /** 是否为容器窗口（有 rows 字段就算，即使还是空的） */
@@ -28,10 +34,16 @@ function childGridStyle(index: number): CSSProperties | undefined {
   if (props.row.layout !== 'horizontal') return undefined
   return { gridColumn: `span ${spanForIndex(index, props.row.rows?.length ?? 0, cols.value)}` }
 }
+
+/** 本窗口自身的差异标记（整体新增/删除/排列方式改了）；没传 marks 时恒为 undefined */
+const rowMark = computed(() => props.marks?.rows[props.row.id])
+
+/** 取某个内容的差异标记 */
+const contentMark = (id: string) => props.marks?.contents[id]
 </script>
 
 <template>
-  <div class="preview-row" :data-row-id="row.id">
+  <div class="preview-row" :data-row-id="row.id" :data-diff="rowMark">
     <!-- 容器窗口：子窗口按方向排列（横向容器用网格均分列数，与编辑画布一致） -->
     <div
       v-if="isContainer(row)"
@@ -45,6 +57,7 @@ function childGridStyle(index: number): CSSProperties | undefined {
         :section="section"
         :row="child"
         :table-cols="cols"
+        :marks="marks"
         :style="childGridStyle(i)"
       />
     </div>
@@ -61,6 +74,7 @@ function childGridStyle(index: number): CSSProperties | undefined {
         :section="section"
         :row="row"
         :content="b"
+        :diff-mark="contentMark(b.id)"
         :data-content-id="b.id"
       />
     </div>

@@ -11,12 +11,14 @@
  *
  * send() 接 SSE 流式（后端经 agent 生命周期 custom 流推送），把 agent_start /
  * delta / tool_call / tool_result / agent_end 按 agent 归属记到对应的 agent 块上；
- * 收到 resume 事件把改好的简历 JSON 灌进简历 store，左栏预览随之更新。
+ * 收到 resume 事件【不直接覆盖简历】，而是存成 pendingDiff 由对比弹窗展示
+ * （ResumeDiffDialog），用户点「应用修改」才走 applyPendingDiff 写回。
  */
 import { defineStore } from 'pinia'
 import { sendChatMessage } from '@/api/chat'
 import { getProviderSettings, missingProviderFields } from '@/api/provider'
 import { useResumeStore } from '@/stores/resume'
+import type { Section } from '@/types'
 
 /** 单条执行过程步骤：agent 生命周期 + 工具调用（折叠卡片里的灰字小列表） */
 export type ChatStep =
@@ -49,6 +51,13 @@ export const useOptimizeStore = defineStore('optimize', {
     messages: [] as ChatItem[],
     /** 是否正在等待 AI 回复 */
     sending: false,
+    /**
+     * 待确认的 AI 修改：{改前快照, 改后简历}。
+     * 后端返回后先放这里、不进简历 store —— 用户点「应用修改」才落库。
+     */
+    pendingDiff: null as { before: Section[]; after: Section[] } | null,
+    /** 对比弹窗是否展开（关掉弹窗 pendingDiff 仍保留，可从对话栏头再打开） */
+    diffOpen: false,
   }),
 
   actions: {
@@ -56,7 +65,7 @@ export const useOptimizeStore = defineStore('optimize', {
       this.jd = text
     },
 
-    /** 发送一条消息：上屏用户气泡 → SSE 流式收各 agent 块 → 应用改好的简历 */
+    /** 发送一条消息：上屏用户气泡 → SSE 流式收各 agent 块 → 收下改好的简历待用户确认 */
     async send(text: string) {
       const trimmed = text.trim()
       if (!trimmed || this.sending) return
@@ -72,6 +81,11 @@ export const useOptimizeStore = defineStore('optimize', {
       const resumeStore = useResumeStore()
       this.messages.push({ kind: 'user', text: trimmed })
       this.sending = true
+
+      // 改前快照：必须在发请求前【深拷贝】——
+      // resume 是响应式代理，且流式期间用户还能继续编辑，
+      // 不拷贝的话比对的"改前"会跟着变，diff 就成了自己跟自己比。
+      const before = JSON.parse(JSON.stringify(resumeStore.resume)) as Section[]
 
       // 当前正在积累的 agent 块 = 时间线里最后一个 kind==='agent' 的项
       const lastAgent = (): Extract<ChatItem, { kind: 'agent' }> | null => {
@@ -118,9 +132,12 @@ export const useOptimizeStore = defineStore('optimize', {
             if (b) b.status = 'done'
           },
           onResume: ({ resume }) => {
-            // 改好的简历 JSON 灌进简历 store，左栏预览随之更新
-            // （importResume 会重生成全部 id，无碍：后端已保留原结构/样式）
-            resumeStore.importResume(resume)
+            // 【不覆盖简历】先把「改前 / 改后」存起来，弹对比窗让用户过目。
+            // 这里直接用后端返回的原始 JSON、不走 normalizeResumeData：
+            // 后者会给每个节点重新生成 uid，两边 id 一失配，
+            // 比对就会把整份简历判成"全变了"（后端 patch 是就地的，id 原样保留）。
+            this.pendingDiff = { before, after: resume as Section[] }
+            this.diffOpen = true
           },
         })
       } catch (err) {
@@ -130,8 +147,39 @@ export const useOptimizeStore = defineStore('optimize', {
       }
     },
 
+    /** 重新打开对比弹窗（关掉之后对话栏头的入口用） */
+    openDiff() {
+      if (this.pendingDiff) this.diffOpen = true
+    },
+
+    /**
+     * 收起对比弹窗但【保留】pendingDiff：简历不动，对话栏头还留着入口，
+     * 用户可以再看看对话内容，想好了再点开决定要不要应用。
+     */
+    dismissDiff() {
+      this.diffOpen = false
+    },
+
+    /**
+     * 应用 AI 修改：这时候才真正写回简历。
+     * importResume 会重生成全部 id 并整体替换（既有的、正确的落库路径），
+     * 它同时会被 main.ts 的 $onAction 记一次撤销快照 → 用户 Ctrl+Z 能撤回本次修改。
+     */
+    applyPendingDiff() {
+      const pending = this.pendingDiff
+      if (!pending) return
+      // 先清 pending 再导入：导入若失败（理论上不会，数据来自后端原样 JSON）
+      // 也不会留下一个已被用过的待确认状态
+      this.pendingDiff = null
+      this.diffOpen = false
+      useResumeStore().importResume(pending.after)
+    },
+
+    /** 清空对话：连同"待确认的 AI 修改"一起作废（新会话不该还挂着上次的提案） */
     clearMessages() {
       this.messages = []
+      this.pendingDiff = null
+      this.diffOpen = false
     },
   },
 })

@@ -37,7 +37,7 @@ async def run(
     writer({"type": "agent_start", "agent": "optimize", "label": "优化 agent"})
     agent = create_agent(
         model=llm,
-        middleware=[SkillMiddleware(["optimize"])],
+        middleware=[SkillMiddleware(["coordinate-edit"])],
         tools=make_patch_tools(store),
     )
     jd_text = f"\n\n职位描述（JD，作参考）：\n{jd}" if (jd or "").strip() else ""

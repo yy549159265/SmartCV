@@ -10,13 +10,15 @@ from pathlib import Path
 from langchain.agents import create_agent
 from langgraph.config import get_stream_writer
 
+from agents.utils.skillmiddleware import SkillMiddleware
+
 logger = logging.getLogger("smartcv")
 
 _SYSTEM_PROMPT = (Path(__file__).resolve().parent / "system_prompt_diagnose.md").read_text(encoding="utf-8")
 
 
 def build_agent(llm):
-    return create_agent(model=llm, tools=[])
+    return create_agent(model=llm, middleware=[SkillMiddleware(["diagnose"])],tools=[])
 
 
 async def run(llm, markdown: str, jd: str, question: str, session_id: str | None = None) -> str:

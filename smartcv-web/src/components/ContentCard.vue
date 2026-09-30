@@ -11,7 +11,7 @@
  *
  * 所有读写都通过 store（单一数据源），本组件不保存任何本地副本。
  */
-import { computed, ref, type CSSProperties } from 'vue'
+import { computed, nextTick, ref, type CSSProperties } from 'vue'
 import { useResumeStore } from '@/stores/resume'
 import { message } from '@/utils/feedback'
 import { polishTexts } from '@/api/polish'
@@ -208,17 +208,57 @@ function indentItem(index: number, delta: 1 | -1) {
 
 /* ---------- 润色（listText / iconText 类型会显示按钮） ---------- */
 
-async function polish() {
-  const items = listItems.value
-  const texts = items.map((it) => it.text)
-  if (!texts.some((t) => t.trim())) {
+/**
+ * 点「✨ 润色」先展开一个思路输入区（而不是直接发请求）：
+ * 用户可以写一句润色思路再「发送」，也可以什么都不写直接「发送」，
+ * 点「取消」则收起输入区，不发任何请求。
+ */
+const polishShow = ref(false)
+/** 用户填的润色描述/思路（可为空，空串时后端按默认规则润色） */
+const polishDescription = ref('')
+const polishInputRef = ref<{ focus: () => void } | null>(null)
+
+/** 当前内容是否有可润色的文字（一个字没写就别润色了） */
+const polishable = computed(() =>
+  props.content.type === 'iconText'
+    ? Boolean(textModel.value?.trim())
+    : listItems.value.some((it) => it.text.trim()),
+)
+
+/** 点「✨ 润色」：展开思路输入区并聚焦输入框（没内容则先提示，不展开） */
+function openPolish() {
+  if (!polishable.value) {
     message.warning('先写点内容再润色吧')
     return
   }
+  polishShow.value = true
+  nextTick(() => polishInputRef.value?.focus())
+}
+
+/** 取消：收起输入区，清空已填思路，不发请求 */
+function cancelPolish() {
+  polishShow.value = false
+  polishDescription.value = ''
+}
+
+/** 发送：带着用户填的思路（可为空）发起润色；列表型/图标文字型各走各的写回逻辑 */
+async function sendPolish() {
+  const description = polishDescription.value.trim()
+  cancelPolish()
+  // 输入区开着期间内容被清空了：静默返回（openPolish 已提示过，不再打扰）
+  if (!polishable.value) return
+  if (props.content.type === 'iconText') await polishIconText(description)
+  else await polishList(description)
+}
+
+/** 列表文字型：批量润色，按输入顺序写回，保留每条原有缩进 */
+async function polishList(description: string) {
+  const items = listItems.value
+  const texts = items.map((it) => it.text)
   const loading = message.loading('正在润色…', { duration: 0 })
   try {
-    const polished = await polishTexts(texts)
-    // 按输入顺序写回，保留每条原有缩进；模型返回少了/空了就保留原文
+    const polished = await polishTexts(texts, description)
+    // 模型返回少了/空了就保留原文
     saveListItems(
       texts.map((orig, i) => ({
         text: polished[i]?.trim() || orig,
@@ -234,15 +274,11 @@ async function polish() {
 }
 
 /** 图标文字型：润色单段文字（文字在 text 字段），复用同一 /api/polish 接口 */
-async function polishIconText() {
+async function polishIconText(description: string) {
   const orig = textModel.value ?? ''
-  if (!orig.trim()) {
-    message.warning('先写点内容再润色吧')
-    return
-  }
   const loading = message.loading('正在润色…', { duration: 0 })
   try {
-    const polished = await polishTexts([orig])
+    const polished = await polishTexts([orig], description)
     // 单条输入对应单条输出；模型返回空了就保留原文
     textModel.value = polished[0]?.trim() || orig
     message.success('润色完成')
@@ -357,9 +393,25 @@ function onRemove() {
       <template v-if="content.type === 'iconText'">
         <div class="icontext-toolbar">
           <span class="editor-hint">图标文字内容</span>
-          <n-button size="tiny" quaternary type="warning" @click.stop="polishIconText">
+          <n-button size="tiny" quaternary type="warning" @click.stop="openPolish">
             ✨ 润色
           </n-button>
+        </div>
+        <!-- 润色思路输入区：点「润色」展开，写不写思路都能发送；取消则收起、不发请求 -->
+        <div v-if="polishShow" class="polish-input">
+          <n-input
+            ref="polishInputRef"
+            v-model:value="polishDescription"
+            size="small"
+            type="textarea"
+            :autosize="{ minRows: 2, maxRows: 5 }"
+            placeholder="输入你想润色的思路，可以不写"
+            @keydown.enter.exact.prevent="sendPolish"
+          />
+          <div class="polish-input-actions">
+            <n-button size="tiny" type="primary" @click.stop="sendPolish">发送</n-button>
+            <n-button size="tiny" quaternary @click.stop="cancelPolish">取消</n-button>
+          </div>
         </div>
         <div class="icontext-row">
           <n-popover v-model:show="iconPopoverShow" trigger="click" placement="bottom-start" :width="320">
@@ -510,9 +562,25 @@ function onRemove() {
             <n-radio-button value="ordered">数字列表</n-radio-button>
           </n-radio-group>
           <!-- 润色按钮：只有列表文字型提供 -->
-          <n-button size="tiny" quaternary type="warning" @click.stop="polish">
+          <n-button size="tiny" quaternary type="warning" @click.stop="openPolish">
             ✨ 润色
           </n-button>
+        </div>
+        <!-- 润色思路输入区：点「润色」展开，写不写思路都能发送；取消则收起、不发请求 -->
+        <div v-if="polishShow" class="polish-input">
+          <n-input
+            ref="polishInputRef"
+            v-model:value="polishDescription"
+            size="small"
+            type="textarea"
+            :autosize="{ minRows: 2, maxRows: 5 }"
+            placeholder="输入你想润色的思路，可以不写"
+            @keydown.enter.exact.prevent="sendPolish"
+          />
+          <div class="polish-input-actions">
+            <n-button size="tiny" type="primary" @click.stop="sendPolish">发送</n-button>
+            <n-button size="tiny" quaternary @click.stop="cancelPolish">取消</n-button>
+          </div>
         </div>
         <div class="list-items">
           <div v-for="(item, i) in listItems" :key="i" class="list-item-edit" :style="{ paddingLeft: `${(item.indent ?? 0) * INDENT_STEP}px` }">
@@ -682,6 +750,22 @@ function onRemove() {
 .editor-hint {
   font-size: 12px;
   color: #6b7280;
+}
+
+/* 润色思路输入区：浅色底 + 虚线边框，和工具栏区分开（虚线暗示"可选填"） */
+.polish-input {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border: 1px dashed #e0cfa0;
+  border-radius: 6px;
+  background: #fffbf0;
+}
+.polish-input-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
 }
 
 /* 图标文字型：图标按钮 + 文字输入框 */

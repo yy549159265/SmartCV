@@ -164,6 +164,7 @@ _FIELD_NAMES = {
     "apiKey": "API Key",
     "model": "模型名称",
     "items": "润色内容",
+    "description": "润色描述",
 }
 
 
@@ -200,6 +201,9 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 class PolishRequest(BaseModel):
     items: list[str] = Field(min_length=1)
     provider: ProviderConfig
+    # 用户的润色描述/思路（前端可选填）：空字符串 = 没填，按默认规则润色。
+    # 与前端 api/polish.ts 的字段名保持一致。
+    description: str = ""
 
 
 class ChatRequest(BaseModel):
@@ -297,7 +301,10 @@ async def polish(
     session_id: str | None = Depends(get_agent_session),
 ):
     try:
-        items = await asyncio.to_thread(run_polish_agent, req.provider, req.items, session_id=session_id)
+        items = await asyncio.to_thread(
+            run_polish_agent, req.provider, req.items,
+            description=req.description, session_id=session_id,
+        )
     except NotImplementedError:
         return JSONResponse(status_code=501, content=error(501, "润色 agent 尚未实现"))
     return ok({"items": items})

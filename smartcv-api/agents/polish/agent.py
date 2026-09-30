@@ -28,6 +28,7 @@ def _to_items(structured_response: object) -> list[str]:
 def run_polish_agent(
     provider: ProviderConfig,
     texts: list[str],
+    description: str = "",
     session_id: str | None = None,
 ):
     llm = choose_llm(provider)
@@ -38,7 +39,14 @@ def run_polish_agent(
         response_format=PolishedItems,
     )
 
-    human_content = f"请润色以下简历要点：\n{'\n'.join(texts)}"
+    # description 是用户填的润色思路（前端可为空）：填了就一并交给模型当风格参考，
+    # 没填就只传要点，和加这个字段之前完全一致。
+    hint = description.strip()
+    items_block = "\n".join(texts)
+    if hint:
+        human_content = f"我的润色思路：{hint}\n\n请按上面的思路润色以下简历要点：\n{items_block}"
+    else:
+        human_content = f"请润色以下简历要点：\n{items_block}"
 
     result = agent.invoke(
         {

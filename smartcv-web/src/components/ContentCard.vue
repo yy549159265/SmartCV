@@ -14,7 +14,7 @@
 import { computed, nextTick, ref, type CSSProperties } from 'vue'
 import { useResumeStore } from '@/stores/resume'
 import { message } from '@/utils/feedback'
-import { polishTexts } from '@/api/polish'
+import { polishTexts, type PolishMode } from '@/api/polish'
 import { ICON_GROUPS } from '@/data/icons'
 import { useClickPopover } from '@/composables/useClickPopover'
 import { CONTENT_TYPE_NAMES } from '@/utils/constants'
@@ -218,6 +218,25 @@ const polishShow = ref(false)
 const polishDescription = ref('')
 const polishInputRef = ref<{ focus: () => void } | null>(null)
 
+/**
+ * 润色模式（后端按它选用不同的系统提示词）：
+ *  - strict 严谨（默认）：规则锁死，只优化表达，不改变原文内容
+ *  - free   自由：像直接问 AI，由模型自主判断怎么写最好，并优先遵循用户思路
+ * 选择刻意不随「取消」重置——用户下次打开通常还是想用上次那个模式。
+ */
+const polishMode = ref<PolishMode>('strict')
+/** 每个模式的一句话说明，直接展示给用户，避免只看到名字猜不出差别 */
+const POLISH_MODE_HINTS: Record<PolishMode, string> = {
+  strict: '严格按规则改写，只优化表达，不改变原文内容',
+  free: '像直接问 AI 一样自由发挥，可大幅重写、补充数据',
+}
+/** 思路输入框的提示语：自由模式鼓励写具体要求；不写就让模型自由发挥 */
+const polishPlaceholder = computed(() =>
+  polishMode.value === 'free'
+    ? '写下你的润色要求，不写则由 AI 自由发挥'
+    : '输入你想润色的思路，可以不写',
+)
+
 /** 当前内容是否有可润色的文字（一个字没写就别润色了） */
 const polishable = computed(() =>
   props.content.type === 'iconText'
@@ -241,23 +260,25 @@ function cancelPolish() {
   polishDescription.value = ''
 }
 
-/** 发送：带着用户填的思路（可为空）发起润色；列表型/图标文字型各走各的写回逻辑 */
+/** 发送：带着用户填的思路（可为空）与所选模式发起润色；列表型/图标文字型各走各的写回逻辑 */
 async function sendPolish() {
   const description = polishDescription.value.trim()
+  // 先取出模式：cancelPolish 会清空描述，但模式要保留
+  const mode = polishMode.value
   cancelPolish()
   // 输入区开着期间内容被清空了：静默返回（openPolish 已提示过，不再打扰）
   if (!polishable.value) return
-  if (props.content.type === 'iconText') await polishIconText(description)
-  else await polishList(description)
+  if (props.content.type === 'iconText') await polishIconText(description, mode)
+  else await polishList(description, mode)
 }
 
 /** 列表文字型：批量润色，按输入顺序写回，保留每条原有缩进 */
-async function polishList(description: string) {
+async function polishList(description: string, mode: PolishMode) {
   const items = listItems.value
   const texts = items.map((it) => it.text)
   const loading = message.loading('正在润色…', { duration: 0 })
   try {
-    const polished = await polishTexts(texts, description)
+    const polished = await polishTexts(texts, description, mode)
     // 模型返回少了/空了就保留原文
     saveListItems(
       texts.map((orig, i) => ({
@@ -274,11 +295,11 @@ async function polishList(description: string) {
 }
 
 /** 图标文字型：润色单段文字（文字在 text 字段），复用同一 /api/polish 接口 */
-async function polishIconText(description: string) {
+async function polishIconText(description: string, mode: PolishMode) {
   const orig = textModel.value ?? ''
   const loading = message.loading('正在润色…', { duration: 0 })
   try {
-    const polished = await polishTexts([orig], description)
+    const polished = await polishTexts([orig], description, mode)
     // 单条输入对应单条输出；模型返回空了就保留原文
     textModel.value = polished[0]?.trim() || orig
     message.success('润色完成')
@@ -399,13 +420,19 @@ function onRemove() {
         </div>
         <!-- 润色思路输入区：点「润色」展开，写不写思路都能发送；取消则收起、不发请求 -->
         <div v-if="polishShow" class="polish-input">
+          <!-- 模式切换 + 一句话说明：让用户一眼看出两档的差别 -->
+          <n-radio-group v-model:value="polishMode" size="small">
+            <n-radio-button value="strict">严谨</n-radio-button>
+            <n-radio-button value="free">自由</n-radio-button>
+          </n-radio-group>
+          <div class="polish-mode-hint">{{ POLISH_MODE_HINTS[polishMode] }}</div>
           <n-input
             ref="polishInputRef"
             v-model:value="polishDescription"
             size="small"
             type="textarea"
             :autosize="{ minRows: 2, maxRows: 5 }"
-            placeholder="输入你想润色的思路，可以不写"
+            :placeholder="polishPlaceholder"
             @keydown.enter.exact.prevent="sendPolish"
           />
           <div class="polish-input-actions">
@@ -568,13 +595,19 @@ function onRemove() {
         </div>
         <!-- 润色思路输入区：点「润色」展开，写不写思路都能发送；取消则收起、不发请求 -->
         <div v-if="polishShow" class="polish-input">
+          <!-- 模式切换 + 一句话说明：让用户一眼看出两档的差别 -->
+          <n-radio-group v-model:value="polishMode" size="small">
+            <n-radio-button value="strict">严谨</n-radio-button>
+            <n-radio-button value="free">自由</n-radio-button>
+          </n-radio-group>
+          <div class="polish-mode-hint">{{ POLISH_MODE_HINTS[polishMode] }}</div>
           <n-input
             ref="polishInputRef"
             v-model:value="polishDescription"
             size="small"
             type="textarea"
             :autosize="{ minRows: 2, maxRows: 5 }"
-            placeholder="输入你想润色的思路，可以不写"
+            :placeholder="polishPlaceholder"
             @keydown.enter.exact.prevent="sendPolish"
           />
           <div class="polish-input-actions">
@@ -761,6 +794,12 @@ function onRemove() {
   border: 1px dashed #e0cfa0;
   border-radius: 6px;
   background: #fffbf0;
+}
+/* 模式说明小字：告诉用户当前这档到底做什么（只看到「严谨/深度」猜不出差别） */
+.polish-mode-hint {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #8a6d3b;
 }
 .polish-input-actions {
   display: flex;

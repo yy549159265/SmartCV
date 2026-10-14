@@ -34,52 +34,10 @@
 
 ## ✨ 功能特性
 
-- **🗂 导入解析** — 上传 PDF / Word，MinerU 云解析成结构化简历 JSON（章节/窗口/内容层级），进度可轮询。
-- **🖌 可视化编辑** — 组件库拖拽排布（7 种内容类型 + 命名预设），右侧实时预览 A4 成品，红线分页。
-- **🤖 AI 优化对话** — SSE 流式。诊断 → 按坐标就地改 JSON → 摘要，全程展示「思考过程 / 工具调用 / 回答」。
-  - **按坐标改**：`patch_content(s, r, c, i, text)` 只替换文字、不增删结构，排版永远不乱。
-  - **全过程可见**：`agent_start / delta(thinking|answer) / tool_call / tool_result / agent_end` 全量推成事件，前端分卡片展示。
-- **📤 导出** — JSON 文件；PDF（后端无头 Chromium 打印，与预览排版一致）。
-
-## 🧱 技术栈
-
-| 端 | 技术 |
-|---|---|
-| 前端 | Vue 3 · Vite · Pinia · VueUse · naive-ui · vue-draggable-plus |
-| 后端 | FastAPI · Pydantic · LangGraph · LangChain（OpenAI 兼容 / DeepSeek） |
-| Agent | 多 Agent：解析（md2json）、诊断、优化、摘要、润色 |
-| 持久化 | SQLite checkpoint（LangGraph）· SSE · UUID7 会话 id |
-| 派生服务 | MinerU（PDF 解析）· Playwright（HTML→PDF） |
-
-## 📁 目录结构
-
-```text
-SmartCV
-├── smartcv-api/            # 后端 FastAPI（接口都写在 main.py）
-│   ├── main.py             # 应用入口 + 全部接口 + 定时清理任务
-│   ├── agents/             # 多 Agent
-│   │   ├── md2json/        #   解析 Agent
-│   │   ├── optimize/       #   诊断 / 优化 / 摘要 + graph + checkpointer
-│   │   ├── polish/         #   润色 Agent
-│   │   ├── skill/          #   可按需加载的技能（SKILL.md）
-│   │   └── utils/          #   choose_llm、skillmiddleware
-│   ├── services/           # pdf2json（解析）、html2pdf（导出）
-│   ├── schemas/            # provider、response（统一 {code,message,data}）
-│   ├── requirements.txt
-│   ├── Dockerfile
-│   └── .dockerignore
-├── smartcv-web/            # 前端 Vue 3
-│   ├── src/
-│   │   ├── pages/          # 主页 / 编辑简历 / 优化简历 / Agent 设置
-│   │   ├── stores/         # resume（简历 JSON）、optimize（对话）
-│   │   ├── api/            # 各接口封装
-│   │   └── components/     # 编辑 / 预览组件
-│   ├── Dockerfile
-│   ├── nginx.conf          # 托管静态 + /api 反向代理
-│   └── .dockerignore
-├── docker-compose.yml
-└── docs/                   # 技术文档（backend-agents.md 等）
-```
+- **🗂 导入解析** — 上传 PDF / Word，AI 解析成结构化简历 JSON，进度实时可见。
+- **🖌 可视化编辑** — 组件拖拽排版，右侧实时预览 A4 成品。
+- **🤖 AI 优化对话** — 流式对话，诊断 → 改稿 → 摘要，思考过程与工具调用全程展示。
+- **📤 导出** — JSON 文件，或导出与预览排版一致的 PDF。
 
 ## 🚀 快速开始
 
@@ -100,12 +58,12 @@ npm run dev                                   # http://localhost:5173，/api 自
 
 ## 🐳 Docker 部署
 
-### 方式一：直接本地使用（拉镜像）
+### 方式一：拉镜像（推荐）
 
-镜像已推到阿里云 ACR 且仓库为**公开**，无需登录。机器装好 Docker + compose 即可，**不用克隆源码、不用构建**：
+镜像已推送到阿里云 ACR 公开仓库，无需登录、无需克隆源码：
 
 ```bash
-docker compose up -d                    # 拉取 ACR 镜像，一键起前后端
+docker compose up -d                    # 一键起前后端
 ```
 
 | 服务 | 镜像 | 访问 |
@@ -113,44 +71,23 @@ docker compose up -d                    # 拉取 ACR 镜像，一键起前后端
 | 前端 `frontend` | `registry.cn-hangzhou.aliyuncs.com/smartcv/smartcv-frontend:v1` | http://localhost:5173 |
 | 后端 `backend` | `registry.cn-hangzhou.aliyuncs.com/smartcv/smartcv-backend:v1` | http://localhost:8600 |
 
-- 前端 nginx 托管静态文件，并把 `/api` 反向代理到后端容器（SSE 已关缓冲、长超时）；后端 healthcheck 用 TCP 拨号 8600，前端等后端健康才启动。
-- 停止：`docker compose down`；看状态：`docker compose ps`。
-- 换其它版本：把 `docker-compose.yml` 里的 image tag（如 `:v1`）改成目标版本再 `up`。
+停止：`docker compose down`。
 
 ### 方式二：源码构建
-
-每个目录自带 Dockerfile（`smartcv-api/Dockerfile`、`smartcv-web/Dockerfile`），本地克隆后用 `docker build` 分别构建（`docker-compose.yml` 里只有 `image:`，所以**不用也不能用 `docker compose build`**）：
 
 ```bash
 docker build -t 镜像名称:版本号  smartcv-api/
 docker build -t 镜像名称:版本号  smartcv-web/
 ```
 
-推送到自己的镜像仓库：
+推送自己的仓库：
 
 ```bash
 docker tag 镜像名称:版本号 <你的仓库地址>/镜像名称:版本号
 docker push <你的仓库地址>/镜像名称:版本号
 ```
 
-### 为什么后端镜像特别大
-
-后端镜像显著大于前端，主要因为**重依赖**被一起打进了镜像：
-
-- **Playwright 无头 Chromium**：导出 PDF 用，`playwright install chromium` 会额外下载一个完整浏览器并安装其系统库（数百 MB），是整个镜像最大的部分。
-- **LangGraph / LangChain 生态**：FastAPI + langchain 全家桶（langgraph / langchain-openai 等）本身也占一两百 MB。
-
-另外提醒：
-
-- 检查点 sqlite 在容器内 `/app`，容器重建即重置（它本就每小时被清空，属临时态）。
-- 首次构建 / 拉取较慢，属正常。
-
-## 🖥️ 使用流程
-
-1. **主页** — 导入 PDF / Word / JSON，或新建空白简历。
-2. **编辑简历** — 右侧实时预览 A4 成品，组件库拖拽排版。
-3. **优化简历** — 右侧 AI 对话栏输入要求，左侧「当前简历」按 A4 分页显示；对话流式展示诊断思考 → 优化改稿 → 摘要回答。
-4. **Agent 设置** — 左侧标签页：「供应商设置」（配模型）、「md预览」（只读查看后端提示词与技能）。
+> 首次构建 / 拉取较慢属正常；后端镜像较大（含 Playwright Chromium 与 LangChain 全家桶）。
 
 ## 🔒 隐私与数据安全
 
@@ -165,24 +102,3 @@ SmartCV **不收集你的任何数据**：
 - **会话状态按「浏览器」隔离，而非按标签页**：SmartCV 用浏览器本地存储记录当前会话，同一个浏览器（同一站点）的所有标签页共用同一个会话标记，且不会随新开标签页 / 窗口而变化。因此：
   - 在同一浏览器里**多开标签页**同时「解析 / 对话」时，后发起的请求会覆盖前一个的会话状态（如解析进度），可能出现两个标签页互相串进度的现象——建议避免同一浏览器多标签同时操作。
   - **多人共用同一台电脑 / 同一浏览器**时也会共享同一会话状态；建议各自使用独立浏览器或无痕窗口，避免读到对方的操作。
-
-## 🔌 接口一览
-
-| 方法 | 路径 | 说明 |
-|---|---|---|
-| POST | `/api/resume/parse` | 上传 PDF/Word → 简历 JSON（章节数组） |
-| GET | `/api/resume/parse/status` | 轮询解析进度（按 `X-Agent-Session-Id`） |
-| POST | `/api/resume/pdf` | HTML → 导出 PDF 文件 |
-| POST | `/api/polish` | 批量润色列表文本 |
-| POST | `/api/chat` | 优化对话（**SSE 流式**），改好的简历 JSON 一并返回 |
-| GET | `/api/agent/md` | 返回后端 agent 的提示词与技能 md（只读） |
-
-## 📖 更多文档
-
-- [后端 Agent 技术文档](docs/backend-agents.md) — 流程、事件、工具、坐标、技能、检查点、流式实现。
-
----
-
-<div align="center">
-  <sub>前端代码全程由 AI 生成 · Made with ❤️</sub>
-</div>

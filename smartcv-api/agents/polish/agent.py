@@ -8,7 +8,17 @@ from langchain.agents import create_agent
 from agents.utils.choose_llm import choose_llm
 from schemas.provider import ProviderConfig
 
-_SYSTEM_PROMPT = (Path(__file__).resolve().parent / "system_prompt_polish.md").read_text(encoding="utf-8")
+_PROMPT_DIR = Path(__file__).resolve().parent
+
+# 两种润色模式各对应一份系统提示词：
+#   strict（严谨）——规则锁死：只重构表达，数字照用原文、不得凭空造数，克制、篇幅短
+#   free  （自由）——像直接问网页版 AI：自主判断怎么写最好，充分重写，可补充数据，按用户思路走
+# 差别只在"改写自由度"：严谨档守事实红线，自由档不设这条限制。
+_MODE_PROMPTS = {
+    "strict": (_PROMPT_DIR / "system_prompt_polish_strict.md").read_text(encoding="utf-8"),
+    "free": (_PROMPT_DIR / "system_prompt_polish_free.md").read_text(encoding="utf-8"),
+}
+_DEFAULT_MODE = "strict"
 
 # 系统提示词明确要求不要代码围栏，但个别模型仍会加上，解析前先剥掉
 _FENCE = re.compile(r"```(?:json)?\s*(.*?)```", re.S)
@@ -56,9 +66,13 @@ def run_polish_agent(
     provider: ProviderConfig,
     texts: list[str],
     description: str = "",
+    mode: str = _DEFAULT_MODE,
     session_id: str | None = None,
 ):
     llm = choose_llm(provider)
+
+    # 未知 mode 兜底走严谨模式（宁可保守，不要意外进入"放开"档）
+    system_prompt = _MODE_PROMPTS.get(mode) or _MODE_PROMPTS[_DEFAULT_MODE]
 
     # 这里不用 response_format=PolishedItems：那会让 langchain 把结构化输出伪装成
     # 一次 function call 发给模型（tools=[PolishedItems]、tool_choice=required）。
@@ -71,8 +85,9 @@ def run_polish_agent(
         tools=[],
     )
 
-    # description 是用户填的润色思路（前端可为空）：填了就一并交给模型当风格参考，
-    # 没填就只传要点，和加这个字段之前完全一致。
+    # description 是用户填的润色思路（前端可为空）：填了就一并交给模型。
+    # 注意它在两种模式下的地位不同 —— 严谨模式里只是"风格参考"，自由模式里是
+    # "最高优先级的指令"（由两份提示词各自定义），传参方式一样。
     hint = description.strip()
     items_block = "\n".join(texts)
     if hint:
@@ -83,7 +98,7 @@ def run_polish_agent(
     result = agent.invoke(
         {
             "messages": [
-                {"type": "system", "content": _SYSTEM_PROMPT},
+                {"type": "system", "content": system_prompt},
                 {"type": "human", "content": human_content},
             ]
         },
@@ -94,5 +109,5 @@ def run_polish_agent(
     # 不再有 structured_response（没走 response_format），直接解析模型回复的 JSON 文本
     content = result["messages"][-1].content
     items = _parse_items(content if isinstance(content, str) else "")
-    logging.info("polish-agent 输出 %d 条润色结果", len(items))
+    logging.info("polish-agent[%s] 输出 %d 条润色结果", mode, len(items))
     return items

@@ -204,6 +204,10 @@ class PolishRequest(BaseModel):
     # 用户的润色描述/思路（前端可选填）：空字符串 = 没填，按默认规则润色。
     # 与前端 api/polish.ts 的字段名保持一致。
     description: str = ""
+    # 润色模式：strict = 严谨（规则锁死，只重构表达），free = 自由（像直接问 AI，
+    # 由模型自主判断怎么写最好，并优先遵循用户思路）。默认 strict，
+    # 老前端不带该字段时行为与加模式之前完全一致。
+    mode: Literal["strict", "free"] = "strict"
 
 
 class ChatRequest(BaseModel):
@@ -303,7 +307,7 @@ async def polish(
     try:
         items = await asyncio.to_thread(
             run_polish_agent, req.provider, req.items,
-            description=req.description, session_id=session_id,
+            description=req.description, mode=req.mode, session_id=session_id,
         )
     except NotImplementedError:
         return JSONResponse(status_code=501, content=error(501, "润色 agent 尚未实现"))

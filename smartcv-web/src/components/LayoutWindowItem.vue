@@ -218,7 +218,7 @@ function onRowDragEnd(evt: { from?: HTMLElement }) {
       <span class="row-drag-handle" title="按住拖动窗口（排序 / 移到其他章节）">
         ⋮⋮
       </span>
-      <span class="row-tag">{{ isContainer ? '⇋ 横排' : '🧩 窗口布局' }}</span>
+      <span class="row-tag">{{ isContainer ? '⇋ 横排' : '窗口布局' }}</span>
       <span class="row-spacer" />
       <n-button size="tiny" quaternary type="error" title="删除窗口" @click.stop="onRemove">✕</n-button>
     </div>
@@ -261,7 +261,7 @@ function onRowDragEnd(evt: { from?: HTMLElement }) {
       </VueDraggable>
       <!-- 空横排提示：铺满落点区并居中，pointer-events:none 不挡拖放 -->
       <div v-if="(row.rows?.length ?? 0) === 0" class="row-empty">
-        📥 从组件库拖「窗口布局」到这里
+        从组件库拖「窗口布局」到这里
       </div>
     </div>
 
@@ -286,7 +286,7 @@ function onRowDragEnd(evt: { from?: HTMLElement }) {
       </VueDraggable>
       <!-- 空窗口提示：铺满落点区并居中，pointer-events:none 不挡拖放 -->
       <div v-if="(row.contents ?? []).length === 0" class="row-empty">
-        📥 从组件库把内容拖到这里
+        从组件库把内容拖到这里
       </div>
     </div>
   </div>
@@ -294,20 +294,20 @@ function onRowDragEnd(evt: { from?: HTMLElement }) {
 
 <style scoped>
 .layout-row {
-  --table-line: #e4e9f1; /* 表格线颜色 */
+  --table-line: var(--border); /* 表格线颜色 */
   position: relative;
   /* 不再画独立边框：窗口靠所在"表格"的统一边线区分，格与格贴边 */
   border: none;
   border-radius: 0;
   padding: 4px 8px 8px;
-  background: #fff;
+  background: var(--panel-bg);
   cursor: default;
 }
 
-/* 选中窗口：内侧蓝色描边（与章节/内容卡片的选中样式一致） */
+/* 选中窗口：内侧主题色描边（与章节/内容卡片的选中样式一致） */
 .layout-row.selected {
   box-shadow: inset 0 0 0 1.5px var(--primary);
-  background: #f7faff;
+  background: var(--primary-faint);
 }
 
 /* 四边 ＋ 按钮：贴在布局窗口的上下左右边缘，只在悬停该窗口时淡入 */
@@ -320,22 +320,22 @@ function onRowDragEnd(evt: { from?: HTMLElement }) {
   width: 16px;
   height: 16px;
   padding: 0;
-  border: 1px solid #e2e8f2;
+  border: 1px solid var(--border);
   border-radius: 50%;
-  background: #fff;
-  color: #9aa6b8;
+  background: var(--panel-bg);
+  color: var(--text-tertiary);
   font-size: 12px;
   line-height: 1;
   cursor: pointer;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 1px 2px rgba(36, 42, 38, 0.06);
   opacity: 0;
   visibility: hidden;
-  transition: opacity 0.15s, background 0.15s, transform 0.15s, visibility 0.15s;
+  transition: opacity 0.15s var(--ease), background 0.15s var(--ease), transform 0.15s var(--ease), visibility 0.15s;
 }
 .add-edge:hover {
   opacity: 0.9;
   visibility: visible;
-  background: #eef3ff;
+  background: var(--primary-soft);
   color: var(--primary);
 }
 .add-top {
@@ -368,7 +368,7 @@ function onRowDragEnd(evt: { from?: HTMLElement }) {
 .row-drag-handle {
   flex: none;
   cursor: grab;
-  color: #b6bdc9;
+  color: var(--text-tertiary);
   font-size: 13px;
   letter-spacing: 1px;
   padding: 0 4px;
@@ -376,8 +376,8 @@ function onRowDragEnd(evt: { from?: HTMLElement }) {
   user-select: none;
 }
 .row-drag-handle:hover {
-  background: #e8edf5;
-  color: #5b6675;
+  background: var(--primary-soft);
+  color: var(--text-secondary);
 }
 .row-drag-handle:active {
   cursor: grabbing;
@@ -392,7 +392,7 @@ function onRowDragEnd(evt: { from?: HTMLElement }) {
 }
 .row-tag {
   font-size: 11px;
-  color: #8b95a7;
+  color: var(--text-tertiary);
 }
 .row-spacer {
   flex: 1;
@@ -474,10 +474,10 @@ function onRowDragEnd(evt: { from?: HTMLElement }) {
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1.5px dashed #d3dae6;
+  border: 1px dashed var(--border-strong);
   border-radius: 8px;
-  background: #fff;
-  color: #8b95a7;
+  background: var(--panel-bg);
+  color: var(--text-tertiary);
   font-size: 12px;
   pointer-events: none;
 }

@@ -64,10 +64,10 @@ async function openMd() {
         :class="{ active: tab === 'provider' }"
         @click="tab = 'provider'"
       >
-        🔌 供应商设置
+        供应商设置
       </button>
       <button class="nav-item" :class="{ active: tab === 'md' }" @click="openMd">
-        📄 md预览
+        md 预览
       </button>
     </aside>
 
@@ -75,7 +75,7 @@ async function openMd() {
       <!-- 标签 1 · 供应商设置 -->
       <template v-if="tab === 'provider'">
         <div class="provider-card">
-          <h2 class="page-title">🔌 供应商设置</h2>
+          <h2 class="page-title">供应商设置</h2>
           <p class="page-desc">
             配置「优化简历」AI 对话使用的模型供应商。配置保存在浏览器本地，后端接入后生效
             （见 <code>src/api/chat.ts</code> 的接入说明）。
@@ -114,7 +114,7 @@ async function openMd() {
       <template v-else>
         <div class="md-layout">
           <div class="md-list">
-            <div class="md-group">📝 提示词（prompts）</div>
+            <div class="md-group">提示词（prompts）</div>
             <button
               v-for="(f, i) in md.prompts"
               :key="'p' + i"
@@ -125,7 +125,7 @@ async function openMd() {
               {{ f.name }}
             </button>
 
-            <div class="md-group">🧩 技能（skills）</div>
+            <div class="md-group">技能（skills）</div>
             <button
               v-for="(f, i) in md.skills"
               :key="'s' + i"
@@ -159,19 +159,20 @@ async function openMd() {
   display: flex;
   gap: 12px;
   padding: 16px;
-  background: #eef0f4;
+  background: var(--app-bg);
 }
 
 /* 左侧标签页 */
 .agent-nav {
   flex: none;
+  align-self: flex-start;
   width: 148px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  background: #fff;
-  border-radius: 10px;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+  gap: 2px;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
   padding: 8px;
 }
 .nav-item {
@@ -181,20 +182,21 @@ async function openMd() {
   width: 100%;
   padding: 8px 10px;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: transparent;
   font-size: 13px;
-  color: #6b7280;
+  color: var(--text-secondary);
   text-align: left;
   cursor: pointer;
+  transition: background 0.14s var(--ease), color 0.14s var(--ease);
 }
 .nav-item:hover {
-  background: #f1f3f7;
-  color: #1f2937;
+  background: var(--surface-soft);
+  color: var(--text);
 }
 .nav-item.active {
-  background: var(--primary);
-  color: #fff;
+  background: var(--primary-soft);
+  color: var(--primary-hover);
   font-weight: 600;
 }
 
@@ -209,19 +211,20 @@ async function openMd() {
 .provider-card {
   max-width: 640px;
   margin: 0 auto;
-  background: #fff;
-  border-radius: 10px;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
   padding: 24px 28px;
 }
 .page-title {
   margin: 0 0 8px;
   font-size: 16px;
+  color: var(--text);
 }
 .page-desc {
   margin: 0 0 20px;
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--text-tertiary);
   line-height: 1.8;
 }
 .form {
@@ -238,7 +241,7 @@ async function openMd() {
   flex: none;
   width: 72px;
   font-size: 13px;
-  color: #374151;
+  color: var(--text-secondary);
 }
 .form-actions {
   display: flex;
@@ -258,16 +261,16 @@ async function openMd() {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  background: #fff;
-  border-radius: 10px;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
   padding: 10px;
   overflow: auto;
 }
 .md-group {
   font-size: 11px;
   font-weight: 600;
-  color: #9ca3af;
+  color: var(--text-tertiary);
   padding: 8px 6px 4px;
 }
 .md-item {
@@ -275,37 +278,39 @@ async function openMd() {
   width: 100%;
   padding: 6px 8px;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: transparent;
   font-size: 12px;
-  color: #374151;
+  color: var(--text-secondary);
   text-align: left;
   cursor: pointer;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  transition: background 0.14s var(--ease), color 0.14s var(--ease);
 }
 .md-item:hover {
-  background: #f1f3f7;
+  background: var(--surface-soft);
+  color: var(--text);
 }
 .md-item.active {
-  background: #eef2ff;
-  color: var(--primary);
+  background: var(--primary-soft);
+  color: var(--primary-hover);
   font-weight: 600;
 }
 .md-loading {
   padding: 10px 6px;
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--text-tertiary);
 }
 .md-detail {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  background: #fff;
-  border-radius: 10px;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
   overflow: hidden;
 }
 .md-detail-head {
@@ -313,11 +318,11 @@ async function openMd() {
   align-items: center;
   gap: 8px;
   padding: 10px 14px;
-  border-bottom: 1px solid #f0f1f4;
+  border-bottom: 1px solid var(--border);
 }
 .md-path {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -330,9 +335,9 @@ async function openMd() {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 12px;
   line-height: 1.7;
-  color: #1f2937;
+  color: var(--text);
   white-space: pre-wrap;
   word-break: break-word;
-  background: #fafbfc;
+  background: var(--surface-soft);
 }
 </style>

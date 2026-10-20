@@ -100,15 +100,17 @@ function onPointerUp(e: PointerEvent) {
 .divider-grip {
   width: 3px;
   height: 42px;
-  border-radius: 2px;
-  background: #c6ccd8;
+  border-radius: 999px;
+  background: var(--primary);
   opacity: 0;
-  transition: opacity 0.12s, background 0.12s;
+  transition: opacity 0.14s var(--ease);
   pointer-events: none;
 }
 .column-divider:hover .divider-grip,
 .column-divider.dragging .divider-grip {
+  opacity: 0.5;
+}
+.column-divider.dragging .divider-grip {
   opacity: 1;
-  background: var(--primary);
 }
 </style>

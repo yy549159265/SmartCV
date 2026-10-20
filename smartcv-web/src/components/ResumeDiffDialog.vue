@@ -114,7 +114,7 @@ function onClose() {
       <!-- 左：原始简历 -->
       <div class="diff-col">
         <div class="col-head">
-          <span class="col-title">📄 原始简历</span>
+          <span class="col-title">原始简历</span>
           <span class="col-hint">{{ markedCount(diff.before) }} 处改动</span>
         </div>
         <div ref="leftEl" class="col-scroll">
@@ -132,7 +132,7 @@ function onClose() {
       <!-- 右：修改后简历 -->
       <div class="diff-col">
         <div class="col-head">
-          <span class="col-title">✨ 修改后简历</span>
+          <span class="col-title">修改后简历</span>
           <span class="col-hint">{{ markedCount(diff.after) }} 处改动</span>
         </div>
         <div ref="rightEl" class="col-scroll">
@@ -175,10 +175,10 @@ function onClose() {
 .diff-count {
   font-size: 13px;
   font-weight: 600;
-  color: #b45309;
+  color: var(--warning);
 }
 .diff-count.none {
-  color: #9ca3af;
+  color: var(--text-tertiary);
   font-weight: 400;
 }
 .diff-legend {
@@ -200,13 +200,13 @@ function onClose() {
   border-radius: 2px;
 }
 .legend-dot.added {
-  background: #10b981;
+  background: var(--primary);
 }
 .legend-dot.removed {
-  background: #ef4444;
+  background: var(--danger);
 }
 .legend-dot.changed {
-  background: #f59e0b;
+  background: var(--warning);
 }
 
 /* ---------- 左右分栏 ---------- */
@@ -229,29 +229,30 @@ function onClose() {
   justify-content: space-between;
   gap: 8px;
   padding: 8px 12px;
-  background: #f8fafc;
+  background: var(--surface-soft);
   border-bottom: 1px solid var(--border);
 }
 .col-title {
   font-size: 13px;
   font-weight: 600;
+  color: var(--text);
 }
 .col-hint {
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--text-tertiary);
 }
 /* 滚动容器：高度固定，超出才有得滚（同步滚动的前提） */
 .col-scroll {
   height: 68vh;
   overflow: auto;
   padding: 16px;
-  background: #eef0f4;
+  background: var(--surface-sunken);
 }
 /* 纸面：宽度 / 缩放走 inline style（与页面预览共用 previewZoom） */
 .col-paper {
   margin: 0 auto;
-  background: #fff;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+  background: var(--panel-bg);
+  box-shadow: var(--shadow-paper);
   padding: 24px;
 }
 
@@ -264,7 +265,7 @@ function onClose() {
 }
 .diff-footer-tip {
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--text-tertiary);
 }
 .diff-footer-actions {
   display: flex;

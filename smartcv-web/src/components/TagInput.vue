@@ -73,10 +73,10 @@ function remove(tag: string) {
   gap: 4px;
   padding: 0 6px 0 10px;
   border-radius: 999px;
-  background: #eef1f6;
+  background: var(--primary-soft);
   font-size: 12px;
   line-height: 1.7;
-  color: #374151;
+  color: var(--primary-hover);
 }
 .tag-remove {
   display: inline-flex;
@@ -88,30 +88,31 @@ function remove(tag: string) {
   border: none;
   border-radius: 50%;
   background: transparent;
-  color: #9ca3af;
+  color: var(--text-tertiary);
   font-size: 10px;
   line-height: 1;
   cursor: pointer;
-  transition: background 0.12s, color 0.12s;
+  transition: background 0.12s var(--ease), color 0.12s var(--ease);
 }
 .tag-remove:hover {
-  background: #e2e8f0;
-  color: #ef4444;
+  background: var(--danger-soft);
+  color: var(--danger);
 }
 .tag-field {
   width: 100%;
   box-sizing: border-box;
   padding: 6px 10px;
-  border: 1px solid #d8dde6;
+  border: 1px solid var(--border);
   border-radius: 6px;
-  background: #fff;
+  background: var(--panel-bg);
   font-size: 13px;
   line-height: 1.5;
-  color: #374151;
+  color: var(--text);
   outline: none;
-  transition: border-color 0.15s;
+  transition: border-color 0.15s var(--ease), box-shadow 0.15s var(--ease);
 }
 .tag-field:focus {
   border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--focus-ring);
 }
 </style>

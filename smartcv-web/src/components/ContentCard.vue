@@ -21,6 +21,7 @@ import { CONTENT_TYPE_NAMES } from '@/utils/constants'
 import type { Content, ContentData, Section, LayoutWindow, ContentType } from '@/types'
 import StylePopover from './StylePopover.vue'
 import TagInput from './TagInput.vue'
+import { onMarkdownKeydown } from '@/utils/textShortcuts'
 
 const props = defineProps<{
   section: Section
@@ -209,7 +210,7 @@ function indentItem(index: number, delta: 1 | -1) {
 /* ---------- 润色（listText / iconText 类型会显示按钮） ---------- */
 
 /**
- * 点「✨ 润色」先展开一个思路输入区（而不是直接发请求）：
+ * 点「润色」先展开一个思路输入区（而不是直接发请求）：
  * 用户可以写一句润色思路再「发送」，也可以什么都不写直接「发送」，
  * 点「取消」则收起输入区，不发任何请求。
  */
@@ -244,7 +245,7 @@ const polishable = computed(() =>
     : listItems.value.some((it) => it.text.trim()),
 )
 
-/** 点「✨ 润色」：展开思路输入区并聚焦输入框（没内容则先提示，不展开） */
+/** 点「润色」：展开思路输入区并聚焦输入框（没内容则先提示，不展开） */
 function openPolish() {
   if (!polishable.value) {
     message.warning('先写点内容再润色吧')
@@ -394,7 +395,7 @@ function onRemove() {
               </div>
             </div>
             <n-button size="small" quaternary block @click="onDuplicate">⧉ 复制</n-button>
-            <n-button size="small" quaternary type="error" block @click="onRemove">🗑️ 删除</n-button>
+            <n-button size="small" quaternary type="error" block @click="onRemove">删除</n-button>
           </div>
         </template>
       </n-popover>
@@ -415,7 +416,7 @@ function onRemove() {
         <div class="icontext-toolbar">
           <span class="editor-hint">图标文字内容</span>
           <n-button size="tiny" quaternary type="warning" @click.stop="openPolish">
-            ✨ 润色
+            润色
           </n-button>
         </div>
         <!-- 润色思路输入区：点「润色」展开，写不写思路都能发送；取消则收起、不发请求 -->
@@ -486,7 +487,8 @@ function onRemove() {
             size="small"
             type="textarea"
             :autosize="{ minRows: 1 }"
-            placeholder="文字（支持 Markdown，如 **加粗**）"
+            placeholder="文字（支持 Markdown；选中后 Ctrl+B 加粗）"
+            @keydown="onMarkdownKeydown"
           />
         </div>
         <TagInput v-model="tagsModel" />
@@ -500,8 +502,9 @@ function onRemove() {
             <n-input
               :value="col"
               size="small"
-              :placeholder="`第 ${i + 1} 栏文字（支持 Markdown）`"
+              :placeholder="`第 ${i + 1} 栏文字（Ctrl+B 加粗）`"
               @update:value="(v: string) => setColumn(i, v)"
+              @keydown="onMarkdownKeydown"
             />
             <n-button
               size="tiny"
@@ -590,7 +593,7 @@ function onRemove() {
           </n-radio-group>
           <!-- 润色按钮：只有列表文字型提供 -->
           <n-button size="tiny" quaternary type="warning" @click.stop="openPolish">
-            ✨ 润色
+            润色
           </n-button>
         </div>
         <!-- 润色思路输入区：点「润色」展开，写不写思路都能发送；取消则收起、不发请求 -->
@@ -644,8 +647,9 @@ function onRemove() {
               size="small"
               type="textarea"
               :autosize="{ minRows: 1 }"
-              placeholder="列表内容（支持 Markdown）"
+              placeholder="列表内容（支持 Markdown；选中后 Ctrl+B 加粗）"
               @update:value="(v: string) => setItem(i, v)"
+              @keydown="onMarkdownKeydown"
             />
             <n-button size="tiny" quaternary type="error" @click.stop="removeItem(i)">✕</n-button>
           </div>
@@ -654,7 +658,16 @@ function onRemove() {
       </template>
     </div>
     <template #footer>
-      <n-button size="small" type="primary" @click="editShow = false">完成</n-button>
+      <div class="modal-footer">
+        <!-- 加粗只在支持 Markdown 的文本类型里有意义，其它类型不显示提示 -->
+        <span
+          v-if="content.type === 'iconText' || content.type === 'twoColumn' || content.type === 'listText'"
+          class="modal-shortcut-hint"
+        >
+          选中文字后 <kbd>Ctrl</kbd>+<kbd>B</kbd> 加粗
+        </span>
+        <n-button size="small" type="primary" @click="editShow = false">完成</n-button>
+      </div>
     </template>
   </n-modal>
 </template>
@@ -667,7 +680,7 @@ function onRemove() {
   gap: 4px;
   padding: 4px 6px;
   border-radius: 6px;
-  background: #fff;
+  background: var(--panel-bg);
   /* 编辑画布是"操作面板"，文字固定小字号，不跟随内容字号放大（放大效果只在预览区体现） */
   font-size: 14px;
   /* 新插入的内容出现时播放一次淡入动画（按 key 挂载的 DOM 只有新内容会播放） */
@@ -687,11 +700,11 @@ function onRemove() {
   }
 }
 .content-card:hover {
-  box-shadow: inset 0 0 0 1px #d8dde6;
+  box-shadow: inset 0 0 0 1px var(--border-strong);
 }
 .content-card.selected {
   box-shadow: inset 0 0 0 1.5px var(--primary);
-  background: #f5f8ff;
+  background: var(--primary-faint);
 }
 
 /* 展开按钮：打开编辑弹窗 */
@@ -707,10 +720,10 @@ function onRemove() {
   line-height: 1;
   cursor: pointer;
   white-space: nowrap;
-  transition: background 0.12s;
+  transition: background 0.12s var(--ease);
 }
 .expand-btn:hover {
-  background: #e8edf5;
+  background: var(--primary-soft);
 }
 
 /* 类型标签：卡片的主体（图标 + 类型名，点它打开编辑弹窗） */
@@ -730,7 +743,7 @@ function onRemove() {
   transition: background 0.12s;
 }
 .content-label:hover {
-  background: #eef3ff;
+  background: var(--primary-soft);
 }
 .content-type-icon {
   flex: none;
@@ -739,7 +752,7 @@ function onRemove() {
 .content-type-name {
   flex: none;
   font-size: 13px;
-  color: #4b5563;
+  color: var(--text-secondary);
   white-space: nowrap;
 }
 
@@ -750,7 +763,7 @@ function onRemove() {
   display: flex;
   align-items: center;
   cursor: grab;
-  color: #b6bdc9;
+  color: var(--text-tertiary);
   font-size: 13px;
   letter-spacing: 1px;
   padding: 0 4px;
@@ -758,8 +771,8 @@ function onRemove() {
   user-select: none;
 }
 .content-drag-handle:hover {
-  background: #e8edf5;
-  color: #5b6675;
+  background: var(--primary-soft);
+  color: var(--text-secondary);
 }
 .content-drag-handle:active {
   cursor: grabbing;
@@ -773,6 +786,32 @@ function onRemove() {
   gap: 6px;
 }
 
+/* 弹窗底部：左侧快捷键提示，右侧「完成」 */
+.modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.modal-shortcut-hint {
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+}
+.modal-shortcut-hint kbd {
+  display: inline-block;
+  min-width: 16px;
+  margin: 0 2px;
+  padding: 1px 5px;
+  font-family: inherit;
+  font-size: 10.5px;
+  line-height: 1.5;
+  text-align: center;
+  color: var(--text-secondary);
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
 /* 图标文字型：标志 + 润色按钮 */
 .icontext-toolbar {
   display: flex;
@@ -782,7 +821,7 @@ function onRemove() {
 }
 .editor-hint {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--text-secondary);
 }
 
 /* 润色思路输入区：浅色底 + 虚线边框，和工具栏区分开（虚线暗示"可选填"） */
@@ -791,15 +830,15 @@ function onRemove() {
   flex-direction: column;
   gap: 6px;
   padding: 8px;
-  border: 1px dashed #e0cfa0;
+  border: 1px dashed rgba(166, 118, 63, 0.34);
   border-radius: 6px;
-  background: #fffbf0;
+  background: var(--warning-soft);
 }
 /* 模式说明小字：告诉用户当前这档到底做什么（只看到「严谨/深度」猜不出差别） */
 .polish-mode-hint {
   font-size: 12px;
   line-height: 1.5;
-  color: #8a6d3b;
+  color: var(--warning);
 }
 .polish-input-actions {
   display: flex;
@@ -825,7 +864,8 @@ function onRemove() {
   width: 56px;
   max-height: 72px;
   object-fit: contain;
-  border: 1px solid #e2e6ee;
+  border: 1px solid var(--border);
+  border-radius: 4px;
 }
 .image-placeholder {
   flex: none;
@@ -835,8 +875,9 @@ function onRemove() {
   width: 64px;
   height: 48px;
   border-radius: 8px;
-  border: 1.5px dashed #d3dae6;
-  background: #f7f9fc;
+  border: 1px dashed var(--border-strong);
+  background: var(--surface-soft);
+  color: var(--text-tertiary);
   font-size: 22px;
 }
 .image-controls {
@@ -863,13 +904,13 @@ function onRemove() {
   justify-content: center;
   width: 42px;
   height: 28px;
-  border: 1px solid #d8dde6;
+  border: 1px solid var(--border);
   border-radius: 6px;
-  background: #fff;
+  background: var(--panel-bg);
   font-size: 16px;
   line-height: 1;
   cursor: pointer;
-  transition: border-color 0.15s;
+  transition: border-color 0.15s var(--ease);
 }
 .icon-trigger:hover {
   border-color: var(--primary);
@@ -883,8 +924,9 @@ function onRemove() {
 /* 没选图标时的空状态：虚线框 + 浅色 ＋，暗示"可以不填" */
 .icon-trigger.empty {
   border-style: dashed;
-  background: #f7f9fc;
-  color: #b6bdc9;
+  border-color: var(--border-strong);
+  background: var(--surface-soft);
+  color: var(--text-tertiary);
   font-size: 14px;
 }
 
@@ -892,7 +934,7 @@ function onRemove() {
 .spacer-editor {
   font-size: 14px;
   line-height: 1.5;
-  color: #b6bdc9;
+  color: var(--text-tertiary);
 }
 
 /* 图标选择器弹层 */
@@ -906,7 +948,7 @@ function onRemove() {
 }
 .icon-section-name {
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--text-tertiary);
   margin-bottom: 4px;
 }
 .icon-grid {
@@ -937,17 +979,17 @@ function onRemove() {
   display: block;
 }
 .icon-cell:hover {
-  background: #eef3ff;
+  background: var(--primary-soft);
 }
 .icon-cell.active {
-  background: #eef3ff;
+  background: var(--primary-soft);
   border-color: var(--primary);
 }
 
 /* 分栏 / 时间段里的分隔符 */
 .editor-divider {
   align-self: center;
-  color: #9ca3af;
+  color: var(--text-tertiary);
   padding: 0 2px;
 }
 
@@ -970,7 +1012,7 @@ function onRemove() {
   width: 16px;
   text-align: center;
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--text-tertiary);
 }
 .column-footer {
   display: flex;
@@ -980,7 +1022,7 @@ function onRemove() {
 .column-sep-label {
   flex: none;
   font-size: 12px;
-  color: #6b7280;
+  color: var(--text-secondary);
 }
 .column-sep-input {
   width: 72px;
@@ -1008,7 +1050,7 @@ function onRemove() {
 }
 .list-marker {
   flex: none;
-  color: #6b7280;
+  color: var(--text-secondary);
   line-height: 26px;
   width: 14px;
   text-align: center;
@@ -1032,14 +1074,14 @@ function onRemove() {
   border: none;
   border-radius: 5px;
   background: transparent;
-  color: #6b7280;
+  color: var(--text-secondary);
   font-size: 15px;
   line-height: 1;
   cursor: pointer;
-  transition: background 0.12s;
+  transition: background 0.12s var(--ease);
 }
 .content-more-btn:hover {
-  background: #e8edf5;
+  background: var(--primary-soft);
 }
 
 /* 菜单里的操作按钮组 */
@@ -1065,7 +1107,7 @@ function onRemove() {
   flex: none;
   width: 30px;
   font-size: 12px;
-  color: #6b7280;
+  color: var(--text-secondary);
 }
 .more-option-row :deep(.n-slider) {
   flex: 1;
@@ -1075,7 +1117,7 @@ function onRemove() {
   width: 40px;
   text-align: right;
   font-size: 12px;
-  color: #374151;
+  color: var(--text);
   font-variant-numeric: tabular-nums;
 }
 </style>

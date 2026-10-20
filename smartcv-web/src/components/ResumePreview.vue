@@ -142,20 +142,21 @@ watch(
   flex-direction: column;
   height: 100%;
   min-width: 0;
-  background: #e8eaee;
+  background: var(--surface-sunken);
 }
 
 .preview-toolbar {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 14px;
-  background: #fff;
+  padding: 10px 16px;
+  background: var(--panel-bg);
   border-bottom: 1px solid var(--border);
 }
 .preview-title {
   font-weight: 600;
-  font-size: 14px;
+  font-size: 13px;
+  color: var(--text);
 }
 .preview-spacer {
   flex: 1;
@@ -186,9 +187,8 @@ watch(
 .a4-page {
   position: relative;
   background: #fff;
-  box-shadow:
-    0 1px 3px rgba(15, 23, 42, 0.08),
-    0 8px 24px rgba(15, 23, 42, 0.1);
+  /* 纸张是界面上唯一有高度感的面，投影保持很淡（不描边，避免影响导出截图） */
+  box-shadow: var(--shadow-paper);
 }
 
 .page-number {
@@ -196,15 +196,15 @@ watch(
   bottom: 12px;
   right: 16px;
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--text-tertiary);
   pointer-events: none;
 }
 
 .preview-empty {
   margin-top: 80px;
   text-align: center;
-  color: #9ca3af;
-  font-size: 13px;
+  color: var(--text-tertiary);
+  font-size: 12.5px;
 }
 .preview-empty div {
   font-size: 40px;

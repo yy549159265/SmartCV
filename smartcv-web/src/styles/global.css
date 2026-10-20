@@ -3,17 +3,52 @@
  * 这里只放"全应用通用"的样式：底色、字体、滚动条、
  * 以及 Markdown 渲染内容的通用样式（.md-body）。
  * 各组件自己的样式写在各自的 <style scoped> 里。
+ *
+ * 视觉基调：瓷白纸面 + 苔绿墨色。扁平、少阴影，用极细的线
+ * 和极浅的色阶区分层级，让 A4 纸面成为页面上唯一"有厚度"的东西。
  * ============================================================ */
 
 :root {
-  /* 主题色板：组件里通过 var(--xxx) 引用，想换配色改这里 */
-  --app-bg: #f3f4f6;
-  --panel-bg: #ffffff;
-  --border: #e5e9f1;
-  --text: #1f2937;
-  --text-secondary: #6b7280;
-  --primary: #4f7cff;
-  --danger: #ef4444;
+  /* ---------- 色板 ---------- */
+  --app-bg: #f2f3f0; /* 瓷白带一点灰绿，不是暖奶油色 */
+  --panel-bg: #ffffff; /* 纸面 */
+  --surface-soft: #f7f8f5; /* 次级面：工具条、卡片内衬 */
+  --surface-sunken: #eaede7; /* 凹陷面：画布、胶片底 */
+  --border: #e3e6df; /* 发丝线 */
+  --border-strong: #d2d7cf;
+  --text: #242a26; /* 墨绿黑，不用纯黑 */
+  --text-secondary: #5f6862;
+  --text-tertiary: #8b938c;
+  --primary: #4b6b5e; /* 苔绿：低饱和、偏深 */
+  --primary-hover: #3e5a4f;
+  --primary-soft: #e8efea;
+  --primary-faint: #f1f5f2;
+  --danger: #a94f4a;
+  --danger-soft: #f7eae9;
+  --warning: #a6763f;
+  --warning-soft: #f6efe4;
+  --focus-ring: rgba(75, 107, 94, 0.32);
+
+  /* ---------- 形状 ---------- */
+  --radius-lg: 14px;
+  --radius-md: 10px;
+  --radius-sm: 7px;
+  /* 只有纸面配得上阴影：极浅的接触影 + 很长很淡的环境影 */
+  --shadow-paper:
+    0 1px 2px rgba(36, 42, 38, 0.04),
+    0 18px 40px -24px rgba(36, 42, 38, 0.24);
+  --shadow-raised: 0 10px 30px -18px rgba(36, 42, 38, 0.25);
+  --ease: cubic-bezier(0.2, 0.7, 0.3, 1);
+
+  /* ---------- 字体 ---------- */
+  /* 正文沿用系统字体：预览/PDF 也继承它，不能随意更换 */
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', sans-serif;
+  /* 展示字体只用于品牌字标与主页大标题，不进入简历内容 */
+  --font-display:
+    'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, 'Songti SC', 'Noto Serif SC',
+    serif;
 }
 
 * {
@@ -28,9 +63,7 @@ body,
 }
 
 body {
-  font-family:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
-    'Microsoft YaHei', sans-serif;
+  font-family: var(--font-sans);
   color: var(--text);
   background: var(--app-bg);
   -webkit-font-smoothing: antialiased;
@@ -43,8 +76,19 @@ button {
   font-family: inherit;
 }
 
+/* 键盘焦点：统一一圈柔和的苔绿光晕，不改变任何盒子尺寸 */
+:where(a, button, [role='button'], [tabindex]):focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: rgba(75, 107, 94, 0.18);
+}
+
 /* ============================================================
  * Markdown 渲染内容的通用样式（预览里的内容文字都用 .md-body）
+ * 注意：这里只改颜色，不改字号 / 行高 / 间距 —— 预览与 PDF 共用这套样式。
  * ============================================================ */
 .md-body p {
   margin: 0 0 6px;
@@ -58,14 +102,14 @@ button {
   padding-left: 1.4em;
 }
 .md-body code {
-  background: rgba(127, 127, 127, 0.12);
+  background: rgba(95, 104, 98, 0.1);
   padding: 1px 5px;
   border-radius: 4px;
   font-size: 0.9em;
   font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
 }
 .md-body pre {
-  background: #f6f8fa;
+  background: var(--surface-soft);
   padding: 10px 12px;
   border-radius: 6px;
   overflow: auto;
@@ -82,7 +126,7 @@ button {
 .md-body blockquote {
   margin: 6px 0;
   padding-left: 10px;
-  border-left: 3px solid #d3dae6;
+  border-left: 3px solid var(--border-strong);
   color: var(--text-secondary);
 }
 
@@ -112,18 +156,22 @@ button {
 }
 
 /* ============================================================
- * 滚动条美化（WebKit 内核）
+ * 滚动条美化（WebKit 内核）：细窄、无轨道、悬停才明显
  * ============================================================ */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
 }
 ::-webkit-scrollbar-thumb {
-  background: #d1d5db;
-  border-radius: 4px;
+  background: #cfd4cc;
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #b6bdc9;
+  background: #b5bcb3;
+  border: 3px solid transparent;
+  background-clip: content-box;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
@@ -141,9 +189,9 @@ button {
  * 一旦用了 border / padding / margin，页数和导出结果就会跟着变。
  * ============================================================ */
 [data-diff] {
-  /* 默认档 = 修改（琥珀）；新增/删除在下面各自覆盖这两个变量 */
-  --diff-color: #f59e0b;
-  --diff-bg: rgba(245, 158, 11, 0.14);
+  /* 默认档 = 修改（哑光赭石）；新增/删除在下面各自覆盖这两个变量 */
+  --diff-color: #a6763f;
+  --diff-bg: rgba(166, 118, 63, 0.13);
   position: relative;
   border-radius: 3px;
   background: var(--diff-bg);
@@ -151,12 +199,12 @@ button {
   box-shadow: -3px 0 0 0 var(--diff-color);
 }
 [data-diff='added'] {
-  --diff-color: #10b981;
-  --diff-bg: rgba(16, 185, 129, 0.13);
+  --diff-color: #4b6b5e;
+  --diff-bg: rgba(75, 107, 94, 0.12);
 }
 [data-diff='removed'] {
-  --diff-color: #ef4444;
-  --diff-bg: rgba(239, 68, 68, 0.13);
+  --diff-color: #a94f4a;
+  --diff-bg: rgba(169, 79, 74, 0.11);
   /* 删除再多一道删除线：颜色之外多个形状通道，色盲用户也能分辨。
      text-decoration 会向流内后代传播，所以整块被删时里面的文字都会划掉，
      且它不改变任何盒子的尺寸（只影响绘制）。 */
@@ -198,9 +246,24 @@ button {
 @keyframes preview-flash {
   0%,
   100% {
-    outline-color: rgba(79, 124, 255, 0.15);
+    outline-color: rgba(75, 107, 94, 0.12);
   }
   50% {
-    outline-color: rgba(79, 124, 255, 0.95);
+    outline-color: rgba(75, 107, 94, 0.9);
+  }
+}
+
+/* ============================================================
+ * 无障碍：系统开启「减少动态效果」时，停掉装饰性动画与过渡
+ * （预览闪烁的选中提示也一并静止，但不影响任何布局）
+ * ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

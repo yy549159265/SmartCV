@@ -291,20 +291,15 @@ const formatSize = (bytes: number) => `${Math.max(1, Math.round(bytes / 1024))} 
   flex-direction: column;
   padding: 0;
   border: 1px solid var(--border);
-  border-radius: 12px;
-  background: #fff;
+  border-radius: var(--radius-lg);
+  background: var(--panel-bg);
   overflow: hidden;
   cursor: pointer;
   text-align: left;
-  transition:
-    transform 0.15s,
-    box-shadow 0.15s,
-    border-color 0.15s;
+  transition: border-color 0.16s var(--ease);
 }
 .example-card:hover {
-  transform: translateY(-2px);
-  border-color: var(--primary);
-  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.1);
+  border-color: var(--border-strong);
 }
 
 /* ---------- 缩略图：固定高度裁切 + 底部渐变，暗示「下面还有内容」 ---------- */
@@ -312,7 +307,7 @@ const formatSize = (bytes: number) => `${Math.max(1, Math.round(bytes / 1024))} 
   position: relative;
   height: 340px;
   overflow: hidden;
-  background: #eef1f6;
+  background: var(--surface-soft);
 }
 .example-thumb::after {
   content: '';
@@ -321,14 +316,14 @@ const formatSize = (bytes: number) => `${Math.max(1, Math.round(bytes / 1024))} 
   right: 0;
   bottom: 0;
   height: 56px;
-  background: linear-gradient(to bottom, rgba(255, 255, 255, 0), #fff);
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0), var(--panel-bg));
   pointer-events: none;
 }
 
 /* A4 纸张：794px 宽（box-sizing: border-box 已全局生效，padding 用 A4 页边距） */
 .example-paper {
   background: #fff;
-  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.12);
+  box-shadow: 0 1px 2px rgba(36, 42, 38, 0.05);
 }
 
 .example-thumb-mask {
@@ -340,7 +335,7 @@ const formatSize = (bytes: number) => `${Math.max(1, Math.round(bytes / 1024))} 
   justify-content: center;
   gap: 10px;
   padding: 16px;
-  background: #f7f9fc;
+  background: var(--surface-soft);
 }
 .example-thumb-text {
   font-size: 12px;
@@ -373,11 +368,11 @@ const formatSize = (bytes: number) => `${Math.max(1, Math.round(bytes / 1024))} 
 .example-size {
   flex: none;
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--text-tertiary);
 }
 
 .example-footer-tip {
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--text-tertiary);
 }
 </style>

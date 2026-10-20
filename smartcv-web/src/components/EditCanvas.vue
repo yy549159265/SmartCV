@@ -14,6 +14,7 @@
 import { onKeyStroke } from '@vueuse/core'
 import { VueDraggable } from 'vue-draggable-plus'
 import SectionCard from './SectionCard.vue'
+import BrandMark from './BrandMark.vue'
 import { useResumeStore } from '@/stores/resume'
 import { createSectionFromPreset } from '@/data/presets'
 import { message } from '@/utils/feedback'
@@ -87,11 +88,12 @@ onKeyStroke('Delete', () => {
   <section class="canvas">
     <div class="canvas-toolbar">
       <span class="canvas-title">编辑画布</span>
-      <span class="canvas-hint">从左侧拖入内容 · 拖动 ⋮⋮ 手柄排序</span>
+      <span class="canvas-hint">从左侧拖入内容，拖动 ⋮⋮ 手柄排序</span>
       <!-- 快捷键提示（见 main.ts 里的 keydown 监听）：靠 spacer 推到工具栏最右 -->
       <span class="canvas-spacer" />
       <span class="canvas-key-hint">
-        <kbd>Ctrl</kbd>+<kbd>Z</kbd> 撤回 · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> 还原
+        <span><kbd>Ctrl</kbd>+<kbd>Z</kbd> 撤回</span>
+        <span><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> 还原</span>
       </span>
     </div>
 
@@ -113,7 +115,7 @@ onKeyStroke('Delete', () => {
 
           <!-- 空画布提示 -->
           <div v-if="store.resume.length === 0" class="canvas-empty">
-            <div class="empty-icon">🧱</div>
+            <BrandMark :size="36" class="canvas-empty-mark" />
             <p>
               画布是空的<br />
               从左侧拖一个章节到这里
@@ -135,24 +137,29 @@ onKeyStroke('Delete', () => {
   flex-direction: column;
   height: 100%;
   min-width: 0;
-  background: #eef0f4;
+  background: var(--surface-sunken);
+  /* 只作为容器查询的参照，不影响列宽（列宽由拖动分隔条决定） */
+  container-type: inline-size;
 }
 
 .canvas-toolbar {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 14px;
-  background: #fff;
+  padding: 10px 16px;
+  background: var(--panel-bg);
   border-bottom: 1px solid var(--border);
 }
 .canvas-title {
+  flex: none;
   font-weight: 600;
-  font-size: 14px;
+  font-size: 13px;
+  white-space: nowrap;
+  color: var(--text);
 }
 .canvas-hint {
-  font-size: 12px;
-  color: #9ca3af;
+  font-size: 11.5px;
+  color: var(--text-tertiary);
   /* 画布列被拖窄时截断提示文字，而不是折行把工具栏撑高 */
   min-width: 0;
   overflow: hidden;
@@ -167,30 +174,38 @@ onKeyStroke('Delete', () => {
 
 .canvas-key-hint {
   flex: none;
-  font-size: 12px;
-  color: #9ca3af;
+  display: flex;
+  gap: 12px;
+  font-size: 11px;
+  color: var(--text-tertiary);
   white-space: nowrap;
 }
 .canvas-key-hint kbd {
   display: inline-block;
   min-width: 16px;
-  margin: 0 3px;
+  margin: 0 2px;
   padding: 1px 5px;
   font-family: inherit;
-  font-size: 11px;
+  font-size: 10.5px;
   line-height: 1.5;
   text-align: center;
-  color: #6b7280;
-  background: #f6f7f9;
+  color: var(--text-secondary);
+  background: var(--surface-soft);
   border: 1px solid var(--border);
-  border-bottom-width: 2px;
   border-radius: 4px;
+}
+
+/* 画布列被拖窄时，先让快捷键提示让位，标题与拖拽说明不折行 */
+@container (max-width: 620px) {
+  .canvas-key-hint {
+    display: none;
+  }
 }
 
 .canvas-scroll {
   flex: 1;
   overflow: auto;
-  padding: 20px 14px 48px;
+  padding: 24px 16px 56px;
 }
 
 /* 画布纸面：填满画布列（随列宽拉伸，拖动分隔条可以把它调宽/调窄） */
@@ -202,9 +217,12 @@ onKeyStroke('Delete', () => {
   max-width: 1000px; /* 上限：防止预览缩到最小时卡片被拉得过长 */
   margin: 0 auto;
   padding: 20px 16px 28px;
-  background: #fff;
-  border-radius: 10px;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06), 0 6px 20px rgba(15, 23, 42, 0.07);
+  background: var(--panel-bg);
+  border-radius: var(--radius-lg);
+  /* 用发丝环 + 极淡纸影代替硬投影；box-shadow 不参与布局 */
+  box-shadow:
+    0 0 0 1px var(--border),
+    var(--shadow-paper);
 }
 
 /* 章节列表铺满整张纸，空白处也能落点；卡片随纸面一起变宽 */
@@ -235,17 +253,17 @@ onKeyStroke('Delete', () => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 12px;
   text-align: center;
-  color: #9ca3af;
+  color: var(--text-tertiary);
   pointer-events: none;
 }
-.empty-icon {
-  font-size: 44px;
+.canvas-empty-mark {
+  opacity: 0.35;
 }
 .canvas-empty p {
   margin: 0;
-  font-size: 13px;
+  font-size: 12.5px;
   line-height: 1.8;
 }
 

@@ -245,7 +245,7 @@ function onRemove() {
         <n-popover v-model:show="styleShow" trigger="click" placement="bottom-start" :width="288">
           <template #trigger>
             <span ref="styleTriggerRef" class="trigger-wrap">
-              <n-button size="tiny" quaternary>🎨 样式</n-button>
+              <n-button size="tiny" quaternary>样式</n-button>
             </span>
           </template>
           <template #default>
@@ -279,7 +279,7 @@ function onRemove() {
 
       <!-- 无窗口提示：铺满整个落点区并居中，pointer-events:none 不挡拖放（空白章节也能承接拖入） -->
       <div v-if="section.rows.length === 0" class="section-empty">
-        📥 从左侧拖「布局窗口」或内容到这里
+        从左侧拖「布局窗口」或内容到这里
       </div>
     </div>
   </div>
@@ -289,19 +289,19 @@ function onRemove() {
 .section-card {
   position: relative;
   padding: 8px 10px 4px;
-  border-radius: 8px;
-  background: #fbfcfe;
-  box-shadow: inset 0 0 0 1px #e2e6ee;
+  border-radius: var(--radius-md);
+  background: var(--surface-soft);
+  box-shadow: inset 0 0 0 1px var(--border);
   transition:
-    box-shadow 0.15s,
-    background 0.15s;
+    box-shadow 0.15s var(--ease),
+    background 0.15s var(--ease);
 }
 .section-card:hover {
-  box-shadow: inset 0 0 0 1px #c8d0dd;
+  box-shadow: inset 0 0 0 1px var(--border-strong);
 }
 .section-card.selected {
   box-shadow: inset 0 0 0 1.5px var(--primary);
-  background: #f7faff;
+  background: var(--primary-faint);
 }
 
 .forced-badge {
@@ -309,9 +309,9 @@ function onRemove() {
   top: -9px;
   right: 12px;
   z-index: 2;
-  background: #fff7ed;
-  color: #ea580c;
-  border: 1px solid #fdba74;
+  background: var(--warning-soft);
+  color: var(--warning);
+  border: 1px solid rgba(166, 118, 63, 0.24);
   border-radius: 999px;
   font-size: 11px;
   line-height: 18px;
@@ -324,7 +324,7 @@ function onRemove() {
   align-items: center;
   gap: 4px;
   padding-bottom: 6px;
-  border-bottom: 1px dashed #e5e9f1;
+  border-bottom: 1px solid var(--border);
   margin-bottom: 8px;
 }
 .section-header.collapsed {
@@ -339,14 +339,15 @@ function onRemove() {
   border: none;
   border-radius: 5px;
   background: transparent;
-  color: #6b7280;
+  color: var(--text-tertiary);
   font-size: 13px;
   line-height: 1;
   cursor: pointer;
-  transition: background 0.12s;
+  transition: background 0.12s var(--ease);
 }
 .collapse-btn:hover {
-  background: #e8edf5;
+  background: var(--primary-soft);
+  color: var(--text-secondary);
 }
 
 .section-drag-handle {
@@ -355,7 +356,7 @@ function onRemove() {
   display: flex;
   align-items: center;
   cursor: grab;
-  color: #b6bdc9;
+  color: var(--text-tertiary);
   font-size: 15px;
   letter-spacing: 1px;
   padding: 0 8px;
@@ -364,8 +365,8 @@ function onRemove() {
   user-select: none;
 }
 .section-drag-handle:hover {
-  background: #e8edf5;
-  color: #5b6675;
+  background: var(--primary-soft);
+  color: var(--text-secondary);
 }
 .section-drag-handle:active {
   cursor: grabbing;
@@ -377,13 +378,13 @@ function onRemove() {
   outline: none;
   background: transparent;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--text);
   padding: 2px 4px;
   border-radius: 4px;
 }
 .section-title-input:hover,
 .section-title-input:focus {
-  background: #eef2f8;
+  background: var(--primary-faint);
 }
 
 /* 标题前的图标触发按钮：点它打开图标选择器（始终可见，便于一眼看到可加图标） */
@@ -405,13 +406,14 @@ function onRemove() {
     border-color 0.12s;
 }
 .section-icon-trigger:hover {
-  border-color: var(--primary);
-  background: #eef3ff;
+  border-color: var(--border-strong);
+  background: var(--primary-soft);
 }
 .section-icon-trigger.empty {
   border-style: dashed;
-  background: #f7f9fc;
-  color: #b6bdc9;
+  border-color: var(--border-strong);
+  background: transparent;
+  color: var(--text-tertiary);
 }
 .section-icon-content {
   display: inline-flex;
@@ -432,7 +434,7 @@ function onRemove() {
 }
 .icon-section-name {
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--text-tertiary);
   margin-bottom: 4px;
 }
 .icon-grid {
@@ -462,10 +464,10 @@ function onRemove() {
   display: block;
 }
 .icon-cell:hover {
-  background: #eef3ff;
+  background: var(--primary-soft);
 }
 .icon-cell.active {
-  background: #eef3ff;
+  background: var(--primary-soft);
   border-color: var(--primary);
 }
 .pick-actions {
@@ -499,7 +501,7 @@ function onRemove() {
   flex-direction: column;
 }
 .section-rows-inner {
-  --table-line: #e4e9f1;
+  --table-line: var(--border);
   display: flex;
   flex-direction: column;
   gap: 1px;
@@ -510,7 +512,7 @@ function onRemove() {
   min-height: 96px;
 }
 .section-rows-inner > * {
-  background: #fff;
+  background: var(--panel-bg);
 }
 
 /* 无窗口提示：绝对定位铺满落点区并居中；pointer-events:none 让它不拦截拖放 */
@@ -520,10 +522,10 @@ function onRemove() {
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1.5px dashed #d3dae6;
+  border: 1px dashed var(--border-strong);
   border-radius: 8px;
-  background: #fcfdff;
-  color: #8b95a7;
+  background: var(--panel-bg);
+  color: var(--text-tertiary);
   font-size: 12px;
   pointer-events: none;
 }

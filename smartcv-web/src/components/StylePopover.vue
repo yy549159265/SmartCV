@@ -306,10 +306,10 @@ const colorPresets = [
         </div>
 
         <p v-if="mode === 'section'" class="style-hint">
-          💡 正文字号 / 颜色 / 行距 / 块间距会继承给章节内所有内容
+          正文字号 / 颜色 / 行距 / 块间距会继承给章节内所有内容
         </p>
         <p v-else class="style-hint">
-          💡 开启「自定义」后该字段独立生效；「跟随」= 使用章节的继承值
+          开启「自定义」后该字段独立生效；「跟随」= 使用章节的继承值
         </p>
   </div>
 </template>
@@ -330,7 +330,7 @@ const colorPresets = [
 
 .style-label {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--text-secondary);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -353,14 +353,14 @@ const colorPresets = [
   width: 42px;
   text-align: right;
   font-size: 12px;
-  color: #374151;
+  color: var(--text);
   font-variant-numeric: tabular-nums;
 }
 
 .style-hint {
   margin: 0;
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--text-tertiary);
   line-height: 1.5;
 }
 </style>

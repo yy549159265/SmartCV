@@ -50,7 +50,7 @@ const contentPresetList = ref(visibleContentPresets)
 <template>
   <aside class="library">
     <div class="library-header">
-      <h2 class="library-title">🧱 组件库</h2>
+      <h2 class="library-title">组件库</h2>
       <p class="library-sub">按住卡片，拖进中间画布</p>
     </div>
 
@@ -66,11 +66,8 @@ const contentPresetList = ref(visibleContentPresets)
           <h4 class="lib-sub-title">通用</h4>
           <VueDraggable v-model="sectionGeneral" v-bind="sectionProps" class="lib-list">
             <div
-              v-for="(p, i) in sectionGeneral"
+              v-for="p in sectionGeneral"
               :key="p.id"
-              v-motion
-              :initial="{ opacity: 0, y: 8 }"
-              :enter="{ opacity: 1, y: 0, transition: { delay: i * 30, duration: 300 } }"
               class="lib-card"
               title="拖到画布空白处，生成新章节"
             >
@@ -85,11 +82,8 @@ const contentPresetList = ref(visibleContentPresets)
           <h4 class="lib-sub-title">预设</h4>
           <VueDraggable v-model="sectionPresetList" v-bind="sectionProps" class="lib-list">
             <div
-              v-for="(p, i) in sectionPresetList"
+              v-for="p in sectionPresetList"
               :key="p.id"
-              v-motion
-              :initial="{ opacity: 0, y: 8 }"
-              :enter="{ opacity: 1, y: 0, transition: { delay: i * 30, duration: 300 } }"
               class="lib-card"
               title="拖到画布空白处，生成新章节"
             >
@@ -114,11 +108,8 @@ const contentPresetList = ref(visibleContentPresets)
           <h4 class="lib-sub-title">通用</h4>
           <VueDraggable v-model="rowGeneral" v-bind="rowProps" class="lib-list">
             <div
-              v-for="(p, i) in rowGeneral"
+              v-for="p in rowGeneral"
               :key="p.id"
-              v-motion
-              :initial="{ opacity: 0, y: 8 }"
-              :enter="{ opacity: 1, y: 0, transition: { delay: i * 30, duration: 300 } }"
               class="lib-card row-card"
               title="拖到章节里，用 ＋上/下/左/右 或拖拽排列"
             >
@@ -133,11 +124,8 @@ const contentPresetList = ref(visibleContentPresets)
           <h4 class="lib-sub-title">预设</h4>
           <VueDraggable v-model="rowPresetList" v-bind="rowProps" class="lib-list">
             <div
-              v-for="(p, i) in rowPresetList"
+              v-for="p in rowPresetList"
               :key="p.id"
-              v-motion
-              :initial="{ opacity: 0, y: 8 }"
-              :enter="{ opacity: 1, y: 0, transition: { delay: i * 30, duration: 300 } }"
               class="lib-card row-card"
               title="拖到章节里，生成对应结构的布局"
             >
@@ -162,11 +150,8 @@ const contentPresetList = ref(visibleContentPresets)
           <h4 class="lib-sub-title">通用</h4>
           <VueDraggable v-model="contentGeneral" v-bind="contentProps" class="lib-list">
             <div
-              v-for="(p, i) in contentGeneral"
+              v-for="p in contentGeneral"
               :key="p.id"
-              v-motion
-              :initial="{ opacity: 0, y: 8 }"
-              :enter="{ opacity: 1, y: 0, transition: { delay: i * 30, duration: 300 } }"
               class="lib-card"
               title="拖到某个布局窗口内部"
             >
@@ -181,11 +166,8 @@ const contentPresetList = ref(visibleContentPresets)
           <h4 class="lib-sub-title">预设</h4>
           <VueDraggable v-model="contentPresetList" v-bind="contentProps" class="lib-list">
             <div
-              v-for="(p, i) in contentPresetList"
+              v-for="p in contentPresetList"
               :key="p.id"
-              v-motion
-              :initial="{ opacity: 0, y: 8 }"
-              :enter="{ opacity: 1, y: 0, transition: { delay: i * 30, duration: 300 } }"
               class="lib-card"
               title="拖到某个布局窗口内部"
             >
@@ -209,113 +191,123 @@ const contentPresetList = ref(visibleContentPresets)
   flex-direction: column;
   height: 100%;
   min-width: 0;
-  background: #fff;
+  background: var(--panel-bg);
   border-right: 1px solid var(--border);
 }
 
 .library-header {
-  padding: 14px 16px 10px;
-  border-bottom: 1px solid #f0f1f4;
+  padding: 18px 16px 14px;
+  border-bottom: 1px solid var(--border);
 }
 
 .library-title {
   margin: 0;
-  font-size: 15px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--text);
 }
 
 .library-sub {
-  margin: 4px 0 0;
-  font-size: 12px;
-  color: #9ca3af;
+  margin: 5px 0 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-tertiary);
 }
 
 .library-scroll {
   flex: 1;
   overflow: auto;
-  padding: 12px 12px 24px;
+  padding: 14px 10px 28px;
 }
 
 .lib-section {
-  margin-bottom: 18px;
+  margin-bottom: 20px;
 }
 
 .lib-section-title {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   width: 100%;
   margin: 0 0 8px;
-  padding: 4px;
+  padding: 5px 6px;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: transparent;
   font-size: 12px;
   font-weight: 600;
-  color: #6b7280;
+  color: var(--text-secondary);
   text-align: left;
   cursor: pointer;
-  transition: background 0.12s;
+  transition: background 0.14s var(--ease);
 }
 .lib-section-title:hover {
-  background: #f2f5fa;
+  background: var(--surface-soft);
+}
+.lib-section-title > span {
+  width: 10px;
+  color: var(--text-tertiary);
+  font-size: 10px;
 }
 
 .lib-sub-title {
-  margin: 8px 0 6px;
-  font-size: 11px;
-  font-weight: 600;
-  color: #9ca3af;
-  padding-left: 4px;
+  margin: 10px 0 6px;
+  padding: 0 6px;
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--text-tertiary);
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 .lib-sub-title::after {
   content: '';
   flex: 1;
   height: 1px;
-  background: #f0f1f4;
+  background: var(--border);
 }
 
 .lib-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 2px;
 }
 
+/* 拖拽项：无边框、无投影的行式条目，悬停只换一层浅底色 */
 .lib-card {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 12px;
-  border: 1px solid #e5e9f1;
-  border-radius: 8px;
-  background: #fbfcfe;
+  padding: 9px 8px;
+  border-radius: var(--radius-sm);
+  background: transparent;
   cursor: grab;
   user-select: none;
-  transition:
-    border-color 0.15s,
-    box-shadow 0.15s,
-    transform 0.15s;
+  transition: background 0.14s var(--ease);
 }
 .lib-card:hover {
-  border-color: var(--primary);
-  box-shadow: 0 2px 8px rgba(79, 124, 255, 0.12);
-  transform: translateY(-1px);
+  background: var(--surface-soft);
 }
 .lib-card:active {
   cursor: grabbing;
+  background: var(--primary-faint);
 }
 
-/* 布局卡片：虚线边框，和内容卡片区分 */
+/* 布局卡片：一层极浅的内衬，和内容卡片区分（不用刺眼的虚线框） */
 .row-card {
-  border-style: dashed;
+  background: var(--surface-soft);
+}
+.row-card:hover {
+  background: var(--primary-faint);
 }
 
 .lib-icon {
   flex: none;
-  font-size: 20px;
-  width: 28px;
+  width: 26px;
+  font-size: 18px;
+  line-height: 1.2;
   text-align: center;
 }
 
@@ -325,24 +317,27 @@ const contentPresetList = ref(visibleContentPresets)
 }
 
 .lib-name {
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 500;
-  color: #1f2937;
+  line-height: 1.45;
+  color: var(--text);
 }
 
 .lib-desc {
+  margin-top: 1px;
   font-size: 11px;
-  color: #9ca3af;
-  margin-top: 2px;
+  line-height: 1.45;
+  color: var(--text-tertiary);
 }
 
 /* 命名内容预设上的类型角标（如 图标文字 / 列表文字） */
 .lib-type {
   flex: none;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--primary-soft);
   font-size: 10px;
-  color: #4f7cff;
-  background: #eef3ff;
-  border-radius: 4px;
-  padding: 1px 6px;
+  line-height: 1.6;
+  color: var(--primary-hover);
 }
 </style>

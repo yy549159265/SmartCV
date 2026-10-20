@@ -241,7 +241,7 @@ function onApplyDiff() {
     <!-- 左：当前简历只读渲染 -->
     <section class="resume-panel">
       <div class="panel-header">
-        <span class="panel-title">📄 当前简历</span>
+        <span class="panel-title">当前简历</span>
         <span class="panel-hint">共 {{ resumeStore.resume.length }} 个章节 · {{ pages.length }} 页 · 只读</span>
         <span class="panel-spacer" />
         <!-- 缩放与实时预览共用：两边看到的字号永远一致 -->
@@ -309,7 +309,7 @@ function onApplyDiff() {
 
       <!-- 对话栏 -->
       <div class="chat-header">
-        <span class="panel-title">💬 简历修改对话</span>
+        <span class="panel-title">简历修改对话</span>
         <span class="panel-spacer" />
         <!-- 对比弹窗关掉后简历仍是旧的，这里留个入口，想好了再点开应用 -->
         <n-button
@@ -319,7 +319,7 @@ function onApplyDiff() {
           ghost
           @click="optimizeStore.openDiff()"
         >
-          📝 查看修改对比
+          查看修改对比
         </n-button>
         <span
           class="session-id"
@@ -340,7 +340,7 @@ function onApplyDiff() {
       <div ref="chatListEl" class="chat-list">
         <!-- 空状态 -->
         <div v-if="optimizeStore.messages.length === 0" class="chat-empty">
-          👋 描述你想怎么改这份简历，例如：<br />
+          描述你想怎么改这份简历，例如：<br />
           「把工作经历写得更量化一点」「帮我把自我评价改得简洁有力」
         </div>
 
@@ -389,7 +389,7 @@ function onApplyDiff() {
                 <div class="agent-block">
                   <button class="agent-sub-toggle" @click="m.thinkingOpen = !m.thinkingOpen">
                     <span class="chevron">{{ m.thinkingOpen ? '▾' : '▸' }}</span>
-                    <span>💭 思考过程</span>
+                    <span>思考过程</span>
                     <span class="field-tip">
                       <span class="field-hint">reasoning_content</span>
                       <span class="tip-bubble">思考参考模型的 reasoning_content 字段；模型没返回这个字段，就是没有思考过程</span>
@@ -402,7 +402,7 @@ function onApplyDiff() {
                 <div v-if="m.steps.length" class="agent-block">
                   <button class="agent-sub-toggle" @click="m.toolsOpen = !m.toolsOpen">
                     <span class="chevron">{{ m.toolsOpen ? '▾' : '▸' }}</span>
-                    <span>🔧 工具调用</span>
+                    <span>工具调用</span>
                     <span class="field-tip">
                       <span class="field-hint">{{ m.steps.length }} 次</span>
                       <span class="tip-bubble">该 agent 实际调用的工具，如 patch_content 按坐标就地改简历</span>
@@ -420,7 +420,7 @@ function onApplyDiff() {
                 <div v-if="m.text" class="agent-block">
                   <button class="agent-sub-toggle" @click="m.answerOpen = !m.answerOpen">
                     <span class="chevron">{{ m.answerOpen ? '▾' : '▸' }}</span>
-                    <span>💬 回答</span>
+                    <span>回答</span>
                   </button>
                   <div v-if="m.answerOpen" class="agent-answer" v-html="renderMarkdown(m.text)"></div>
                 </div>
@@ -468,7 +468,7 @@ function onApplyDiff() {
   display: flex;
   gap: 12px;
   padding: 12px;
-  background: #eef0f4;
+  background: var(--app-bg);
 }
 
 /* ---- 左：简历渲染 ---- */
@@ -477,9 +477,9 @@ function onApplyDiff() {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  background: #fff;
-  border-radius: 10px;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
   overflow: hidden;
 }
 
@@ -521,11 +521,12 @@ function onApplyDiff() {
 }
 .panel-title {
   font-weight: 600;
-  font-size: 14px;
+  font-size: 13px;
+  color: var(--text);
 }
 .panel-hint {
-  font-size: 12px;
-  color: #9ca3af;
+  font-size: 11.5px;
+  color: var(--text-tertiary);
 }
 .panel-spacer {
   flex: 1;
@@ -546,9 +547,7 @@ function onApplyDiff() {
 .a4-page {
   position: relative;
   background: #fff;
-  box-shadow:
-    0 1px 3px rgba(15, 23, 42, 0.08),
-    0 8px 24px rgba(15, 23, 42, 0.1);
+  box-shadow: var(--shadow-paper);
   /* 宽度 / 最小高 / 内边距 / 缩放由 pageStyle 动态设置（与实时预览的 A4 纸张一致） */
 }
 .page-number {
@@ -556,14 +555,14 @@ function onApplyDiff() {
   bottom: 12px;
   right: 16px;
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--text-tertiary);
   pointer-events: none;
 }
 .resume-empty {
   padding: 60px 0;
   text-align: center;
-  color: #9ca3af;
-  font-size: 13px;
+  color: var(--text-tertiary);
+  font-size: 12.5px;
 }
 
 /* ---- 右：JD + 对话 ---- */
@@ -572,14 +571,14 @@ function onApplyDiff() {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  background: #fff;
-  border-radius: 10px;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
   overflow: hidden;
 }
 
 .jd-section {
-  border-bottom: 1px solid #f0f1f4;
+  border-bottom: 1px solid var(--border);
 }
 .jd-toggle {
   display: flex;
@@ -591,12 +590,14 @@ function onApplyDiff() {
   background: transparent;
   font-size: 13px;
   font-weight: 600;
-  color: #374151;
+  color: var(--text-secondary);
   text-align: left;
   cursor: pointer;
+  transition: background 0.14s var(--ease), color 0.14s var(--ease);
 }
 .jd-toggle:hover {
-  background: #f7f9fc;
+  background: var(--surface-soft);
+  color: var(--text);
 }
 .jd-body {
   padding: 0 16px 12px;
@@ -607,12 +608,12 @@ function onApplyDiff() {
   align-items: center;
   justify-content: space-between;
   padding: 10px 16px;
-  border-bottom: 1px solid #f0f1f4;
+  border-bottom: 1px solid var(--border);
 }
 .session-id {
   font-size: 11px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  color: #94a3b8;
+  color: var(--text-tertiary);
   white-space: nowrap;
   cursor: help;
 }
@@ -627,9 +628,10 @@ function onApplyDiff() {
 }
 .chat-empty {
   margin: auto;
+  max-width: 360px;
   text-align: center;
-  color: #9ca3af;
-  font-size: 13px;
+  color: var(--text-secondary);
+  font-size: 12.5px;
   line-height: 1.9;
 }
 .chat-msg {
@@ -661,12 +663,12 @@ function onApplyDiff() {
   gap: 4px;
   max-width: 100%;
   min-width: 0;
-  background: #f8fafc;
-  border: 1px solid #eef0f4;
-  border-radius: 10px;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
   padding: 6px 10px;
 }
-/* 状态头：running 绿色闪烁帧 / done 绿色对勾 */
+/* 状态头：running 主题色柔光呼吸 / done 主题色对勾 */
 .agent-status {
   display: inline-flex;
   align-items: center;
@@ -677,17 +679,17 @@ function onApplyDiff() {
   border-radius: 999px;
   font-size: 12px;
   font-weight: 600;
-  background: #dcfce7;
-  color: #166534;
+  background: var(--primary-soft);
+  color: var(--primary-hover);
   cursor: default;
   user-select: none;
 }
 .agent-status.running {
-  /* 绿色闪动：背景 + 圆点一起明显闪烁，跑到哪个 agent 一眼可见 */
-  animation: status-blink 1s ease-in-out infinite;
+  /* 柔光呼吸：背景 + 圆点一起明暗变化，跑到哪个 agent 一眼可见 */
+  animation: status-blink 1.2s ease-in-out infinite;
 }
 .agent-status.done {
-  background: #d1fae5;
+  background: var(--primary-soft);
   cursor: default;
 }
 .status-text {
@@ -702,7 +704,7 @@ function onApplyDiff() {
   flex: none;
 }
 .status-mark .check {
-  color: #15803d;
+  color: var(--primary);
   font-weight: 700;
   line-height: 1;
 }
@@ -710,18 +712,18 @@ function onApplyDiff() {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #16a34a;
-  animation: dot-pulse 1s ease-in-out infinite;
+  background: var(--primary);
+  animation: dot-pulse 1.2s ease-in-out infinite;
 }
 @keyframes status-blink {
   0%,
   100% {
-    background: #dcfce7;
-    box-shadow: 0 0 0 0 rgba(22, 163, 74, 0);
+    background: var(--primary-soft);
+    box-shadow: 0 0 0 0 rgba(75, 107, 94, 0);
   }
   50% {
-    background: #86efac;
-    box-shadow: 0 0 0 4px rgba(22, 163, 74, 0.28);
+    background: var(--primary-faint);
+    box-shadow: 0 0 0 4px rgba(75, 107, 94, 0.16);
   }
 }
 @keyframes dot-pulse {
@@ -735,9 +737,9 @@ function onApplyDiff() {
 }
 .chevron {
   font-size: 9px;
-  color: #6b7280;
+  color: var(--text-tertiary);
 }
-/* 阶段状态行：convert 等非 agent 阶段（灰 pending → 绿色 todo check） */
+/* 阶段状态行：convert 等非 agent 阶段（中性 pending → 主题色已完成） */
 .status-line {
   display: inline-flex;
   align-items: center;
@@ -746,12 +748,12 @@ function onApplyDiff() {
   border-radius: 999px;
   font-size: 12px;
   font-weight: 500;
-  background: #f1f5f9;
-  color: #64748b;
+  background: var(--surface-soft);
+  color: var(--text-secondary);
 }
 .status-line.done {
-  background: #dcfce7;
-  color: #166534;
+  background: var(--primary-soft);
+  color: var(--primary-hover);
 }
 .status-line-text {
   white-space: nowrap;
@@ -763,7 +765,7 @@ function onApplyDiff() {
   gap: 4px;
 }
 .agent-block + .agent-block {
-  border-top: 1px solid #eef0f4;
+  border-top: 1px solid var(--border);
   padding-top: 6px;
 }
 /* 思考/工具的折叠开关行（标题可点） */
@@ -777,11 +779,11 @@ function onApplyDiff() {
   padding: 0;
   font-size: 11px;
   font-weight: 600;
-  color: #9ca3af;
+  color: var(--text-tertiary);
   cursor: pointer;
 }
 .agent-sub-toggle:hover {
-  color: #6b7280;
+  color: var(--text-secondary);
 }
 /* 字段小提示：悬浮弹出解释气泡 */
 .field-tip {
@@ -793,8 +795,8 @@ function onApplyDiff() {
   font-weight: 500;
   padding: 1px 5px;
   border-radius: 6px;
-  background: #f1f5f9;
-  color: #94a3b8;
+  background: var(--surface-soft);
+  color: var(--text-tertiary);
   cursor: help;
 }
 /* 悬浮气泡：悬停在字段标签上才显示 */
@@ -807,15 +809,15 @@ function onApplyDiff() {
   max-width: 260px;
   width: max-content;
   padding: 6px 9px;
-  background: #1f2937;
-  color: #f9fafb;
+  background: var(--text);
+  color: #fff;
   font-size: 11px;
   font-weight: 400;
   line-height: 1.5;
   white-space: normal;
   text-align: left;
   border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.18);
+  box-shadow: var(--shadow-raised);
   z-index: 30;
   opacity: 0;
   visibility: hidden;
@@ -836,19 +838,19 @@ function onApplyDiff() {
 .agent-think {
   font-size: 12px;
   line-height: 1.7;
-  color: #374151;
+  color: var(--text-secondary);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  border-top: 1px dashed #eef0f4;
+  border-top: 1px solid var(--border);
   padding-top: 6px;
 }
 /* 回答：Markdown 渲染结果，样式收敛一点更紧凑 */
 .agent-answer {
   font-size: 12px;
   line-height: 1.7;
-  color: #374151;
+  color: var(--text-secondary);
   overflow-wrap: anywhere;
-  border-top: 1px dashed #eef0f4;
+  border-top: 1px solid var(--border);
   padding-top: 6px;
 }
 .agent-answer :deep(p) {
@@ -872,31 +874,34 @@ function onApplyDiff() {
   margin: 6px 0 4px;
   font-size: 13px;
   font-weight: 600;
-  color: #111827;
+  color: var(--text);
 }
 .agent-answer :deep(code) {
-  background: #f3f4f6;
+  background: var(--surface-sunken);
   padding: 1px 4px;
   border-radius: 3px;
   font-size: 11px;
 }
 .agent-answer :deep(pre) {
-  background: #f8fafc;
-  border: 1px solid #eef0f4;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
   border-radius: 6px;
   padding: 8px 10px;
   overflow-x: auto;
   margin: 0 0 6px;
 }
 .agent-answer :deep(a) {
-  color: #2563eb;
+  color: var(--primary);
   text-decoration: none;
+}
+.agent-answer :deep(a:hover) {
+  text-decoration: underline;
 }
 .agent-answer :deep(blockquote) {
   margin: 0 0 6px;
   padding-left: 10px;
-  border-left: 3px solid #e5e7eb;
-  color: #6b7280;
+  border-left: 3px solid var(--border-strong);
+  color: var(--text-secondary);
 }
 .steps {
   display: flex;
@@ -904,7 +909,7 @@ function onApplyDiff() {
   gap: 3px;
   font-size: 11px;
   line-height: 1.55;
-  color: #9ca3af;
+  color: var(--text-tertiary);
 }
 .step {
   overflow-wrap: anywhere;
@@ -917,7 +922,8 @@ function onApplyDiff() {
 }
 .tool-result {
   padding-left: 12px;
-  color: #c0c6cf;
+  color: var(--text-tertiary);
+  opacity: 0.8;
 }
 .bubble {
   max-width: 100%;
@@ -934,18 +940,18 @@ function onApplyDiff() {
   border-bottom-right-radius: 4px;
 }
 .from-ai .bubble {
-  background: #f1f3f7;
-  color: #1f2937;
+  background: var(--surface-soft);
+  color: var(--text);
   border-bottom-left-radius: 4px;
 }
 .bubble.typing {
-  color: #9ca3af;
+  color: var(--text-tertiary);
   font-style: italic;
 }
 .bubble.error {
-  background: #fef2f2;
-  color: #b91c1c;
-  border: 1px solid #fecaca;
+  background: var(--danger-soft);
+  color: var(--danger);
+  border: 1px solid rgba(169, 79, 74, 0.25);
 }
 
 .chat-input {
@@ -953,7 +959,7 @@ function onApplyDiff() {
   align-items: flex-end;
   gap: 8px;
   padding: 10px 16px;
-  border-top: 1px solid #f0f1f4;
+  border-top: 1px solid var(--border);
 }
 .chat-input :deep(.n-input) {
   flex: 1;

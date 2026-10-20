@@ -16,6 +16,8 @@ import { useResumeStore } from '@/stores/resume'
 import { useClickPopover } from '@/composables/useClickPopover'
 import { message } from '@/utils/feedback'
 import { brandSvg } from '@/data/icons'
+import BrandMark from '@/components/BrandMark.vue'
+import { themeOverrides } from '@/styles/naive-theme'
 
 const store = useResumeStore()
 
@@ -48,13 +50,14 @@ function onSave() {
 </script>
 
 <template>
-  <div class="app-shell">
-    <!-- 顶部工具条：品牌 + 页面栏 + 数据操作 -->
-    <header class="app-header">
-      <div class="brand">
-        <span class="brand-icon">🧱</span>
-        SmartCV
-      </div>
+  <n-config-provider :theme-overrides="themeOverrides">
+    <div class="app-shell">
+      <!-- 顶部工具条：品牌 + 页面栏 + 数据操作 -->
+      <header class="app-header">
+        <div class="brand">
+          <BrandMark :size="22" />
+          <span class="brand-name">SmartCV</span>
+        </div>
 
       <!-- 页面栏 -->
       <nav class="page-tabs">
@@ -100,7 +103,8 @@ function onSave() {
     <EditorPage v-else-if="currentPage === 'editor'" />
     <OptimizePage v-else-if="currentPage === 'optimize'" />
     <ProviderSettingsPage v-else />
-  </div>
+    </div>
+  </n-config-provider>
 </template>
 
 <style scoped>
@@ -109,67 +113,81 @@ function onSave() {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background: var(--app-bg);
 }
 
 .app-header {
   flex: none;
-  height: 52px;
+  height: 56px;
   display: flex;
   align-items: center;
-  gap: 20px;
-  padding: 0 16px;
-  background: #fff;
+  gap: 30px;
+  padding: 0 22px;
+  background: var(--panel-bg);
   border-bottom: 1px solid var(--border);
   z-index: 10;
 }
 .brand {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 15px;
-  font-weight: 700;
-  color: #1f2937;
+  gap: 10px;
+  flex: none;
 }
-.brand-icon {
+.brand-name {
+  font-family: var(--font-display);
   font-size: 18px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  color: var(--text);
 }
 
-/* 页面栏：主页 / 编辑 / 优化 / 设置 */
+/* 页面栏：下划线式导航，不用胶囊底、不用投影 */
 .page-tabs {
   display: flex;
-  align-items: center;
-  gap: 4px;
-  background: #f1f3f7;
-  border-radius: 8px;
-  padding: 3px;
+  align-items: stretch;
+  gap: 24px;
+  height: 100%;
 }
 .page-tab {
-  padding: 5px 16px;
+  position: relative;
+  flex: none;
+  padding: 0;
   border: none;
-  border-radius: 6px;
   background: transparent;
   font-size: 13px;
-  color: #6b7280;
+  white-space: nowrap;
+  color: var(--text-secondary);
   cursor: pointer;
-  transition:
-    background 0.15s,
-    color 0.15s;
+  transition: color 0.16s var(--ease);
+}
+.page-tab::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: transparent;
+  transition: background 0.16s var(--ease);
 }
 .page-tab:hover {
-  color: #1f2937;
+  color: var(--text);
 }
 .page-tab.active {
-  background: #fff;
-  color: var(--primary);
+  color: var(--text);
   font-weight: 600;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+.page-tab.active::after {
+  background: var(--primary);
 }
 
 .header-actions {
   margin-left: auto;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
 }
 /* 触发器包装：给 ref 一个原生元素（n-button 的实例没有 contains） */
 .trigger-wrap {
@@ -179,13 +197,60 @@ function onSave() {
 .github-link {
   display: inline-flex;
   align-items: center;
-  padding: 4px 6px;
-  color: #6b7280;
+  padding: 4px 8px;
+  margin-right: 6px;
+  color: var(--text-tertiary);
   text-decoration: none;
-  font-size: 1.1em;
-  transition: color 0.2s;
+  font-size: 1.05em;
+  transition: color 0.2s var(--ease);
 }
 .github-link:hover {
-  color: #24292f;
+  color: var(--text);
+}
+
+/* ---------- 窄屏：页面栏可横向滚动，标题与操作保持单行 ---------- */
+@media (max-width: 720px) {
+  .app-header {
+    gap: 14px;
+    padding: 0 14px;
+  }
+  .page-tabs {
+    flex: 1;
+    min-width: 0;
+    gap: 18px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+  }
+  .page-tabs::-webkit-scrollbar {
+    display: none;
+  }
+  .page-tab::after {
+    bottom: 0;
+  }
+  .header-actions {
+    flex: none;
+  }
+}
+@media (max-width: 560px) {
+  .brand-name,
+  .github-link {
+    display: none;
+  }
+  /* 两行：品牌 + 操作在上，页面栏独占一行（四个入口不再横向裁切） */
+  .app-header {
+    flex-wrap: wrap;
+    height: auto;
+    min-height: 56px;
+    gap: 10px;
+    padding: 5px 14px 0;
+  }
+  .page-tabs {
+    order: 3;
+    flex-basis: 100%;
+    height: 40px;
+    justify-content: space-between;
+    gap: 0;
+  }
 }
 </style>

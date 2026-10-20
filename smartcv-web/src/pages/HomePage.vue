@@ -15,6 +15,7 @@ import { useStatsStore } from '@/stores/stats'
 import { parseResumeFile, type ParseProgress, type ParseStep } from '@/api/document'
 import { message } from '@/utils/feedback'
 import ExampleGallery from '@/components/ExampleGallery.vue'
+import BrandMark from '@/components/BrandMark.vue'
 
 const store = useResumeStore()
 const statsStore = useStatsStore()
@@ -149,54 +150,87 @@ const showGallery = ref(false)
 
 <template>
   <div class="home-page">
-    <div class="home-hero">
-      <div class="home-brand">
-        <span class="home-brand-icon">🧱</span>
-        <h1>SmartCV</h1>
+    <div class="home-inner">
+      <header class="home-hero">
+        <div class="home-brand">
+          <BrandMark :size="42" />
+          <h1>SmartCV</h1>
+        </div>
+        <p class="home-sub">选择一份简历开始编辑</p>
+        <p v-if="hasResume()" class="home-hint">
+          已有 {{ store.resume.length }} 个章节，也可从下方导入后直接继续
+        </p>
+      </header>
+
+      <div class="home-cards">
+        <!-- 导入 PDF / Word -->
+        <button class="home-card" @click="pickDoc">
+          <span class="home-card-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M6.5 3.5h6.8l4.2 4.2v12.8H6.5z" />
+              <path d="M13.3 3.5v4.2h4.2M9.5 12h5M9.5 15.5h5" />
+            </svg>
+          </span>
+          <span class="home-card-text">
+            <span class="home-card-title">导入 PDF / Word</span>
+            <span class="home-card-desc">上传文档，AI 解析成可编辑简历</span>
+          </span>
+        </button>
+
+        <!-- 导入 JSON -->
+        <button class="home-card" @click="pickJson">
+          <span class="home-card-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M9.2 4.5c-2.1 0-2.2 2.4-2.2 3.8 0 1.5-.8 3.7-2.5 3.7 1.7 0 2.5 2.2 2.5 3.7 0 1.4.1 3.8 2.2 3.8" />
+              <path d="M14.8 4.5c2.1 0 2.2 2.4 2.2 3.8 0 1.5.8 3.7 2.5 3.7-1.7 0-2.5 2.2-2.5 3.7 0 1.4-.1 3.8-2.2 3.8" />
+            </svg>
+          </span>
+          <span class="home-card-text">
+            <span class="home-card-title">导入 JSON</span>
+            <span class="home-card-desc">读取本地的简历 JSON 文件</span>
+          </span>
+        </button>
+
+        <!-- 新建 -->
+        <button class="home-card" @click="onNew">
+          <span class="home-card-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <rect x="4.5" y="4.5" width="15" height="15" rx="3.5" />
+              <path d="M12 8.5v7M8.5 12h7" />
+            </svg>
+          </span>
+          <span class="home-card-text">
+            <span class="home-card-title">新建空白简历</span>
+            <span class="home-card-desc">从零开始搭建</span>
+          </span>
+        </button>
+
+        <!-- 加载示例 -->
+        <button class="home-card" @click="showGallery = true">
+          <span class="home-card-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <rect x="4" y="5" width="16" height="14" rx="2.5" />
+              <circle cx="9" cy="10" r="1.4" />
+              <path d="M5 17l4.5-4 3 2.5L16.5 11 20 15" />
+            </svg>
+          </span>
+          <span class="home-card-text">
+            <span class="home-card-title">加载示例</span>
+            <span class="home-card-desc">看看现成的简历长什么样</span>
+          </span>
+        </button>
       </div>
-      <p class="home-sub">选择一份简历开始编辑</p>
-      <p v-if="hasResume()" class="home-hint">
-        当前已有 {{ store.resume.length }} 个章节，可在下方「新建」外的入口导入后直接编辑
-      </p>
+
+      <footer class="home-footer">
+        <p class="home-privacy">
+          你的简历只存在本机浏览器里，不收集任何数据；仅在使用 AI 功能时，内容才会发送到你配置的模型服务商（仅匿名统计导出次数，不涉及简历内容）
+        </p>
+        <p class="home-stats">
+          <span>PDF {{ statsStore.pdf }} 次</span>
+          <span>JSON {{ statsStore.json }} 次</span>
+        </p>
+      </footer>
     </div>
-
-    <div class="home-cards">
-      <!-- 导入 PDF / Word -->
-      <button class="home-card" @click="pickDoc">
-        <span class="home-card-icon">📄</span>
-        <span class="home-card-title">导入 PDF / Word</span>
-        <span class="home-card-desc">上传文档，AI 解析成可编辑简历</span>
-      </button>
-
-      <!-- 导入 JSON -->
-      <button class="home-card" @click="pickJson">
-        <span class="home-card-icon">📦</span>
-        <span class="home-card-title">导入 JSON</span>
-        <span class="home-card-desc">读取本地的简历 JSON 文件</span>
-      </button>
-
-      <!-- 新建 -->
-      <button class="home-card" @click="onNew">
-        <span class="home-card-icon">✨</span>
-        <span class="home-card-title">新建空白简历</span>
-        <span class="home-card-desc">从零开始搭建</span>
-      </button>
-
-      <!-- 加载示例 -->
-      <button class="home-card" @click="showGallery = true">
-        <span class="home-card-icon">🖼️</span>
-        <span class="home-card-title">加载示例</span>
-        <span class="home-card-desc">看看现成的简历长什么样</span>
-      </button>
-    </div>
-
-    <p class="home-privacy">
-      🔒 你的简历只存在本机浏览器里，不收集任何数据；仅在使用 AI 功能时，内容才会发送到你配置的模型服务商（仅匿名统计导出次数，不涉及简历内容）
-    </p>
-
-    <p class="home-stats">
-      📊 已导出 PDF {{ statsStore.pdf }} 次 · JSON {{ statsStore.json }} 次
-    </p>
 
     <!-- 示例模板画廊；载入成功后直接进编辑器 -->
     <ExampleGallery v-model:show="showGallery" @enter="emit('enter')" />
@@ -283,79 +317,162 @@ const showGallery = ref(false)
 <style scoped>
 .home-page {
   height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 40px;
-  padding: 24px;
   overflow: auto;
+  display: flex;
+  padding: 44px 24px;
+}
+.home-inner {
+  width: min(760px, 100%);
+  margin: auto;
+  padding: 4px 0;
 }
 
-.home-hero {
-  text-align: center;
-}
+/* ---------- 起始页头部：左对齐的编辑排版 ---------- */
 .home-brand {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 10px;
-}
-.home-brand-icon {
-  font-size: 34px;
+  gap: 15px;
 }
 .home-brand h1 {
   margin: 0;
-  font-size: 34px;
-  color: #1f2937;
+  font-family: var(--font-display);
+  font-size: clamp(34px, 4vw, 44px);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  color: var(--text);
 }
 .home-sub {
-  margin: 12px 0 0;
-  font-size: 15px;
-  color: #6b7280;
+  margin: 16px 0 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-secondary);
 }
 .home-hint {
-  margin: 8px 0 0;
-  font-size: 13px;
+  display: inline-flex;
+  margin: 12px 0 0;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--primary-soft);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--primary-hover);
+}
+
+/* ---------- 四个入口：扁平纸片，无悬浮位移、无投影 ---------- */
+.home-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 36px;
+}
+.home-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--panel-bg);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background 0.16s var(--ease),
+    border-color 0.16s var(--ease);
+}
+.home-card:hover {
+  background: var(--surface-soft);
+  border-color: var(--border-strong);
+}
+.home-card:active {
+  background: var(--primary-faint);
+}
+.home-card-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  background: var(--surface-soft);
   color: var(--primary);
+  transition: background 0.16s var(--ease);
+}
+.home-card:hover .home-card-icon {
+  background: var(--primary-soft);
+}
+.home-card-icon svg {
+  width: 19px;
+  height: 19px;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.home-card-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding-top: 1px;
+}
+.home-card-title {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--text);
+}
+.home-card-desc {
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-tertiary);
+}
+
+/* ---------- 页脚：隐私说明 + 导出统计 ---------- */
+.home-footer {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-top: 32px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
 }
 .home-privacy {
   margin: 0;
-  font-size: 12px;
-  color: #9ca3af;
-  text-align: center;
-  line-height: 1.6;
-  max-width: 460px;
+  max-width: 560px;
+  font-size: 11.5px;
+  line-height: 1.75;
+  color: var(--text-tertiary);
 }
 .home-stats {
-  margin: 8px 0 0;
-  font-size: 12px;
-  color: #b8bcc4;
-  text-align: center;
-}
-
-.home-cards {
+  flex: none;
   display: flex;
-  gap: 20px;
-  flex-wrap: wrap;
-  justify-content: center;
+  gap: 14px;
+  margin: 0;
+  padding-top: 1px;
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
 }
 
+/* ---------- 导入对话框 ---------- */
 .import-dialog-body {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
   padding-top: 4px;
 }
 .import-tip {
   margin: 0;
+  padding: 10px 12px;
   font-size: 12px;
-  line-height: 1.6;
-  color: #b45309;
-  background: #fef3c7;
-  border: 1px solid #fde68a;
-  border-radius: 8px;
-  padding: 8px 10px;
+  line-height: 1.65;
+  color: var(--warning);
+  background: var(--warning-soft);
+  border: 1px solid rgba(166, 118, 63, 0.18);
+  border-radius: var(--radius-md);
 }
 .import-dialog-row {
   display: flex;
@@ -364,49 +481,16 @@ const showGallery = ref(false)
 }
 .import-dialog-label {
   flex: none;
-  font-size: 13px;
-  color: #374151;
+  font-size: 12px;
+  color: var(--text-secondary);
 }
 .import-docling-note {
   margin: 0;
   font-size: 12px;
-  color: #9ca3af;
-}
-.home-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  width: 220px;
-  padding: 32px 24px;
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  background: #fff;
-  cursor: pointer;
-  transition:
-    transform 0.15s,
-    box-shadow 0.15s,
-    border-color 0.15s;
-}
-.home-card:hover {
-  transform: translateY(-2px);
-  border-color: var(--primary);
-  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
-}
-.home-card-icon {
-  font-size: 30px;
-}
-.home-card-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: #1f2937;
-}
-.home-card-desc {
-  font-size: 12px;
-  color: #9ca3af;
-  text-align: center;
+  color: var(--text-tertiary);
 }
 
+/* ---------- 解析进度 ---------- */
 .progress-body {
   display: flex;
   flex-direction: column;
@@ -414,14 +498,15 @@ const showGallery = ref(false)
 }
 .progress-estimate {
   margin: 0;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
+  letter-spacing: 0.02em;
   color: var(--primary);
 }
 .progress-tip {
   margin: 0;
-  font-size: 13px;
-  color: #6b7280;
+  font-size: 12px;
+  color: var(--text-secondary);
 }
 .progress-list {
   list-style: none;
@@ -429,14 +514,15 @@ const showGallery = ref(false)
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 9px;
 }
 .progress-step {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 13px;
-  color: #374151;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
 }
 .progress-icon {
   width: 16px;
@@ -444,21 +530,26 @@ const showGallery = ref(false)
   font-weight: 700;
 }
 .step-done .progress-icon {
-  color: #16a34a;
+  color: var(--primary);
 }
 .step-failed .progress-icon {
-  color: #dc2626;
+  color: var(--danger);
 }
 .step-running .progress-icon {
   color: var(--primary);
 }
 .step-pending .progress-icon {
-  color: #d1d5db;
+  color: var(--text-tertiary);
+  opacity: 0.5;
 }
 .progress-error {
   margin: 0;
-  font-size: 13px;
-  color: #dc2626;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--danger-soft);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--danger);
 }
 .progress-actions {
   display: flex;
@@ -467,5 +558,19 @@ const showGallery = ref(false)
 
 .hidden-input {
   display: none;
+}
+
+@media (max-width: 640px) {
+  .home-page {
+    padding: 32px 18px;
+  }
+  .home-cards {
+    grid-template-columns: 1fr;
+    margin-top: 28px;
+  }
+  .home-footer {
+    flex-direction: column;
+    gap: 12px;
+  }
 }
 </style>

@@ -66,10 +66,10 @@ npm run dev                                   # http://localhost:5173，/api 自
 docker compose up -d                    # 一键起前后端
 ```
 
-| 服务 | 镜像 | 访问 |
-|---|---|---|
+| 服务 | 镜像 | 访问                  |
+|---|---|-----------------------|
 | 前端 `frontend` | `registry.cn-hangzhou.aliyuncs.com/smartcv/smartcv-frontend:v1` | http://localhost:5173 |
-| 后端 `backend` | `registry.cn-hangzhou.aliyuncs.com/smartcv/smartcv-backend:v1` | http://localhost:8600 |
+| 后端 `backend` | `registry.cn-hangzhou.aliyuncs.com/smartcv/smartcv-backend:v1` | http://localhost:8700 |
 
 停止：`docker compose down`。
 

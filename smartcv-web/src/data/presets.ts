@@ -10,6 +10,7 @@
  */
 import type { Content, ContentData, Section, LayoutWindow, ContentStyle, SectionLayout, SectionStyle } from '@/types'
 import { uid } from '@/utils/id'
+import { LIST_TEXT_ICON } from '@/data/icons'
 
 /* ==================== 内容预设 ==================== */
 
@@ -78,7 +79,7 @@ export const GENERIC_CONTENT_PRESETS: ContentPreset[] = [
     id: 'generic-content-list',
     name: '列表文字',
     desc: '圆点或数字列表，支持一键润色',
-    icon: '☰',
+    icon: LIST_TEXT_ICON,
     type: 'listText',
     content: { listType: 'bullet', items: [{ text: '' }] },
   },

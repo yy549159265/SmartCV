@@ -48,12 +48,12 @@
 cd smartcv-api
 python -m pip install -r requirements.txt
 python -m playwright install chromium        # 导出 PDF 用
-uvicorn main:app --port 8600                  # 端口 8600（8000 在 Windows 预留端口段里）
+uvicorn main:app --port 8700                  # 端口 8700（8000/8600 可能落在 Windows 预留端口段里）
 
 # 2) 前端（另开一个终端）
 cd smartcv-web
 npm install
-npm run dev                                   # http://localhost:5173，/api 自动代理到 8600
+npm run dev                                   # http://localhost:5173，/api 自动代理到 8700
 ```
 
 ## 🐳 Docker 部署

@@ -1,7 +1,10 @@
 """简历解析任务的步骤化状态存储 + 全局注册表。
 
 按 session_id 存一份 PDF2ResumeStore，前端上传后轮询 /api/resume/parse/status
-拿到各固定步骤的状态，展示进度；用户刷新/断开时服务端置为 cancelled。
+拿到各固定步骤的状态，展示进度。
+
+隐私约束：这里只存步骤状态和错误文案，不存 Markdown、简历正文或解析结果。
+请求结束（成功/失败/取消）后调用 delete_store 立即删除。
 """
 
 from enum import IntEnum
@@ -9,8 +12,6 @@ from typing import Literal
 
 from cachetools import TTLCache
 from pydantic import BaseModel, Field
-
-from agents.md2json.schemas.resume import Resume
 
 
 class Step(IntEnum):
@@ -22,17 +23,21 @@ class Step(IntEnum):
 
     UPLOAD = 0  # 文件上传与校验
     PARSE = 1  # 正在解析简历为 MarkDown 格式
-    ORGANIZE = 2  # 正在使用 Agent 整理 MarkDown 简历
-    CONVERT = 3  # 正在使用 Agent 转换 MarkDown 简历为 Json
-    DONE = 4  # 完成
+    CLEAN = 2  # 正在清洗解析结果
+    SEGMENT = 3  # 正在识别简历章节
+    CONVERT = 4  # 正在生成简历 JSON
+    VALIDATE = 5  # 正在校验内容完整性
+    DONE = 6  # 完成
 
 
 # 步骤展示名，顺序与 Step 一一对应；前端弹窗显示的就是这些文案，要改只改这里
 STEP_NAMES = [
     "文件上传与校验",
     "正在解析简历为 MarkDown 格式",
-    "正在使用 Agent 整理 MarkDown 简历",
-    "正在使用 Agent 转换 MarkDown 简历为 Json",
+    "正在清洗解析结果",
+    "正在识别简历章节",
+    "正在生成简历 JSON",
+    "正在校验内容完整性",
     "完成",
 ]
 
@@ -45,8 +50,6 @@ class StepStatus(BaseModel):
 class PDF2ResumeStore(BaseModel):
     state: Literal["pending", "running", "done", "failed", "cancelled"] = "pending"
     session_id: str | None = None
-    markdown: str | None = None  # 整理后的标记文本（generate_resume 收到时写入）
-    content: Resume | None = None
     error: str | None = None
     steps: list[StepStatus] = Field(default_factory=list)
 
@@ -73,7 +76,7 @@ class PDF2ResumeStore(BaseModel):
 
 # ---- 全局注册表：按 session_id 存一份，供前端轮询状态 ----
 # 用内存级 TTL 缓存（类似 Redis 的 EXPIRE）：每条 10 分钟过期自动删除，
-# 满容量自动逐出最旧，无需手动定时清理。
+# 满容量自动逐出最旧，无需手动定时清理。请求结束后还会主动 delete_store。
 _JOB_TTL_SECONDS = 600  # 10 分钟
 _MAX_JOBS = 200
 _JOBS: TTLCache = TTLCache(maxsize=_MAX_JOBS, ttl=_JOB_TTL_SECONDS)
@@ -92,3 +95,16 @@ def get_store(session_id: str | None) -> PDF2ResumeStore | None:
     if not session_id:
         return None
     return _JOBS.get(session_id)
+
+
+def delete_store(session_id: str | None, store: PDF2ResumeStore | None = None) -> None:
+    """请求结束后立即删除，服务端不保留本次解析的任何状态。
+
+    传 store 时只在注册表里还是同一份对象时才删，避免并发/重试请求
+    互相删掉对方刚创建的进度。
+    """
+    if not session_id:
+        return
+    if store is not None and _JOBS.get(session_id) is not store:
+        return
+    _JOBS.pop(session_id, None)

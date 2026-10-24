@@ -36,6 +36,7 @@ MinerU 云解析服务：把本地 PDF/Word 上传到 MinerU，拿回 Markdown�
   鉴权失败 {"success":false,"msgCode":"A0202","msg":"..."}
 """
 import asyncio
+import json
 import logging
 import time
 import uuid
@@ -57,7 +58,9 @@ import httpx
 # from docling.document_converter import DocumentConverter, PdfFormatOption
 from fastapi import HTTPException, Request, UploadFile
 
-from agents.md2json.agent import run_resume_agent
+from agents.md2json.agent import run_parse_pipeline
+from agents.md2json.schemas.models import MineruResult
+from agents.md2json.schemas.resume import Section
 from agents.md2json.schemas.store import PDF2ResumeStore, Step
 from schemas.provider import ProviderConfig
 
@@ -203,17 +206,23 @@ async def _request_retry(
     重连一次通常就能成功。
     """
     last_exc: httpx.TransportError | None = None
+    # 日志里去掉签名查询串，避免把 MinerU 的临时凭证写进日志
+    safe_url = url.split("?", 1)[0]
     for i in range(attempts):
         try:
             return await client.request(method, url, **kwargs)
         except httpx.TransportError as e:
             last_exc = e
             if i < attempts - 1:
-                logger.warning(
-                    "MinerU %s %s 传输失败（%s），重试 %d/%d",
-                    method, url, e, i + 1, attempts,
+                # ConnectError 的 str(e) 经常是空的，必须带上类名和 cause 才能定位
+                reason = str(e).strip() or (
+                    repr(e.__cause__) if e.__cause__ else "无错误详情"
                 )
-                await asyncio.sleep(1 + i)
+                logger.warning(
+                    "MinerU %s %s 传输失败（%s: %s），重试 %d/%d",
+                    method, safe_url, e.__class__.__name__, reason, i + 1, attempts,
+                )
+                await asyncio.sleep(min(2**i, 8))
     if last_exc is not None:
         raise last_exc
     raise httpx.ConnectError("MinerU 传输请求失败")
@@ -243,12 +252,15 @@ async def _poll_result(client: httpx.AsyncClient, headers: dict, batch_id: str) 
 
 async def parse_with_mineru(
     content: bytes, filename: str, token: str, session_id: str | None = None
-) -> str:
+) -> MineruResult:
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {token}",
     }
-    async with httpx.AsyncClient(timeout=60) as client:
+    # trust_env=False：httpx 默认会读取 Windows 的系统代理，Clash 等代理在
+    # cdn-mineru.openxlab.org.cn 的 TLS 握手上会失败（空消息的 ConnectError），
+    # 直连则正常。MinerU 是境内服务，这里统一不走系统代理。
+    async with httpx.AsyncClient(timeout=60, trust_env=False, follow_redirects=True) as client:
         # 1. 申请上传链接
         r = await _request_retry(
             client, "POST", f"{_BASE}/file-urls/batch",
@@ -281,28 +293,60 @@ async def parse_with_mineru(
         if not zip_url:
             raise HTTPException(status_code=502, detail="MinerU 结果缺少下载链接")
 
-        # 5. 下载 zip，解出 full.md
-        zr = await _request_retry(client, "GET", zip_url)
+        # 5. 下载 zip，解出 full.md（兜底）和 content_list.json（块级结构）
+        # CDN 偶发抖动，下载多给一次重试
+        zr = await _request_retry(client, "GET", zip_url, attempts=4)
         if zr.status_code != 200:
             raise HTTPException(
                 status_code=502,
                 detail=f"MinerU 结果下载失败：HTTP {zr.status_code}",
             )
-        markdown = _extract_full_md(zr.content)
-
-        # 拿到 MinerU 解析的 Markdown，返回交给 md2json agent 转简历 JSON。
-        return markdown
+        return _extract_result(zr.content)
 
 
-def _extract_full_md(zip_bytes: bytes) -> str:
-    with zipfile.ZipFile(BytesIO(zip_bytes)) as z:
-        for name in z.namelist():
-            if name.endswith("full.md"):
-                return z.read(name).decode("utf-8", errors="replace")
-        md_names = [n for n in z.namelist() if n.endswith(".md")]
-        if md_names:
-            return z.read(md_names[0]).decode("utf-8", errors="replace")
-    raise HTTPException(status_code=502, detail="MinerU 结果压缩包里没有 Markdown")
+def _read_json_list(raw: bytes) -> list[dict] | None:
+    try:
+        data = json.loads(raw.decode("utf-8-sig"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    return data if isinstance(data, list) else None
+
+
+def _extract_result(zip_bytes: bytes) -> MineruResult:
+    """从 MinerU 的 zip 里取 Markdown 与 content_list.json。
+
+    content_list 带 page_idx / bbox / text_level，清洗页眉页脚和识别标题更准；
+    full.md 作为兜底，两者至少有一个才继续。
+    """
+    markdown = ""
+    content_list: list[dict] | None = None
+
+    try:
+        with zipfile.ZipFile(BytesIO(zip_bytes)) as z:
+            names = z.namelist()
+
+            for name in names:
+                if name.endswith("full.md"):
+                    markdown = z.read(name).decode("utf-8", errors="replace")
+                    break
+            if not markdown:
+                md_names = [n for n in names if n.endswith(".md")]
+                if md_names:
+                    markdown = z.read(md_names[0]).decode("utf-8", errors="replace")
+
+            for name in names:
+                if not name.endswith("content_list.json"):
+                    continue
+                parsed = _read_json_list(z.read(name))
+                if parsed is not None:
+                    content_list = parsed
+                    break
+    except (zipfile.BadZipFile, OSError) as e:
+        raise HTTPException(status_code=502, detail=f"MinerU 结果压缩包损坏：{e}")
+
+    if not markdown and content_list is None:
+        raise HTTPException(status_code=502, detail="MinerU 结果压缩包里没有可解析内容")
+    return MineruResult(markdown=markdown, content_list=content_list)
 
 
 async def parse_resume_document(
@@ -313,12 +357,13 @@ async def parse_resume_document(
     parser: str = "mineru",
     mineru_token: str = "",
     session_id: str | None = None,
-) -> PDF2ResumeStore:
-    """上传校验 → 文档解析 → 交给 run_resume_agent 转骨架 JSON。
+) -> list[Section]:
+    """上传校验 → MinerU 解析 → 确定性流水线转简历 JSON。
 
-    store 承载各步骤状态，供 /api/resume/parse/status 轮询；每个步骤边界检查
-    客户端是否断开，断开则 store.cancel() 并抛 CancelledError 中止后续 LLM 调用。
-    agent（含 LLM 网络调用）用 to_thread 跑，避免卡住事件循环挡住状态轮询。
+    store 只承载步骤状态，供 /api/resume/parse/status 轮询；每个步骤边界检查
+    客户端是否断开，断开则 store.cancel() 并抛 CancelledError 中止后续处理。
+    流水线（含一次 LLM 语义规范化，失败自动回退确定性规则）用 to_thread 跑，
+    避免卡住事件循环挡住状态轮询。
     """
 
     async def check_disconnected() -> None:
@@ -349,14 +394,15 @@ async def parse_resume_document(
             store.fail_step(Step.PARSE, "使用 MinerU 需填写 Token")
             raise HTTPException(status_code=400, detail="使用 MinerU 需填写 Token")
         try:
-            markdown = await parse_with_mineru(content, filename, mineru_token, session_id)
+            result = await parse_with_mineru(content, filename, mineru_token, session_id)
         except httpx.HTTPError as e:
             # 传输层错误（DNS / TLS 握手 / 超时 / 拒连）会直接抛 httpx 异常，
             # 这里转成可读中文，让前端能看到是「连不上 MinerU」而不是裸 500。
             store.fail_step(Step.PARSE, "MinerU 连接失败")
+            reason = str(e).strip() or "无错误详情，请检查网络或系统代理设置"
             raise HTTPException(
                 status_code=502,
-                detail=f"MinerU 连接失败（{e.__class__.__name__}）：{e}",
+                detail=f"MinerU 连接失败（{e.__class__.__name__}）：{reason}",
             )
     else:
         # docling 本地解析已停用（太耗服务器资源），只保留 MinerU。
@@ -376,6 +422,12 @@ async def parse_resume_document(
     store.finish_step(Step.PARSE)
     await check_disconnected()
 
-    # 3. 合并后的单 agent：先整理标记文本，再调用工具构造 JSON。
-    #    LLM 网络调用是阻塞的，放线程里跑，事件循环留着服务状态轮询。
-    return await asyncio.to_thread(run_resume_agent, provider, store, markdown, session_id)
+    # 3. 清洗 → 大模型语义规范化 → 确定性排版 → 校验。
+    #    优先让模型输出语义字段（学校/学位/专业/时间分开），失败再回退确定性分章；
+    #    流水线是阻塞调用，放线程里跑，事件循环留着服务状态轮询。
+    try:
+        return await asyncio.to_thread(
+            run_parse_pipeline, result, store, provider, session_id
+        )
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=str(e))

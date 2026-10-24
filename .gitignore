@@ -24,8 +24,12 @@ node_modules/
 dist/
 *.local
 npm-debug.log*
+# TypeScript 增量编译缓存（vue-tsc -b 生成，提交到仓库没有意义）
+*.tsbuildinfo
 
 # ============ 运行期数据（后端生成，勿入库） ============
+# Playwright 的临时 artifacts / 浏览器 profile（见 services/html2pdf.py）
+smartcv-api/.runtime/
 # chat 流水线的 LangGraph sqlite 检查点（含 -wal/-shm/-sh 伴生文件）
 smartcv-api/chat_checkpoints.sqlite
 smartcv-api/chat_checkpoints.sqlite-*

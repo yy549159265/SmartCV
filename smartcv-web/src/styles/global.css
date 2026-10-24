@@ -212,6 +212,24 @@ button {
   text-decoration-color: var(--diff-color);
 }
 
+/* 用户在对比弹窗里点了 ←「还原」：这处已经用回修改前的内容（绿色） */
+[data-diff='restored'] {
+  --diff-color: #4b6b5e;
+  --diff-bg: rgba(75, 107, 94, 0.1);
+  text-decoration: none;
+}
+
+/* 新增被用户忽略：灰色虚线框 + 删除线。预览里保留占位（按钮还在、能点回来），
+   确认写回时这处不会进入简历。不用 opacity：那会把里面的切换按钮一起变淡。 */
+[data-diff='ignored'] {
+  --diff-color: #8a9199;
+  --diff-bg: rgba(138, 145, 153, 0.1);
+  text-decoration: line-through;
+  text-decoration-color: var(--diff-color);
+  outline: 1px dashed var(--diff-color);
+  outline-offset: 2px;
+}
+
 /* 角标：＋ 新增 / － 删除 / ✎ 修改。绝对定位，不占布局、不挡正文 */
 [data-diff]::after {
   position: absolute;

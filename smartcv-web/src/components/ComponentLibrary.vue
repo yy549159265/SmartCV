@@ -45,6 +45,14 @@ const rowGeneral = ref(GENERIC_ROW_PRESETS)
 const rowPresetList = ref(ROW_PRESETS)
 const contentGeneral = ref(GENERIC_CONTENT_PRESETS)
 const contentPresetList = ref(visibleContentPresets)
+
+/**
+ * 卡片悬停提示：组件库被拖窄后名字/说明都会收起（只剩图标），
+ * 名字、说明和拖拽用法都必须还能从 title 里看到。
+ */
+function cardTip(p: { name: string; desc: string }, action: string) {
+  return `${p.name} · ${p.desc}｜${action}`
+}
 </script>
 
 <template>
@@ -69,9 +77,9 @@ const contentPresetList = ref(visibleContentPresets)
               v-for="p in sectionGeneral"
               :key="p.id"
               class="lib-card"
-              title="拖到画布空白处，生成新章节"
+              :title="cardTip(p, '拖到画布空白处，生成新章节')"
             >
-              <span class="lib-icon">{{ p.icon }}</span>
+              <span class="lib-icon" v-html="p.icon" />
               <div class="lib-info">
                 <div class="lib-name">{{ p.name }}</div>
                 <div class="lib-desc">{{ p.desc }}</div>
@@ -85,9 +93,9 @@ const contentPresetList = ref(visibleContentPresets)
               v-for="p in sectionPresetList"
               :key="p.id"
               class="lib-card"
-              title="拖到画布空白处，生成新章节"
+              :title="cardTip(p, '拖到画布空白处，生成新章节')"
             >
-              <span class="lib-icon">{{ p.icon }}</span>
+              <span class="lib-icon" v-html="p.icon" />
               <div class="lib-info">
                 <div class="lib-name">{{ p.name }}</div>
                 <div class="lib-desc">{{ p.desc }}</div>
@@ -111,9 +119,9 @@ const contentPresetList = ref(visibleContentPresets)
               v-for="p in rowGeneral"
               :key="p.id"
               class="lib-card row-card"
-              title="拖到章节里，用 ＋上/下/左/右 或拖拽排列"
+              :title="cardTip(p, '拖到章节里，用 ＋上/下/左/右 或拖拽排列')"
             >
-              <span class="lib-icon">{{ p.icon }}</span>
+              <span class="lib-icon" v-html="p.icon" />
               <div class="lib-info">
                 <div class="lib-name">{{ p.name }}</div>
                 <div class="lib-desc">{{ p.desc }}</div>
@@ -127,9 +135,9 @@ const contentPresetList = ref(visibleContentPresets)
               v-for="p in rowPresetList"
               :key="p.id"
               class="lib-card row-card"
-              title="拖到章节里，生成对应结构的布局"
+              :title="cardTip(p, '拖到章节里，生成对应结构的布局')"
             >
-              <span class="lib-icon">{{ p.icon }}</span>
+              <span class="lib-icon" v-html="p.icon" />
               <div class="lib-info">
                 <div class="lib-name">{{ p.name }}</div>
                 <div class="lib-desc">{{ p.desc }}</div>
@@ -153,9 +161,9 @@ const contentPresetList = ref(visibleContentPresets)
               v-for="p in contentGeneral"
               :key="p.id"
               class="lib-card"
-              title="拖到某个布局窗口内部"
+              :title="cardTip(p, '拖到某个布局窗口内部')"
             >
-              <span class="lib-icon">{{ p.icon }}</span>
+              <span class="lib-icon" v-html="p.icon" />
               <div class="lib-info">
                 <div class="lib-name">{{ p.name }}</div>
                 <div class="lib-desc">{{ p.desc }}</div>
@@ -169,9 +177,9 @@ const contentPresetList = ref(visibleContentPresets)
               v-for="p in contentPresetList"
               :key="p.id"
               class="lib-card"
-              title="拖到某个布局窗口内部"
+              :title="cardTip(p, '拖到某个布局窗口内部')"
             >
-              <span class="lib-icon">{{ p.icon }}</span>
+              <span class="lib-icon" v-html="p.icon" />
               <div class="lib-info">
                 <div class="lib-name">{{ p.name }}</div>
                 <div class="lib-desc">{{ p.desc }}</div>
@@ -193,6 +201,8 @@ const contentPresetList = ref(visibleContentPresets)
   min-width: 0;
   background: var(--panel-bg);
   border-right: 1px solid var(--border);
+  /* 列宽可拖动：把侧栏本身作为容器，拖窄后自动进入"只显示图标"模式 */
+  container-type: inline-size;
 }
 
 .library-header {
@@ -305,10 +315,19 @@ const contentPresetList = ref(visibleContentPresets)
 
 .lib-icon {
   flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 26px;
   font-size: 18px;
   line-height: 1.2;
   text-align: center;
+}
+/* 类型图标可能是 emoji，也可能是内联 SVG（如「列表文字」）；SVG 按 1em 对齐文字 */
+.lib-icon :deep(svg) {
+  display: block;
+  width: 1em;
+  height: 1em;
 }
 
 .lib-info {
@@ -339,5 +358,56 @@ const contentPresetList = ref(visibleContentPresets)
   font-size: 10px;
   line-height: 1.6;
   color: var(--primary-hover);
+}
+
+/* ============================================================
+ * 压缩模式：组件库列被拖窄后只显示图标
+ *
+ * 名字、说明、类型角标都收起，卡片排成图标方格；
+ * 拖拽用法与名字仍在卡片的 title（悬浮提示）里，不会丢信息。
+ * 阈值 190px ≈ 名字/说明开始大量折行的宽度。
+ * ============================================================ */
+@container (max-width: 190px) {
+  .library-header {
+    padding: 14px 10px 10px;
+  }
+  /* 副标题（"按住卡片，拖进中间画布"）在窄栏里会折成三行，直接收起 */
+  .library-sub {
+    display: none;
+  }
+  .library-scroll {
+    padding: 10px 6px 20px;
+  }
+  .lib-section-title {
+    justify-content: center;
+    padding: 5px 4px;
+  }
+  .lib-sub-title {
+    justify-content: center;
+    padding: 0 2px;
+  }
+  /* 小组标题右侧的延长线在窄栏里没有意义 */
+  .lib-sub-title::after {
+    display: none;
+  }
+  /* 一列图标 → 自动换行的图标方格 */
+  .lib-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(34px, 1fr));
+    gap: 4px;
+  }
+  .lib-card,
+  .row-card {
+    justify-content: center;
+    padding: 7px 4px;
+    gap: 0;
+  }
+  .lib-info,
+  .lib-type {
+    display: none;
+  }
+  .lib-icon {
+    width: 100%;
+  }
 }
 </style>

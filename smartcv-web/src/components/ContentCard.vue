@@ -15,7 +15,7 @@ import { computed, nextTick, ref, type CSSProperties } from 'vue'
 import { useResumeStore } from '@/stores/resume'
 import { message } from '@/utils/feedback'
 import { polishTexts, type PolishMode } from '@/api/polish'
-import { ICON_GROUPS } from '@/data/icons'
+import { ICON_GROUPS, LIST_TEXT_ICON } from '@/data/icons'
 import { useClickPopover } from '@/composables/useClickPopover'
 import { CONTENT_TYPE_NAMES } from '@/utils/constants'
 import type { Content, ContentData, Section, LayoutWindow, ContentType } from '@/types'
@@ -42,7 +42,8 @@ const isSelected = computed(() => store.selectedId === props.content.id)
 
 /**
  * 编辑方式：画布里的内容卡片永远只占一行（横向窗口里放很多块也不会挤），
- * 点「展开」在弹窗里编辑内容 —— 空间充足，输入框不会被压扁。
+ * 点卡片上的类型标签（图标 + 类型名）就在弹窗里编辑内容 —— 空间充足，输入框不会被压扁。
+ * 卡片里不再单独放「▸ 展开」按钮：它占地方，而且点类型标签本来就能展开。
  */
 const editShow = ref(false)
 
@@ -55,7 +56,7 @@ const TYPE_ICONS: Record<ContentType, string> = {
   twoColumn: '↔️',
   timeRange: '⏱️',
   tag: '🏷️',
-  listText: '☰',
+  listText: LIST_TEXT_ICON,
   image: '🖼️',
   spacer: '🫥',
 }
@@ -207,6 +208,45 @@ function indentItem(index: number, delta: 1 | -1) {
   saveListItems(items)
 }
 
+/* ---------- 列表项拖动排序（原生 HTML5 drag，不依赖外部库） ---------- */
+
+/** 正在拖的项下标 / 当前悬停的目标行下标 */
+const dragIndex = ref<number | null>(null)
+const dragOverIndex = ref<number | null>(null)
+
+function onDragStart(index: number, e: DragEvent) {
+  dragIndex.value = index
+  if (e.dataTransfer) {
+    e.dataTransfer.effectAllowed = 'move'
+    // Firefox 要求必须 setData 才会真正开始拖动
+    e.dataTransfer.setData('text/plain', String(index))
+  }
+}
+
+function onDragOver(index: number, e: DragEvent) {
+  if (dragIndex.value === null) return
+  e.preventDefault() // 允许 drop
+  if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
+  dragOverIndex.value = index
+}
+
+/** 松手：把拖动的项移到目标行所在的位置 */
+function onDrop(index: number) {
+  const from = dragIndex.value
+  dragIndex.value = null
+  dragOverIndex.value = null
+  if (from === null || from === index) return
+  const items = listItems.value.map((it) => ({ ...it }))
+  const [moved] = items.splice(from, 1)
+  items.splice(index, 0, moved)
+  saveListItems(items)
+}
+
+function onDragEnd() {
+  dragIndex.value = null
+  dragOverIndex.value = null
+}
+
 /* ---------- 润色（listText / iconText 类型会显示按钮） ---------- */
 
 /**
@@ -225,9 +265,11 @@ const polishInputRef = ref<{ focus: () => void } | null>(null)
  *  - free   自由：像直接问 AI，由模型自主判断怎么写最好，并优先遵循用户思路
  * 选择刻意不随「取消」重置——用户下次打开通常还是想用上次那个模式。
  */
-const polishMode = ref<PolishMode>('strict')
+/** 卡片润色只提供这两档；enhance 是「优化简历」输入框的提示词增强，不在这里选 */
+type ContentPolishMode = 'strict' | 'free'
+const polishMode = ref<ContentPolishMode>('strict')
 /** 每个模式的一句话说明，直接展示给用户，避免只看到名字猜不出差别 */
-const POLISH_MODE_HINTS: Record<PolishMode, string> = {
+const POLISH_MODE_HINTS: Record<ContentPolishMode, string> = {
   strict: '严格按规则改写，只优化表达，不改变原文内容',
   free: '像直接问 AI 一样自由发挥，可大幅重写、补充数据',
 }
@@ -330,23 +372,19 @@ function onRemove() {
     :data-content-id="content.id"
     @click.stop="store.select(content.id)"
   >
-    <!-- 展开按钮：卡片永远只占一行（横向窗口里放再多块也不会挤），点它弹出编辑弹窗 -->
-    <button class="expand-btn" title="展开内容，在弹窗里编辑内容" @click.stop="openEdit">
-      ▸ 展开
-    </button>
-
     <!-- 拖拽手柄：按住拖动排序 / 移到其他窗口（vue-draggable-plus） -->
     <span class="content-drag-handle" title="按住拖动排序 / 移到其他窗口">
       ⋮⋮
     </span>
 
-    <!-- 类型标签：只显示「图标 + 类型名」，点它同样打开编辑弹窗 -->
+    <!-- 类型标签：图标 + 类型名。点它 = 展开编辑弹窗（悬停提示说明这一点）；
+         卡片被挤窄时只留图标，点击区域仍然覆盖整条标签 -->
     <button
       class="content-label"
-      :title="`点击编辑${CONTENT_TYPE_NAMES[content.type]}`"
+      :title="`点击展开编辑 · ${CONTENT_TYPE_NAMES[content.type]}`"
       @click.stop="openEdit"
     >
-      <span class="content-type-icon">{{ TYPE_ICONS[content.type] }}</span>
+      <span class="content-type-icon" v-html="TYPE_ICONS[content.type]" />
       <span class="content-type-name">{{ CONTENT_TYPE_NAMES[content.type] }}</span>
     </button>
 
@@ -619,7 +657,25 @@ function onRemove() {
           </div>
         </div>
         <div class="list-items">
-          <div v-for="(item, i) in listItems" :key="i" class="list-item-edit" :style="{ paddingLeft: `${(item.indent ?? 0) * INDENT_STEP}px` }">
+          <div
+            v-for="(item, i) in listItems"
+            :key="i"
+            class="list-item-edit"
+            :class="{ dragging: dragIndex === i, 'drag-over': dragOverIndex === i && dragIndex !== i }"
+            :style="{ paddingLeft: `${(item.indent ?? 0) * INDENT_STEP}px` }"
+            @dragover="onDragOver(i, $event)"
+            @drop.prevent="onDrop(i)"
+          >
+            <!-- 拖拽手柄：按住上下拖，松手插到目标行位置 -->
+            <span
+              class="list-item-drag"
+              draggable="true"
+              title="按住拖动调整列表项顺序"
+              @dragstart="onDragStart(i, $event)"
+              @dragend="onDragEnd"
+            >
+              ⋮⋮
+            </span>
             <span class="list-marker">
               {{ content.content.listType === 'ordered' ? `${i + 1}.` : '•' }}
             </span>
@@ -688,6 +744,9 @@ function onRemove() {
   /* 选中/悬停用内阴影画边框，不占布局空间（保证和预览高度一致） */
   box-shadow: inset 0 0 0 1px transparent;
   transition: box-shadow 0.15s;
+  /* 卡片自身作为容器：宽度被挤窄（横排里放多块）时，按自己的真实宽度切换成"只显示图标"。
+     用卡片而不是画布做容器 —— 同一行里每块宽度可能都不一样。 */
+  container-type: inline-size;
 }
 @keyframes cardAppear {
   from {
@@ -705,25 +764,6 @@ function onRemove() {
 .content-card.selected {
   box-shadow: inset 0 0 0 1.5px var(--primary);
   background: var(--primary-faint);
-}
-
-/* 展开按钮：打开编辑弹窗 */
-.expand-btn {
-  flex: none;
-  height: 24px;
-  padding: 0 8px;
-  border: none;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--primary);
-  font-size: 12px;
-  line-height: 1;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: background 0.12s var(--ease);
-}
-.expand-btn:hover {
-  background: var(--primary-soft);
 }
 
 /* 类型标签：卡片的主体（图标 + 类型名，点它打开编辑弹窗） */
@@ -747,13 +787,43 @@ function onRemove() {
 }
 .content-type-icon {
   flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   font-size: 13px;
 }
+/* 内联 SVG 类型图标（如「列表文字」）：与 emoji 同样按字号缩放 */
+.content-type-icon :deep(svg) {
+  display: block;
+  width: 1em;
+  height: 1em;
+}
 .content-type-name {
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
   font-size: 13px;
   color: var(--text-secondary);
   white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* ============================================================
+ * 压缩模式：卡片自身宽度不够时只显示类型图标
+ *
+ * 阈值的由来：图标 13px + 间距 6 + 「列表文字」4×13 ≈ 71px，
+ * 加上左右内边距、⋮⋮ 手柄和 ⋯ 按钮约 61px → 约 132px 才放得下名字。
+ * 卡片再窄就只留图标（仍可点击展开编辑，悬停提示会说明类型）。
+ * 展开按钮已删除，所以图标就是唯一入口，点击区域撑满剩余宽度。
+ * ============================================================ */
+@container (max-width: 140px) {
+  .content-label {
+    justify-content: center;
+    padding: 0 2px;
+  }
+  .content-type-name {
+    display: none;
+  }
 }
 
 /* 拖拽手柄：默认半透明，悬停卡片时显示 */
@@ -1041,12 +1111,41 @@ function onRemove() {
   gap: 6px;
 }
 .list-item-edit {
+  position: relative;
   display: flex;
   align-items: flex-start;
   gap: 6px;
+  border-radius: 4px;
+  transition: opacity 0.12s;
 }
 .list-item-edit :deep(.n-input) {
   flex: 1;
+}
+/* 拖动中的行变淡；目标位置在行上方画一条主题色指示线 */
+.list-item-edit.dragging {
+  opacity: 0.4;
+}
+.list-item-edit.drag-over::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -4px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--primary);
+}
+.list-item-drag {
+  flex: none;
+  color: var(--text-tertiary);
+  line-height: 26px;
+  font-size: 12px;
+  letter-spacing: 1px;
+  cursor: grab;
+  user-select: none;
+}
+.list-item-drag:active {
+  cursor: grabbing;
 }
 .list-marker {
   flex: none;

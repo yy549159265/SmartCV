@@ -10,8 +10,9 @@
  */
 import { computed, type CSSProperties } from 'vue'
 import PreviewContent from './PreviewContent.vue'
+import DiffActionButton from './DiffActionButton.vue'
 import { computeTableCols, spanForIndex } from '@/utils/layout'
-import type { DiffMarks } from '@/utils/resumeDiff'
+import { diffAttr as resolveDiffAttr, type DiffControls, type DiffMarks } from '@/utils/resumeDiff'
 import type { Section, LayoutWindow } from '@/types'
 
 const props = defineProps<{
@@ -21,6 +22,8 @@ const props = defineProps<{
   tableCols?: number
   /** 差异标记表（对比弹窗用）；不传 = 不做任何高亮 */
   marks?: DiffMarks
+  /** 逐处切换的操作表（对比弹窗用）；不传 = 只显示高亮、不能切换 */
+  controls?: DiffControls
 }>()
 
 /** 是否为容器窗口（有 rows 字段就算，即使还是空的） */
@@ -38,12 +41,28 @@ function childGridStyle(index: number): CSSProperties | undefined {
 /** 本窗口自身的差异标记（整体新增/删除/排列方式改了）；没传 marks 时恒为 undefined */
 const rowMark = computed(() => props.marks?.rows[props.row.id])
 
+/** 本窗口自身的切换操作（只在"排版方式改了 / 整块增删"时有） */
+const rowView = computed(() => props.controls?.rows[props.row.id])
+
+/** 实际挂到 data-diff 上的标记：还原过的改动换成"已还原 / 已忽略"两档样式 */
+const rowAttr = computed(() => resolveDiffAttr(rowMark.value, rowView.value))
+
 /** 取某个内容的差异标记 */
 const contentMark = (id: string) => props.marks?.contents[id]
+
+/** 取某个内容的切换操作 */
+const contentView = (id: string) => props.controls?.contents[id]
 </script>
 
 <template>
-  <div class="preview-row" :data-row-id="row.id" :data-diff="rowMark">
+  <div
+    class="preview-row"
+    :class="{ 'diff-action-host': !!rowView }"
+    :data-row-id="row.id"
+    :data-diff="rowAttr"
+  >
+    <DiffActionButton v-if="rowView" class="diff-action-float" :view="rowView" />
+
     <!-- 容器窗口：子窗口按方向排列（横向容器用网格均分列数，与编辑画布一致） -->
     <div
       v-if="isContainer(row)"
@@ -58,6 +77,7 @@ const contentMark = (id: string) => props.marks?.contents[id]
         :row="child"
         :table-cols="cols"
         :marks="marks"
+        :controls="controls"
         :style="childGridStyle(i)"
       />
     </div>
@@ -75,6 +95,7 @@ const contentMark = (id: string) => props.marks?.contents[id]
         :row="row"
         :content="b"
         :diff-mark="contentMark(b.id)"
+        :diff-view="contentView(b.id)"
         :data-content-id="b.id"
       />
     </div>
@@ -84,6 +105,18 @@ const contentMark = (id: string) => props.marks?.contents[id]
 <style scoped>
 .preview-row {
   min-width: 0;
+}
+
+/* ---- 对比弹窗：整块改动的切换按钮（浮在左边距，不占布局） ---- */
+.diff-action-host {
+  position: relative;
+}
+/* 整行可能很高，按钮放顶部（放垂直居中可能滚出可视区） */
+.diff-action-float {
+  position: absolute;
+  top: -2px;
+  left: -20px;
+  z-index: 6;
 }
 
 /* 子窗口排列 */

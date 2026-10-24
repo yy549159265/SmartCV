@@ -12,9 +12,10 @@
  * 不传（预览、分页测量层、PDF 导出三处都不传）时，渲染结果与没有这个属性时完全一致。
  */
 import { computed, type CSSProperties } from 'vue'
+import DiffActionButton from './DiffActionButton.vue'
 import { effectiveContentStyle } from '@/utils/style'
 import { renderMarkdown } from '@/utils/markdown'
-import type { DiffMark } from '@/utils/resumeDiff'
+import { diffAttr as resolveDiffAttr, type ChangeView, type DiffMark } from '@/utils/resumeDiff'
 import type { Content, Section, LayoutWindow } from '@/types'
 
 const props = defineProps<{
@@ -23,7 +24,12 @@ const props = defineProps<{
   content: Content
   /** 差异标记：'added' | 'removed' | 'changed'；不传 = 未改动 */
   diffMark?: DiffMark
+  /** 这处改动的操作态（对比弹窗用）；不传 = 只显示高亮、不能切换 */
+  diffView?: ChangeView
 }>()
+
+/** 实际挂到 data-diff 上的标记：还原过的改动换成"已还原 / 已忽略"两档样式 */
+const diffAttr = computed(() => resolveDiffAttr(props.diffMark, props.diffView))
 
 /** 最终生效样式（已处理继承） */
 const eff = computed(() => effectiveContentStyle(props.row, props.section, props.content))
@@ -98,7 +104,15 @@ const imageStyle = computed<CSSProperties>(() => {
 </script>
 
 <template>
-  <div class="preview-content md-body" :data-diff="diffMark" :style="rootStyle">
+  <div
+    class="preview-content md-body"
+    :class="{ 'diff-action-host': !!diffView }"
+    :data-diff="diffAttr"
+    :style="rootStyle"
+  >
+    <!-- 逐处切换：左上角浮出 ← / →（不参与布局，不影响排版与分页） -->
+    <DiffActionButton v-if="diffView" class="diff-action-float" :view="diffView" />
+
     <!-- 图标文字型：图标 + 文字 + 可选标签（整体随"文字位置"设置左右移动） -->
     <div
       v-if="content.type === 'iconText'"
@@ -196,6 +210,19 @@ const imageStyle = computed<CSSProperties>(() => {
 <style scoped>
 .preview-content {
   min-width: 0; /* 横向布局里允许被压缩换行 */
+}
+
+/* ---- 对比弹窗：逐处切换按钮 ---- */
+.diff-action-host {
+  position: relative;
+}
+/* 浮在块的左边距里：不占布局宽高，所以不影响排版；贴着这段文字的开头，
+   一眼能看出按钮管的是哪一处（放右上角时容易被当成右侧的 ✎ 角标）。 */
+.diff-action-float {
+  position: absolute;
+  top: calc(50% - 10px);
+  left: -20px;
+  z-index: 6;
 }
 
 /* ---- 图标文字型 ---- */

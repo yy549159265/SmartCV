@@ -27,11 +27,15 @@ class BaseStyle(BaseModel):
 
 
 class SectionStyle(BaseStyle):
-    """章节样式：比内容多 titleSize / gap / spaceBefore。"""
+    """章节样式：比内容多 titleSize / gap / spaceBefore / titleUnderline。"""
 
     titleSize: Optional[float] = None
     gap: Optional[float] = None
     spaceBefore: Optional[float] = None
+    # 标题下方是否显示横线（前端默认为 true）。
+    # 必须声明：/api/chat 用 Section 解析前端简历，Pydantic 会丢弃未声明字段，
+    # 少这一项会让用户关掉的横线在每次对话后被重置回默认开启。
+    titleUnderline: Optional[bool] = None
 
 
 class ContentStyle(BaseStyle):

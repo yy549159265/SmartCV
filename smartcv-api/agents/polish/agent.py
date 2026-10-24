@@ -3,20 +3,29 @@ import logging
 import re
 from pathlib import Path
 
-from langchain.agents import create_agent
+from langchain_core.messages import HumanMessage, SystemMessage
+from pydantic import BaseModel
 
 from agents.utils.choose_llm import choose_llm
 from schemas.provider import ProviderConfig
 
+
+class PolishedItems(BaseModel):
+    """润色结果的结构，与提示词要求的 {"items": [...]} 一致。"""
+
+    items: list[str]
+
 _PROMPT_DIR = Path(__file__).resolve().parent
 
-# 两种润色模式各对应一份系统提示词：
-#   strict（严谨）——规则锁死：只重构表达，数字照用原文、不得凭空造数，克制、篇幅短
-#   free  （自由）——像直接问网页版 AI：自主判断怎么写最好，充分重写，可补充数据，按用户思路走
-# 差别只在"改写自由度"：严谨档守事实红线，自由档不设这条限制。
+# 每种模式各对应一份系统提示词：
+#   strict  （严谨）——规则锁死：只重构表达，数字照用原文、不得凭空造数，克制、篇幅短
+#   free    （自由）——像直接问网页版 AI：自主判断怎么写最好，充分重写，可补充数据，按用户思路走
+#   enhance （提示词增强）——把用户口语化的修改需求改写成可执行的提示词，可参考 JD
+# 前两者差别在"改写自由度"；enhance 是另一种任务，输出仍是 {"items": [...]} 以复用同一接口。
 _MODE_PROMPTS = {
     "strict": (_PROMPT_DIR / "system_prompt_polish_strict.md").read_text(encoding="utf-8"),
     "free": (_PROMPT_DIR / "system_prompt_polish_free.md").read_text(encoding="utf-8"),
+    "enhance": (_PROMPT_DIR / "system_prompt_polish_enhance.md").read_text(encoding="utf-8"),
 }
 _DEFAULT_MODE = "strict"
 
@@ -68,46 +77,49 @@ def run_polish_agent(
     description: str = "",
     mode: str = _DEFAULT_MODE,
     session_id: str | None = None,
+    context: str = "",
 ):
     llm = choose_llm(provider)
 
-    # 未知 mode 兜底走严谨模式（宁可保守，不要意外进入"放开"档）
     system_prompt = _MODE_PROMPTS.get(mode) or _MODE_PROMPTS[_DEFAULT_MODE]
 
-    # 这里不用 response_format=PolishedItems：那会让 langchain 把结构化输出伪装成
-    # 一次 function call 发给模型（tools=[PolishedItems]、tool_choice=required）。
-    # 模型返回的 arguments 只要是坏 JSON（中文文本里没转义的引号、参数被截断等）
-    # 或工具名对不上，langchain 就会保留 assistant 的 tool_calls 却不补 tool 应答，
-    # 下一轮请求被 DeepSeek 以 "assistant message with 'tool_calls' must be followed
-    # by tool messages" 400 拒绝。提示词本来就要求直接输出合法 JSON，改成自己解析更稳。
-    agent = create_agent(
-        model=llm,
-        tools=[],
+    structured_llm = llm.with_structured_output(
+        PolishedItems,
+        method="json_mode",
+        include_raw=True,  # 解析失败时保留原文 {"raw": ..., "parsed": ..., "parsing_error": ...}
     )
 
-    # description 是用户填的润色思路（前端可为空）：填了就一并交给模型。
-    # 注意它在两种模式下的地位不同 —— 严谨模式里只是"风格参考"，自由模式里是
-    # "最高优先级的指令"（由两份提示词各自定义），传参方式一样。
-    hint = description.strip()
-    items_block = "\n".join(texts)
-    if hint:
-        human_content = f"我的润色思路：{hint}\n\n请按上面的思路润色以下简历要点：\n{items_block}"
+    # 三类输入分工明确：
+    #   context     参考材料（JD / 简历 / 对话历史…），只读，不参与改写
+    #   description 要求（怎么改），可为空；两种模式下的地位见各自提示词
+    #   texts       待处理内容，逐行改写，输出条数与之对应
+    # 用标签包裹，避免模型把参考材料也当成本次要改写的内容，也降低材料里的
+    # 文字被误当成指令的风险。老调用方不传 context/description 时，拼装结果
+    # 和以前等价（只是措辞更中性）。
+    blocks: list[str] = []
+    if context.strip():
+        blocks.append(f"<参考材料>\n{context.strip()}\n</参考材料>")
+    if description.strip():
+        blocks.append(f"<要求>\n{description.strip()}\n</要求>")
+    blocks.append("<待处理内容>\n" + "\n".join(texts) + "\n</待处理内容>")
+    human_content = "\n\n".join(blocks)
+
+    result = structured_llm.invoke(
+        [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=human_content),
+        ]
+    )
+
+    parsed = result.get("parsed")
+    # 如果解析对象失败，退回到手动解析
+    if isinstance(parsed, PolishedItems):
+        items = [str(i) for i in parsed.items]
     else:
-        human_content = f"请润色以下简历要点：\n{items_block}"
+        logging.warning("polish[%s] 结构化解析失败，回退为文本解析：%s", mode, result.get("parsing_error"))
+        raw = result.get("raw")
+        content = getattr(raw, "content", "")
+        items = _parse_items(content if isinstance(content, str) else "")
 
-    result = agent.invoke(
-        {
-            "messages": [
-                {"type": "system", "content": system_prompt},
-                {"type": "human", "content": human_content},
-            ]
-        },
-        # session_id 通过 configurable 传给 agent，同一会话的多次调用才能串成一条会话
-        config={"recursion_limit": 20, "configurable": {"session_id": session_id}},
-    )
-
-    # 不再有 structured_response（没走 response_format），直接解析模型回复的 JSON 文本
-    content = result["messages"][-1].content
-    items = _parse_items(content if isinstance(content, str) else "")
-    logging.info("polish-agent[%s] 输出 %d 条润色结果", mode, len(items))
+    logging.info("polish[%s] session=%s 输出 %d 条润色结果", mode, session_id, len(items))
     return items

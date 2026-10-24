@@ -45,6 +45,9 @@ class ChatTask:
         self.events: deque = deque(maxlen=_EVENT_CACHE_MAXLEN)  # (event_id, sse文本)
         self.queue: asyncio.Queue = asyncio.Queue(maxsize=_QUEUE_MAXSIZE)
         self._seq = itertools.count(1)
+        # 反问答对：agent 暂停时登记问题 id + future，前端 POST 答案后 resolve
+        self._question_id: str | None = None
+        self._answer_future: asyncio.Future | None = None
 
     async def emit(self, event: dict) -> None:
         """生产端发事件：分配 id → 缓存进 deque → 塞进 queue（队列满则阻塞=背压）。"""
@@ -52,6 +55,33 @@ class ChatTask:
         text = format_sse(event_id, event)
         self.events.append((event_id, text))
         await self.queue.put(text)
+
+    # ---- 反问：暂停 → 等前端提交答案 ----
+
+    def open_question(self, question_id: str) -> asyncio.Future:
+        """登记一个待回答的问题，返回答案 future（由 submit_answer resolve）。"""
+        future = asyncio.get_running_loop().create_future()
+        self._question_id = question_id
+        self._answer_future = future
+        return future
+
+    def submit_answer(self, question_id: str, answers: list[dict]) -> bool:
+        """前端 POST 答案：id 对得上且仍在等待才接受；重复/过期提交返回 False。"""
+        future = self._answer_future
+        if future is None or future.done() or self._question_id != question_id:
+            return False
+        future.set_result(answers)
+        return True
+
+    def clear_question(self, question_id: str | None = None) -> None:
+        """清掉待答登记；还没回答就取消 future（超时 / 任务取消时用）。"""
+        if question_id is not None and self._question_id != question_id:
+            return
+        future = self._answer_future
+        if future is not None and not future.done():
+            future.cancel()
+        self._answer_future = None
+        self._question_id = None
 
     def finish(self, resume: Any, summary: str, diagnosis: str) -> None:
         self.resume = resume
@@ -65,6 +95,8 @@ class ChatTask:
 
     def cancel(self) -> None:
         self.status = "cancelled"
+        # 生产任务被取消时，正在等答案的 future 也要取消，否则协程会一直挂着
+        self.clear_question()
 
 
 # ---- 全局注册表：按 session_id 存一份 ChatTask，10 分钟过期自动删除 ----

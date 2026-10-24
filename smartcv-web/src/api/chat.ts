@@ -1,7 +1,7 @@
 /**
  * "优化简历"对话接口（SSE 流式）
  *
- * 后端：POST /api/chat（见 smartcv-api/main.py）
+ * 后端：POST /api/chat（见 smartcv-api/routers/agent.py）
  *   入参：{ resume: Section[], message: string, jd?: string, provider: {...} }
  *   出参：SSE 事件流（text/event-stream），每条事件 = { type, ... }：
  *     - { type: "status",      stage, text }         阶段开始（convert）
@@ -10,6 +10,8 @@
  *     - { type: "tool_call",   tool, args }          优化 agent 调用工具（patch_content 等）
  *     - { type: "tool_result", tool, result }        工具返回
  *     - { type: "delta",       stage, text }         阶段内逐 token 流式（打字机）
+ *     - { type: "ask_question", questionId, title, questions }  诊断 agent 反问，等用户回答
+ *     - { type: "ask_question_closed", questionId, reason }     问题被关闭（超时）
  *     - { type: "resume",      resume, summary, diagnosis }  最终改好的简历 JSON
  *     - { type: "done" }                             流水线完成
  *     - { type: "error",       message }             失败（前端直接抛错）
@@ -27,6 +29,40 @@ export interface ChatResumePayload {
   diagnosis: string
 }
 
+/** 反问的一个预设选项（第 4 项「其他」由前端补，不在这里） */
+export interface AskOption {
+  label: string
+  description?: string
+}
+
+/** 反问的一个问题 */
+export interface AskQuestion {
+  id: string
+  header: string
+  question: string
+  /** true = 多选，false = 单选 */
+  multiSelect: boolean
+  options: AskOption[]
+  /** 固定为 true：前端在选项后追加「其他（自定义输入）」 */
+  allowCustom?: boolean
+}
+
+/** 一整套反问（诊断 agent 暂停时下发） */
+export interface AskQuestionPayload {
+  questionId: string
+  title: string
+  questions: AskQuestion[]
+  /** 后端等待回答的秒数（用于前端倒计时），缺省按 300 处理 */
+  timeoutSeconds?: number
+}
+
+/** 前端提交的单题答案 */
+export interface ChatAnswer {
+  id: string
+  selected: string[]
+  custom: string
+}
+
 export interface ChatHandlers {
   /** 阶段开始（"正在诊断简历…"等提示文案） */
   onStatus?: (stage: string, text: string) => void
@@ -40,6 +76,10 @@ export interface ChatHandlers {
   onToolResult?: (tool: string, result: string) => void
   /** 结束 agent */
   onAgentEnd?: (agent: string, label: string) => void
+  /** 诊断 agent 反问：前端展示选择题，答完 POST /api/chat/answer */
+  onAskQuestion?: (payload: AskQuestionPayload) => void
+  /** 问题已关闭（等待超时等），前端把卡片置为失效 */
+  onAskQuestionClosed?: (questionId: string, reason: string) => void
   /** 最终改好的简历 JSON（前端据此重绘） */
   onResume?: (payload: ChatResumePayload) => void
   /** 流水线完成 */
@@ -111,6 +151,21 @@ export async function sendChatMessage(
       case 'agent_end':
         handlers?.onAgentEnd?.(String(ev.agent), String(ev.label ?? ev.agent))
         break
+      case 'ask_question':
+        handlers?.onAskQuestion?.({
+          questionId: String(ev.questionId ?? ''),
+          title: String(ev.title ?? ''),
+          questions: Array.isArray(ev.questions) ? (ev.questions as AskQuestion[]) : [],
+          timeoutSeconds:
+            typeof ev.timeoutSeconds === 'number' ? ev.timeoutSeconds : undefined,
+        })
+        break
+      case 'ask_question_closed':
+        handlers?.onAskQuestionClosed?.(
+          String(ev.questionId ?? ''),
+          String(ev.reason ?? 'closed'),
+        )
+        break
       case 'resume':
         summary = String(ev.summary ?? '')
         handlers?.onResume?.({
@@ -141,4 +196,22 @@ export async function sendChatMessage(
   }
   if (buffer.trim()) dispatch(buffer)
   return summary
+}
+
+/**
+ * 回答诊断 agent 的反问。
+ *
+ * 答案不会另开一条 SSE 流：后端正拿着原来的 /api/chat 连接暂停等待，
+ * 这里 POST 成功后，原流会继续往下输出诊断 → 优化 → 总结。
+ * 空数组 = 跳过回答，诊断按现有信息继续。
+ */
+export async function sendChatAnswers(questionId: string, answers: ChatAnswer[]): Promise<void> {
+  const res = await apiFetch('/api/chat/answer', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ questionId, answers }),
+  })
+  if (!res.ok) {
+    throw new Error(await apiErrorMessage(res, '提交回答失败'))
+  }
 }

@@ -2,12 +2,17 @@
  * 示例模板接口 —— 数据源是 GitHub 仓库的 example/ 目录。
  *
  * 为什么放 GitHub 而不是打包进前端：
- *   1. 新增示例只要往仓库 example/ 丢一个 json，前端不用改代码、也不用重新构建；
- *   2. 目录清单由 GitHub API 自动给出，画廊照单渲染 —— 加多少张卡片都自动排版。
+ *   1. 新增示例只要往仓库 example/ 丢一个 json、在 index.json 里登记一行，
+ *      前端不用改代码、也不用重新构建；
+ *   2. 目录清单由仓库里的 example/index.json 给出，画廊照单渲染 —— 加多少张卡片都自动排版。
  *
- * 配额：只有「列目录」这一步走 api.github.com（未认证 60 次/小时/IP，响应带 CORS 头）；
- *   拉文件内容走 download_url（raw.githubusercontent.com，CDN 直出，不吃这个配额）。
- *   所以清单缓存在 sessionStorage（1 小时），避免反复消耗配额。
+ * 为什么用 index.json 而不是 GitHub API 列目录：
+ *   api.github.com 未认证只有 60 次/小时/IP，多开标签页、换设备，或者同一出口 IP
+ *   的其它工具都会一起消耗它。改成读仓库里的静态清单后，清单和文件都走
+ *   raw.githubusercontent.com（CDN 直出），不消耗 API 配额，也不需要 token。
+ *
+ * 维护：新增/删除示例后，在 smartcv-web 下运行 `npm run examples:index`
+ *   重新生成 index.json（见 scripts/gen-example-index.mjs）。
  *
  * 命名约定：`01-经典左头图.json` → 序号 1、标题「经典左头图」。
  *   不按这个约定命名也能用，只是排到最后、标题直接取文件名。
@@ -19,32 +24,34 @@ const REPO = 'yy549159265/SmartCV'
 const BRANCH = 'main'
 const DIR = 'example'
 
-/** 列目录地址（走 GitHub API，消耗配额） */
-const LIST_URL = `https://api.github.com/repos/${REPO}/contents/${DIR}?ref=${BRANCH}`
+/** raw CDN 根地址：清单和示例文件都从这里取，不消耗 GitHub API 配额 */
+const RAW_BASE = `https://raw.githubusercontent.com/${REPO}/${BRANCH}/${DIR}`
+
+/** 清单地址（仓库里的 example/index.json，由 scripts/gen-example-index.mjs 生成） */
+const LIST_URL = `${RAW_BASE}/index.json`
 
 /** 清单缓存的 sessionStorage key 与有效期（1 小时） */
 const CACHE_KEY = 'smartcv-example-list'
 const CACHE_TTL = 60 * 60 * 1000
 
-/** GitHub contents 接口返回的单个条目（只列用得到的字段） */
-interface GitHubEntry {
+/** index.json 里的单个条目：name 必填，title/size 省略时由文件名推导或显示为 0 */
+interface IndexEntry {
   name: string
-  type: string
-  size: number
-  download_url: string | null
+  title?: string
+  size?: number
 }
 
 /** 画廊里的一张示例卡片 */
 export interface ExampleItem {
   /** 仓库里的文件名，如 01-经典左头图.json */
   name: string
-  /** 展示用标题（从文件名解析） */
+  /** 展示用标题（清单里的 title，没有则从文件名解析） */
   title: string
   /** 排序号（文件名前缀数字；没写前缀的排到最后） */
   order: number
-  /** 文件大小（字节） */
+  /** 文件大小（字节；清单里没写就是 0） */
   size: number
-  /** 下载地址（GitHub 已编码好，中文文件名直接用） */
+  /** 下载地址（raw CDN，由文件名编码拼接） */
   url: string
 }
 
@@ -93,25 +100,34 @@ export async function listExamples(force = false): Promise<ExampleItem[]> {
   let res: Response
   try {
     // force 时绕过浏览器 HTTP 缓存，否则刚推上去的示例目录可能还是旧的
-    res = await fetch(LIST_URL, {
-      headers: { Accept: 'application/vnd.github+json' },
-      cache: force ? 'reload' : 'default',
-    })
+    res = await fetch(LIST_URL, { cache: force ? 'reload' : 'default' })
   } catch {
     throw new Error('连接 GitHub 失败，请检查网络后重试')
   }
 
   if (!res.ok) {
-    // 403 = 未认证配额（60 次/小时/IP）用完了；404 = 仓库或目录不存在
-    if (res.status === 403) throw new Error('GitHub 接口次数已达上限（60 次/小时），请稍后再试')
-    if (res.status === 404) throw new Error('仓库里找不到 example 目录')
-    throw new Error(`读取示例目录失败（HTTP ${res.status}）`)
+    // 404 = 仓库里没有 index.json（或分支/目录改名了）
+    if (res.status === 404) throw new Error('仓库里找不到 example/index.json')
+    throw new Error(`读取示例清单失败（HTTP ${res.status}）`)
   }
 
-  const entries = (await res.json()) as GitHubEntry[]
+  const entries = (await res.json()) as IndexEntry[]
+  if (!Array.isArray(entries)) throw new Error('示例清单格式不正确')
+
   const items = entries
-    .filter((e) => e.type === 'file' && /\.json$/i.test(e.name) && e.download_url)
-    .map((e) => ({ name: e.name, size: e.size, url: e.download_url as string, ...parseName(e.name) }))
+    .filter((e) => e !== null && typeof e === 'object' && typeof e.name === 'string' && /\.json$/i.test(e.name))
+    .map((e) => {
+      const parsed = parseName(e.name)
+      return {
+        name: e.name,
+        // 清单里显式写了 title 就用它，否则按文件名约定推导
+        title: e.title || parsed.title,
+        size: typeof e.size === 'number' ? e.size : 0,
+        // 下载地址由清单里的文件名拼出来，和清单一样走 raw CDN
+        url: `${RAW_BASE}/${encodeURIComponent(e.name)}`,
+        order: parsed.order,
+      }
+    })
     .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name))
 
   writeCache(items)

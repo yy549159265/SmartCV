@@ -16,9 +16,10 @@
  */
 import { computed } from 'vue'
 import PreviewLayoutWindow from './PreviewLayoutWindow.vue'
+import DiffActionButton from './DiffActionButton.vue'
 import { effectiveSectionStyle } from '@/utils/style'
 import { computeTableCols } from '@/utils/layout'
-import type { DiffMarks } from '@/utils/resumeDiff'
+import { diffAttr as resolveDiffAttr, type DiffControls, type DiffMarks } from '@/utils/resumeDiff'
 import type { Section } from '@/types'
 
 const props = withDefaults(
@@ -37,6 +38,8 @@ const props = withDefaults(
     spaceBefore?: number
     /** 差异标记表（对比弹窗用）；不传 = 不做任何高亮 */
     marks?: DiffMarks
+    /** 逐处切换的操作表（对比弹窗用）；不传 = 只显示高亮、不能切换 */
+    controls?: DiffControls
   }>(),
   {
     showTitle: true,
@@ -76,6 +79,14 @@ const padStyle = computed(() => ({
   paddingTop: props.topPad === false ? '0px' : '4px',
   paddingBottom: props.bottomPad === false ? '0px' : '16px',
 }))
+
+/** 章节自身（标题/样式）的切换操作 */
+const sectionView = computed(() => props.controls?.sections[props.section.id])
+
+/** 实际挂到 data-diff 上的标记：还原过的改动换成"已还原 / 已忽略"两档样式 */
+const sectionAttr = computed(() =>
+  resolveDiffAttr(props.marks?.sections[props.section.id], sectionView.value),
+)
 </script>
 
 <template>
@@ -84,12 +95,14 @@ const padStyle = computed(() => ({
       v-if="showTitle !== false"
       class="preview-section-title"
       :class="{ 'has-underline': eff.titleUnderline }"
-      :data-diff="marks?.sections[section.id]"
+      :data-diff="sectionAttr"
       :style="titleStyle"
     >
       <span class="preview-title-row">
         <span v-if="section.icon" class="preview-title-icon" v-html="section.icon"></span>
         <span class="preview-title-text">{{ section.title }}</span>
+        <!-- 章节级改动（标题/样式/整章增删）的切换按钮 -->
+        <DiffActionButton v-if="sectionView" :view="sectionView" />
       </span>
     </div>
     <!-- 布局窗口树（递归渲染） -->
@@ -101,6 +114,7 @@ const padStyle = computed(() => ({
         :row="row"
         :table-cols="tableCols"
         :marks="marks"
+        :controls="controls"
       />
     </div>
   </section>

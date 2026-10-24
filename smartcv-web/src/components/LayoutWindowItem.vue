@@ -464,7 +464,10 @@ function onRowDragEnd(evt: { from?: HTMLElement }) {
 }
 .row-h .content-drag-list :deep(.content-card) {
   flex: 1 1 0;
-  min-width: 0;
+  /* 卡片最窄也要放得下 ⋮⋮ 手柄 + 类型图标 + ⋯ 菜单。
+     再窄就换行（列表本身 flex-wrap:wrap），而不是把卡片压成一条缝
+     —— 压缩模式（只显示图标）靠卡片自己的容器查询，不靠无限变窄。 */
+  min-width: 88px;
 }
 
 /* 空态提示：绝对定位铺满落点区并居中，pointer-events:none 不拦截拖放 */

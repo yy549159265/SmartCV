@@ -9,12 +9,15 @@
  * 对话走 SSE 流式（见 src/api/chat.ts）：诊断"思考"正文 + steps 执行过程 +
  * 摘要"修改说明"气泡；供应商配置在「供应商设置」页（localStorage 保存）。
  */
-import { nextTick, ref, computed } from 'vue'
+import { nextTick, ref, computed, watch } from 'vue'
+import type { InputInst } from 'naive-ui'
 import PreviewSection from '@/components/PreviewSection.vue'
 import ResumeDiffDialog from '@/components/ResumeDiffDialog.vue'
+import AskQuestionCard from '@/components/AskQuestionCard.vue'
 import { useResumeStore } from '@/stores/resume'
 import { useOptimizeStore, type ChatItem, type ChatStep } from '@/stores/optimize'
 import { useStatsStore } from '@/stores/stats'
+import type { ChatAnswer } from '@/api/chat'
 
 /** 各 agent 生命周期的友好文案：running（进行中）/ done（完成） */
 const AGENT_STATUS: Record<string, { running: string; done: string }> = {
@@ -68,6 +71,7 @@ import { previewZoom, ZOOM_LEVELS } from '@/composables/usePreviewZoom'
 import { CONTENT_WIDTH, PAGE_HEIGHT, PAGE_PADDING, PAGE_WIDTH } from '@/utils/constants'
 import { pageRunSpecs, type PageUnit, type RunSpec } from '@/utils/pagination'
 import { exportResumePdf } from '@/api/pdf'
+import { polishTexts } from '@/api/polish'
 import type { Section } from '@/types'
 import { downloadJson } from '@/utils/download'
 import { renderMarkdown } from '@/utils/markdown'
@@ -159,6 +163,8 @@ const jdExpanded = ref(false)
 
 /** 输入框内容 */
 const draft = ref('')
+/** 输入框实例（增强后把光标放回末尾，方便继续编辑或发送） */
+const chatInputRef = ref<InputInst | null>(null)
 /** 对话列表容器（用于自动滚到底部） */
 const chatListEl = ref<HTMLElement | null>(null)
 
@@ -170,6 +176,65 @@ async function onSend() {
   // 新消息上屏后滚到底部
   await nextTick()
   chatListEl.value?.scrollTo({ top: chatListEl.value.scrollHeight, behavior: 'smooth' })
+}
+
+/** 诊断 agent 反问：提交答案（空数组 = 跳过） */
+function onSubmitQuestion(questionId: string, answers: ChatAnswer[]) {
+  void optimizeStore.submitQuestionAnswers(questionId, answers)
+}
+
+// 反问卡片出现时自动滚到底部，别让用户错过等待回答的问题
+watch(
+  () => optimizeStore.messages.some((m) => m.kind === 'question' && m.status === 'pending'),
+  async (pending) => {
+    if (!pending) return
+    await nextTick()
+    chatListEl.value?.scrollTo({ top: chatListEl.value.scrollHeight, behavior: 'smooth' })
+  },
+)
+
+/* ---------- 提示词增强 ---------- */
+
+/** 是否正在请求增强（按钮转圈，避免重复点击） */
+const enhancing = ref(false)
+/** 增强前 / 增强后对比弹窗 */
+const enhanceShow = ref(false)
+const enhanceBefore = ref('')
+const enhanceAfter = ref('')
+
+/**
+ * 把输入框里的口语化要求发给后端改写成更明确、可执行的提示词。
+ * 复用 /api/polish（mode='enhance'），已填的 JD 作为参考材料一起传。
+ * 不直接覆盖输入框：先弹窗对比，用户点「确定」才写回。
+ */
+async function onEnhancePrompt() {
+  const text = draft.value.trim()
+  if (enhancing.value || optimizeStore.sending) return
+  if (!text) {
+    message.warning('先输入修改要求再增强')
+    return
+  }
+
+  enhancing.value = true
+  try {
+    const [enhanced] = await polishTexts([text], '', 'enhance', optimizeStore.jd)
+    const result = (enhanced ?? '').trim()
+    if (!result) throw new Error('增强结果为空，请稍后重试')
+    enhanceBefore.value = text
+    enhanceAfter.value = result
+    enhanceShow.value = true
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '提示词增强失败')
+  } finally {
+    enhancing.value = false
+  }
+}
+
+/** 确认采用增强结果：写回输入框，光标移到末尾 */
+function onApplyEnhance() {
+  draft.value = enhanceAfter.value
+  enhanceShow.value = false
+  nextTick(() => chatInputRef.value?.focus())
 }
 
 /** 当前会话 id（展示用；「新建会话」重置后同步更新） */
@@ -186,13 +251,15 @@ function onNewConversation() {
 /* ---------- AI 修改对比 ---------- */
 
 /**
- * 应用对比弹窗里的修改：这时候才真正把 AI 改好的简历写回 store。
+ * 应用对比弹窗里的修改：这时候才真正把（逐处筛选过的）结果写回 store。
  * importResume 会重生成 id 并整体替换，同时被 main.ts 的 $onAction 记一次撤销快照，
  * 所以提示里告诉用户可以 Ctrl+Z 撤回。
+ * 全部还原时 store 不会写回，提示也换成"简历未改动"。
  */
 function onApplyDiff() {
-  optimizeStore.applyPendingDiff()
-  message.success('已应用 AI 修改，可用 Ctrl+Z 撤销')
+  const applied = optimizeStore.applyPendingDiff()
+  if (applied) message.success('已应用 AI 修改，可用 Ctrl+Z 撤销')
+  else message.info('所有改动都已还原，简历保持不变')
 }
 </script>
 
@@ -349,7 +416,7 @@ function onApplyDiff() {
           v-for="(m, i) in optimizeStore.messages"
           :key="i"
           class="chat-msg"
-          :class="{ 'from-user': m.kind === 'user' }"
+          :class="{ 'from-user': m.kind === 'user', 'question-msg': m.kind === 'question' }"
         >
           <!-- 用户消息：右侧气泡 -->
           <div v-if="m.kind === 'user'" class="msg-block from-user">
@@ -370,6 +437,11 @@ function onApplyDiff() {
               </span>
               <span class="status-line-text">{{ m.text }}</span>
             </div>
+          </div>
+
+          <!-- 诊断 agent 反问：暂停等待用户选择；提交后原 SSE 流继续 -->
+          <div v-else-if="m.kind === 'question'" class="msg-block from-process">
+            <AskQuestionCard :item="m" @submit="onSubmitQuestion" />
           </div>
 
           <!-- agent 块：诊断 / 优化 / 摘要统一卡片，状态头 + 回答(常显) + 思考/工具(各自折叠) -->
@@ -430,15 +502,42 @@ function onApplyDiff() {
         </div>
       </div>
 
+      <!-- 增强中：在输入区上方就地提示，不走全局 toast（否则会飘到页面顶部） -->
+      <div v-if="enhancing" class="enhance-loading">
+        <n-spin :size="12" />
+        <span>正在增强提示词…</span>
+      </div>
+
       <!-- 输入区 -->
       <div class="chat-input">
         <n-input
+          ref="chatInputRef"
           v-model:value="draft"
           type="textarea"
           :autosize="{ minRows: 1, maxRows: 4 }"
           placeholder="输入修改要求，Enter 发送，Shift+Enter 换行"
           @keydown.enter.exact.prevent="onSend"
         />
+        <!-- 提示词增强：把口语化要求改写成更明确的提示词（悬停显示说明） -->
+        <n-tooltip trigger="hover">
+          <template #trigger>
+            <n-button
+              class="enhance-btn"
+              quaternary
+              size="small"
+              :disabled="optimizeStore.sending || enhancing"
+              :loading="enhancing"
+              aria-label="提示词增强"
+              @click="onEnhancePrompt"
+            >
+              <svg v-if="!enhancing" class="enhance-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 2.5l1.7 4.8L18.5 9l-4.8 1.7L12 15.5l-1.7-4.8L5.5 9l4.8-1.7L12 2.5z" fill="currentColor" />
+                <path d="M19 14l.9 2.1 2.1.9-2.1.9L19 20l-.9-2.1L16 17l2.1-.9L19 14z" fill="currentColor" />
+              </svg>
+            </n-button>
+          </template>
+          提示词增强
+        </n-tooltip>
         <n-button
           type="primary"
           size="small"
@@ -451,14 +550,45 @@ function onApplyDiff() {
     </section>
   </main>
 
-  <!-- AI 修改对比弹窗：后端返回改好的简历后自动弹出，用户确认才写回简历 -->
+  <!-- AI 修改对比弹窗：后端返回改好的简历后自动弹出；
+       每处可单独 ← 还原 / → 恢复，点「确定应用」才把结果写回简历 -->
   <ResumeDiffDialog
     :show="optimizeStore.diffOpen && !!optimizeStore.pendingDiff"
     :before="optimizeStore.pendingDiff?.before ?? []"
     :after="optimizeStore.pendingDiff?.after ?? []"
+    :reverted="optimizeStore.pendingDiff?.reverted ?? []"
     @update:show="(v: boolean) => { if (!v) optimizeStore.dismissDiff() }"
+    @toggle="(key: string) => optimizeStore.toggleDiffChange(key)"
+    @revert-all="optimizeStore.revertAllDiff()"
+    @accept-all="optimizeStore.acceptAllDiff()"
     @apply="onApplyDiff"
   />
+
+  <!-- 提示词增强对比：确认后才写回输入框，取消则保持原样 -->
+  <n-modal
+    v-model:show="enhanceShow"
+    display-directive="if"
+    preset="card"
+    title="提示词增强"
+    style="width: 900px; max-width: 94vw"
+  >
+    <div class="enhance-compare">
+      <div class="enhance-col">
+        <div class="enhance-col-head">增强前</div>
+        <div class="enhance-text">{{ enhanceBefore }}</div>
+      </div>
+      <div class="enhance-col">
+        <div class="enhance-col-head">增强后</div>
+        <div class="enhance-text">{{ enhanceAfter }}</div>
+      </div>
+    </div>
+    <template #footer>
+      <div class="enhance-actions">
+        <n-button size="small" @click="enhanceShow = false">取消</n-button>
+        <n-button size="small" type="primary" @click="onApplyEnhance">确定</n-button>
+      </div>
+    </template>
+  </n-modal>
 </template>
 
 <style scoped>
@@ -652,6 +782,11 @@ function onApplyDiff() {
 }
 .from-user .msg-block {
   align-items: flex-end;
+}
+/* 反问卡片是表单，占满对话栏宽度更好操作 */
+.chat-msg.question-msg .msg-block {
+  width: 100%;
+  max-width: 100%;
 }
 /* 过程 agent（诊断/优化）：可折叠卡片，默认收起 */
 .from-process {
@@ -963,5 +1098,57 @@ function onApplyDiff() {
 }
 .chat-input :deep(.n-input) {
   flex: 1;
+}
+
+/* ---- 提示词增强 ---- */
+.enhance-loading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 16px 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.enhance-btn {
+  align-self: flex-end;
+  color: var(--text-secondary);
+}
+.enhance-icon {
+  width: 18px;
+  height: 18px;
+}
+.enhance-compare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.enhance-col {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-soft);
+}
+.enhance-col-head {
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.enhance-text {
+  max-height: 48vh;
+  overflow: auto;
+  padding: 12px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.enhance-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 </style>

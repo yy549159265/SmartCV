@@ -18,8 +18,12 @@ import ColumnDivider from '@/components/ColumnDivider.vue'
 
 /** 各列的默认宽度（px） */
 const DEFAULTS = { library: 268, preview: 872 }
-/** 各列的宽度范围（px） */
-const LIMITS = { library: { min: 200, max: 460 }, preview: { min: 500, max: 1100 } }
+/**
+ * 各列的宽度范围（px）。
+ * 组件库下限放得很小：拖窄后会自动进入"只显示图标"的压缩模式（见 ComponentLibrary 的容器查询），
+ * 把空间让给画布/预览。
+ */
+const LIMITS = { library: { min: 128, max: 460 }, preview: { min: 500, max: 1100 } }
 
 const libraryWidth = useStorage('smartcv-layout-library', DEFAULTS.library)
 const previewWidth = useStorage('smartcv-layout-preview', DEFAULTS.preview)

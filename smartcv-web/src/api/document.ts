@@ -1,12 +1,12 @@
 /**
  * "导入文档（PDF / Word）"接口
  *
- * 后端：POST /api/resume/parse（见 smartcv-api/main.py）
+ * 后端：POST /api/resume/parse（见 smartcv-api/routers/business.py）
  *   入参：multipart 表单
  *         file                    —— 上传的简历文档（PDF / .docx）
- *         parser                  —— 解析引擎：docling（本地，默认）/ mineru（云 API）
+ *         parser                  —— 解析引擎：mineru（云 API，默认）；docling 已停用
  *         mineruToken             —— 选 mineru 时的 API Token
- *         provider/baseUrl/apiKey/model —— 供应商配置（后端据此调 LLM 解析）
+ *         provider/baseUrl/apiKey/model —— 供应商配置（用于大模型语义结构化，失败回退确定性规则）
  *   出参：统一响应 { code, message, data }，data 为与 importResume 兼容的简历数据
  *        （顶层为章节数组 Section[]）
  *

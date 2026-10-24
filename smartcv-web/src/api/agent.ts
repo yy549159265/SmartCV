@@ -1,7 +1,7 @@
 /**
  * "Agent 设置"页接口
  *
- * 后端：GET /api/agent/md（见 smartcv-api/main.py）
+ * 后端：GET /api/agent/md（见 smartcv-api/routers/agent.py）
  *   出参：统一响应 { code, message, data }，data = { prompts, skills }：
  *     - prompts：后端 agent 用的提示词（system_prompt 开头的 md）
  *     - skills：技能文档（agents/skill 目录下的 md）

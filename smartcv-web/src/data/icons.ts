@@ -91,3 +91,20 @@ export const ICON_GROUPS: IconGroup[] = [
 
 /** 扁平化后的全部图标（快速判断/遍历用） */
 export const ALL_ICONS: string[] = ICON_GROUPS.flatMap((g) => g.icons)
+
+/* ---------- 内容类型图标 ---------- */
+
+/**
+ * 「列表文字」的类型图标：三行文字 + 行首圆点（内联 SVG）。
+ *
+ * 原来用 ☰ / ≡ 这类三横线字符，在 13~18px 下会被看成汉字「三」，
+ * 完全看不出是列表；改用带圆点的 SVG，缩小后也能一眼认出。
+ * 颜色走 currentColor，跟随所在卡片 / 标签的文字色。
+ */
+export const LIST_TEXT_ICON =
+  '<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" ' +
+  'stroke-width="1.7" stroke-linecap="round" aria-hidden="true">' +
+  '<circle cx="4.5" cy="6" r="1.2" fill="currentColor" stroke="none"/>' +
+  '<circle cx="4.5" cy="12" r="1.2" fill="currentColor" stroke="none"/>' +
+  '<circle cx="4.5" cy="18" r="1.2" fill="currentColor" stroke="none"/>' +
+  '<path d="M8.5 6h11M8.5 12h11M8.5 18h11"/></svg>'

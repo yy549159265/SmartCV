@@ -11,6 +11,14 @@
 
 FROM python:3.12-slim
 
+# Debian 软件源换阿里云镜像（国内 apt 快很多，Playwright 的 --with-deps 也走这里）。
+# bookworm 镜像里源文件是 /etc/apt/sources.list.d/debian.sources（deb822 格式），
+# 老镜像可能是 /etc/apt/sources.list，两个都改，找不到就跳过。
+RUN set -eux; \
+    for f in /etc/apt/sources.list /etc/apt/sources.list.d/debian.sources; do \
+        [ -f "$f" ] && sed -i 's|deb.debian.org|mirrors.aliyun.com|g; s|security.debian.org|mirrors.aliyun.com|g' "$f" || true; \
+    done
+
 # OpenCV 运行库 + curl（docling 用）；不装 gcc（大部分包已有轮子）。
 RUN apt-get update \
     && apt-get install -y --no-install-recommends fonts-liberation curl \
@@ -22,8 +30,15 @@ WORKDIR /app
 COPY requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt
 
-# Playwright 无头 Chromium（导出 PDF 用）
-RUN playwright install --with-deps chromium
+# Playwright 无头 Chromium（导出 PDF 用）。
+# 默认从 cdn.playwright.dev 下载，国内很慢；npmmirror 按原样镜像了 cft 路径，
+# 例如 builds/cft/151.0.7922.34/linux64/chrome-linux64.zip 实测 200，
+# 所以把下载 Host 指过去即可（playwright 1.62 会读 PLAYWRIGHT_DOWNLOAD_HOST）。
+# --with-deps 的 apt 依赖走上面换好的阿里云源。
+ARG PLAYWRIGHT_DOWNLOAD_HOST=https://cdn.npmmirror.com/binaries/playwright
+RUN PLAYWRIGHT_DOWNLOAD_HOST=${PLAYWRIGHT_DOWNLOAD_HOST} \
+    PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT=120000 \
+    playwright install --with-deps chromium
 
 #ENV HF_ENDPOINT=https://hf-mirror.com \
 #    HF_HUB_DISABLE_XET=1 \

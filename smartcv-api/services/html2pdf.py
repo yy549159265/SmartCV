@@ -10,8 +10,10 @@ PDF 生成服务：把"前端渲染好的简历 HTML"用无头 Chromium（Playwr
   - 需要安装 playwright 及浏览器（一次性）：
         pip install playwright
         playwright install chromium
-  - 国内装浏览器可能要配镜像：
-        set PLAYWRIGHT_DOWNLOAD_HOST=https://npmmirror.com/mirrors/playwright
+  - 国内装浏览器很慢，可走 npmmirror（它镜像了 playwright 的 cft 路径）：
+        PowerShell: $env:PLAYWRIGHT_DOWNLOAD_HOST="https://cdn.npmmirror.com/binaries/playwright"
+        cmd / bash:  set / export PLAYWRIGHT_DOWNLOAD_HOST=https://cdn.npmmirror.com/binaries/playwright
+        playwright install chromium
   - Chromium 实例懒加载、全程复用（首次启动约 1~2 秒，之后每次请求几百毫秒）。
 """
 

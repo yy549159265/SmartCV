@@ -47,7 +47,7 @@
 # 1) 后端
 cd smartcv-api
 python -m pip install -r requirements.txt
-python -m playwright install chromium        # 导出 PDF 用
+python -m playwright install chromium        # 导出 PDF 用（国内慢可设 PLAYWRIGHT_DOWNLOAD_HOST=https://cdn.npmmirror.com/binaries/playwright）
 uvicorn main:app --port 8700                  # 端口 8700（8000/8600 可能落在 Windows 预留端口段里）
 
 # 2) 前端（另开一个终端）

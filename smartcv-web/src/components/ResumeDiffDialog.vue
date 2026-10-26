@@ -82,10 +82,16 @@ const marksAfter = computed<DiffMarks>(() => {
     sections: { ...diff.value.after.sections },
     rows: { ...diff.value.after.rows },
     contents: { ...diff.value.after.contents },
+    // 单元表是两层结构：外层复制一份，避免和 diff.after 共用引用
+    units: Object.fromEntries(
+      Object.entries(diff.value.after.units).map(([id, map]) => [id, { ...map }]),
+    ),
   }
   for (const change of diff.value.changes) {
     if (change.kind !== 'removed') continue
     if (!revertedSet.value.has(change.key)) continue
+    // 单元级只会出现"文字被替换"，不会有删除，所以只处理三层
+    if (change.level === 'unit') continue
     const bucket =
       change.level === 'section'
         ? marks.sections
@@ -108,8 +114,10 @@ const controlsAfter = computed<DiffControls>(() =>
   buildControls(diff.value, 'after', revertedSet.value, (key) => emit('toggle', key)),
 )
 
-/** 某一侧被标记的内容块数（栏头显示"本侧改动几处"） */
-const markedCount = (marks: DiffMarks) => Object.keys(marks.contents).length
+/** 某一侧被标记的处数（内容块 + 内容里的文字单元；栏头显示"本侧改动几处"） */
+const markedCount = (marks: DiffMarks) =>
+  Object.keys(marks.contents).length +
+  Object.values(marks.units).reduce((n, map) => n + Object.keys(map).length, 0)
 
 /* ---------- 同步滚动 ---------- */
 const leftEl = ref<HTMLElement | null>(null)

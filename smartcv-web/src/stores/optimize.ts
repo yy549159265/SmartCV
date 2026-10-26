@@ -22,6 +22,7 @@ import {
   type AskQuestion,
   type ChatAnswer,
   type DiagnosisItem,
+  type WebSearchItem,
 } from '@/api/chat'
 import { getProviderSettings, missingProviderFields } from '@/api/provider'
 import { useResumeStore } from '@/stores/resume'
@@ -76,6 +77,10 @@ export type ChatItem =
       questions: QuestionItem[]
       /** 已结束的反问记录是否展开 */
       questionsOpen: boolean
+      /** 诊断 agent 的联网搜索记录（query + 结果），单独折叠展示 */
+      searches: WebSearchItem[]
+      /** 「Web 搜索」是否展开 */
+      searchesOpen: boolean
       status: 'running' | 'done'
     }
 
@@ -110,6 +115,7 @@ function formatToolArgs(tool: string, args: Record<string, unknown>): string {
     const decision = args.decision === 'change' ? '需要修改' : '不修改'
     return `诊断 ${String(args.index ?? '?')} · ${decision}`
   }
+  if (tool === 'web_search') return String(args.query ?? '')
   if (tool !== 'patch_content') return JSON.stringify(args)
   const text = String(args.text ?? '')
   const shown = text.length > 40 ? `${text.slice(0, 40)}…` : text
@@ -203,12 +209,16 @@ export const useOptimizeStore = defineStore('optimize', {
               lead = prev.text
               this.messages.pop()
             }
-            this.messages.push({ kind: 'agent', agent, label, text: '', thinking: '', steps: [], thinkingOpen: false, toolsOpen: false, answerOpen: true, diagnosis: [], lead, markdown: '', markdownOpen: false, questions: [], questionsOpen: false, status: 'running' })
+            this.messages.push({ kind: 'agent', agent, label, text: '', thinking: '', steps: [], thinkingOpen: false, toolsOpen: false, answerOpen: true, diagnosis: [], lead, markdown: '', markdownOpen: false, questions: [], questionsOpen: false, searches: [], searchesOpen: false, status: 'running' })
           },
           // 诊断 agent 的输入简历（带位置编号），挂在诊断块上供「位置诊断」展开查看
           onResumeMarkdown: (text) => {
             const b = lastAgent()
             if (b) b.markdown = text
+          },
+          // 联网搜索结果：单独挂在「Web 搜索」区，工具调用里不再重复
+          onWebSearch: (item) => {
+            lastAgent()?.searches.push(item)
           },
           onDelta: (_stage, tok, kind) => {
             const b = lastAgent()

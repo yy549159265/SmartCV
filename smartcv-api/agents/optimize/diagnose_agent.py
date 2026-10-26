@@ -22,6 +22,7 @@ from agents.optimize.schemas.diagnosis import DiagnosisResult
 from agents.optimize.schemas.task import get_chat_task
 from agents.optimize.utils.checkpointer import get_checkpointer
 from agents.optimize.utils.tools import make_ask_tool
+from agents.optimize.utils.web_search import make_web_search_tool
 from agents.utils.skillmiddleware import SkillMiddleware
 
 logger = logging.getLogger("smartcv")
@@ -38,7 +39,8 @@ def build_agent(llm):
     return create_agent(
         model=llm,
         middleware=[SkillMiddleware(["diagnose", "coordinate"])],
-        tools=[make_ask_tool()],
+        # web_search 只给诊断 agent：优化/摘要不联网，避免网络内容污染简历事实
+        tools=[make_ask_tool(), make_web_search_tool()],
         # 诊断结果按实体类输出：位置 + 原因 + 依据 + 方向，不再是一段自由文本
         response_format=DiagnosisResult,
         checkpointer=get_checkpointer(),

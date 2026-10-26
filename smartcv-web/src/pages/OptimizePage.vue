@@ -135,6 +135,11 @@ function groupSteps(steps: ChatStep[]): DisplayStep[] {
   }
   return rows
 }
+
+/** 工具调用展示行：web_search 在「Web 搜索」区单独展示，这里跳过避免重复 */
+function toolRows(steps: ChatStep[]): DisplayStep[] {
+  return groupSteps(steps).filter((row) => row.tool !== 'web_search')
+}
 import { usePagination } from '@/composables/usePagination'
 import { previewZoom, ZOOM_LEVELS } from '@/composables/usePreviewZoom'
 import { CONTENT_WIDTH, PAGE_HEIGHT, PAGE_PADDING, PAGE_WIDTH } from '@/utils/constants'
@@ -583,20 +588,55 @@ function onApplyDiff() {
                   <div v-if="m.thinkingOpen && m.thinking" class="agent-think">{{ m.thinking }}</div>
                 </div>
 
-                <!-- 🔧 工具调用：折叠 -->
-                <div v-if="m.steps.length" class="agent-block">
+                <!-- 🔧 工具调用：折叠（web_search 单独在下一块展示） -->
+                <div v-if="toolRows(m.steps).length" class="agent-block">
                   <button class="agent-sub-toggle" @click="m.toolsOpen = !m.toolsOpen">
                     <span class="chevron">{{ m.toolsOpen ? '▾' : '▸' }}</span>
                     <span>工具调用</span>
                     <span class="field-tip">
-                      <span class="field-hint">{{ m.steps.length }} 次</span>
+                      <span class="field-hint">{{ toolRows(m.steps).length }} 次</span>
                       <span class="tip-bubble">该 agent 实际调用的工具，如 review_diagnosis 审查诊断、patch_content 执行修改</span>
                     </span>
                   </button>
                   <div v-if="m.toolsOpen" class="steps">
-                    <div v-for="(row, si) in groupSteps(m.steps)" :key="si" class="step" :class="row.kind">
+                    <div v-for="(row, si) in toolRows(m.steps)" :key="si" class="step" :class="row.kind">
                       <div class="tool-line"><span class="tool-name">调用工具 {{ row.tool }}</span><span class="tool-args">{{ row.args }}</span></div>
                       <div v-if="row.result" class="tool-result">↳ {{ row.result }}</div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 🌐 Web 搜索：只诊断 agent 会联网；排在工具之后、回答之前 -->
+                <div v-if="m.searches.length" class="agent-block">
+                  <button class="agent-sub-toggle" @click="m.searchesOpen = !m.searchesOpen">
+                    <span class="chevron">{{ m.searchesOpen ? '▾' : '▸' }}</span>
+                    <span>Web 搜索</span>
+                    <span class="field-tip">
+                      <span class="field-hint">{{ m.searches.length }} 次</span>
+                      <span class="tip-bubble">诊断时查的外部公开资料，只用于核对术语、公司背景和岗位标准，不会写进简历事实</span>
+                    </span>
+                  </button>
+                  <div v-if="m.searchesOpen" class="searches">
+                    <div v-for="(s, si) in m.searches" :key="si" class="search">
+                      <div class="search-query">
+                        <span class="search-text">{{ s.query }}</span>
+                        <span v-if="!s.results.length" class="search-empty">
+                          {{ s.error ? '搜索失败' : '无结果' }}
+                        </span>
+                      </div>
+                      <div v-if="s.error" class="search-error">{{ s.error }}</div>
+                      <a
+                        v-for="(r, ri) in s.results"
+                        :key="ri"
+                        class="search-result"
+                        :href="r.url"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        <span class="search-title">{{ r.title }}</span>
+                        <span class="search-url">{{ r.url }}</span>
+                        <span v-if="r.content" class="search-content">{{ r.content }}</span>
+                      </a>
                     </div>
                   </div>
                 </div>
@@ -1532,6 +1572,90 @@ function onApplyDiff() {
   padding-left: 10px;
   border-left: 3px solid var(--border-strong);
   color: var(--text-secondary);
+}
+/* Web 搜索：一次搜索 = query 一行 + 结果列表（标题/URL/摘要） */
+.searches {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--text-tertiary);
+}
+.search {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.search-query {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  column-gap: 5px;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+/* 查询前面点一个小圆点，区分「查询」和下面的结果 */
+.search-query::before {
+  content: '';
+  flex: none;
+  width: 5px;
+  height: 5px;
+  margin-right: 2px;
+  border-radius: 50%;
+  background: var(--primary);
+  opacity: 0.6;
+  align-self: center;
+}
+.search-text {
+  overflow-wrap: anywhere;
+}
+.search-empty {
+  padding: 0 5px;
+  border-radius: 6px;
+  background: var(--surface-soft);
+  font-weight: 400;
+  color: var(--text-tertiary);
+}
+.search-error {
+  padding-left: 16px;
+  color: var(--warning);
+  overflow-wrap: anywhere;
+}
+.search-result {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding-left: 12px;
+  color: inherit;
+  text-decoration: none;
+  border-left: 2px solid transparent;
+}
+.search-result:hover {
+  border-left-color: var(--primary-soft);
+}
+.search-title {
+  color: var(--text-secondary);
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.search-result:hover .search-title {
+  color: var(--primary);
+}
+.search-url {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  opacity: 0.8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.search-content {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  color: var(--text-tertiary);
 }
 .steps {
   display: flex;

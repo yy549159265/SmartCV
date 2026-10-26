@@ -17,31 +17,40 @@
  *   removed —— 只在改前简历里存在（删除）
  *   changed —— 两边都在，但内容/样式不同（修改）
  *
+ * 内容内部的文字再拆一层「文字单元」（与后端坐标 [s r c i] 的 i 对应）：
+ * 后端 patch_content 一次只改一个单元，所以"只有文字变了"时只标那一行/那一栏，
+ * 不把整个内容块罩住；只有结构/样式也变了才退回整块标。
+ *
  * 两份数据都当作只读：mergeResume 只生成新对象，不会改动入参。
  */
-import type { Content, ContentData, LayoutWindow, Section } from '@/types'
+import type { Content, ContentData, LayoutWindow, ListItem, Section } from '@/types'
 
 /** 一处标记的类型；查不到标记 = 该节点未改动 */
 export type DiffMark = 'added' | 'removed' | 'changed'
 
-/** 改动所在层级：章节 / 布局窗口 / 内容 */
-export type ChangeLevel = 'section' | 'row' | 'content'
+/** 改动所在层级：章节 / 布局窗口 / 内容 / 文字单元 */
+export type ChangeLevel = 'section' | 'row' | 'content' | 'unit'
 
 /**
  * 给预览组件用的标记表：节点 id → 标记。
- * 三层分开存，组件各取所需（章节标标题、窗口标整块、内容标内容块）。
+ * 四层分开存，组件各取所需（章节标标题、窗口标整块、内容标内容块、单元标一行文字）。
+ *
+ * units 与后端的坐标 [s r c i] 对应：后端 patch_content 只替换一个「文字单元」，
+ * 所以"内容里只有文字变了"时只标那一行/那一栏，不再把整个内容块罩住。
  */
 export interface DiffMarks {
   sections: Record<string, DiffMark>
   rows: Record<string, DiffMark>
   contents: Record<string, DiffMark>
+  /** 内容 id → 单元序号（i）→ 标记 */
+  units: Record<string, Record<number, DiffMark>>
 }
 
 /**
  * 一处可独立切换的改动。
  *
  * key 同时用于「已还原集合」和「操作按钮定位」：
- *   `section:<id>` / `row:<id>` / `content:<id>`
+ *   `section:<id>` / `row:<id>` / `content:<id>` / `unit:<contentId>:<i>`
  * 同一节点在不同层级各算一处（例如窗口排版改了、里面的文字也改了）。
  */
 export interface DiffChange {
@@ -50,8 +59,10 @@ export interface DiffChange {
   kind: DiffMark
   /** 所属章节 id（行 / 内容级改动用；章节级改动就是它自己） */
   sectionId: string
-  /** 改动的节点 id（章节 / 窗口 / 内容） */
+  /** 改动的节点 id（章节 / 窗口 / 内容；单元级 = 它所在的内容 id） */
   nodeId: string
+  /** 单元级改动在内容里的序号（对应后端坐标的 i） */
+  unitIndex?: number
   /** 改动前的文字摘要（内容级才有，给按钮气泡看） */
   beforeText: string
   /** 改动后的文字摘要 */
@@ -84,21 +95,23 @@ export interface ChangeView {
   toggle: () => void
 }
 
-/** 三层各自的改动操作表 */
+/** 四层各自的改动操作表 */
 export interface DiffControls {
   sections: Record<string, ChangeView>
   rows: Record<string, ChangeView>
   contents: Record<string, ChangeView>
+  /** 内容 id → 单元序号（i）→ 操作态 */
+  units: Record<string, Record<number, ChangeView>>
 }
 
 /** 建一个空标记表 */
 function emptyMarks(): DiffMarks {
-  return { sections: {}, rows: {}, contents: {} }
+  return { sections: {}, rows: {}, contents: {}, units: {} }
 }
 
 /** 建一个空操作表 */
 function emptyControls(): DiffControls {
-  return { sections: {}, rows: {}, contents: {} }
+  return { sections: {}, rows: {}, contents: {}, units: {} }
 }
 
 /**
@@ -190,6 +203,71 @@ function sameContent(a: Content, b: Content): boolean {
   )
 }
 
+/**
+ * 内容里的「文字单元」原文，顺序即后端坐标里的 i。
+ * 与 smartcv-api/agents/optimize/utils/markdown.py 的 iter_text_units 一一对应：
+ *   iconText → [text]；twoColumn → 每列；timeRange → [起 - 止]；
+ *   listText → 每个列表项；tag → 每个标签；image / spacer → 没有文字单元。
+ */
+function unitTexts(content: Content): string[] {
+  const d = content.content ?? {}
+  switch (content.type) {
+    case 'iconText':
+      return [d.text ?? '']
+    case 'twoColumn':
+      return (d.columns ?? []).map((col) => col ?? '')
+    case 'timeRange':
+      return [`${d.start ?? ''} - ${d.end ?? ''}`]
+    case 'listText': {
+      // 兼容旧数据里的纯字符串列表项
+      const items = (d.items ?? []) as Array<ListItem | string>
+      return items.map((item) => (typeof item === 'string' ? item : item?.text ?? ''))
+    }
+    case 'tag':
+      return (d.tags ?? []).map((tag) => tag ?? '')
+    default:
+      return []
+  }
+}
+
+/**
+ * 把文字单元全部清空后的副本。
+ * 用来判断"除了文字，还有没有别的变化"（类型/样式/栏数/项数/分隔符…）：
+ * 只有完全一样，才敢按单元标记；否则单元之间的对应关系不可靠，退回整块标。
+ */
+function withoutUnitTexts(content: Content): Content {
+  const data: ContentData = { ...(content.content ?? {}) }
+  switch (content.type) {
+    case 'iconText':
+      data.text = ''
+      break
+    case 'twoColumn':
+      if (data.columns) data.columns = data.columns.map(() => '')
+      break
+    case 'timeRange':
+      data.start = ''
+      data.end = ''
+      break
+    case 'listText':
+      if (data.items) {
+        data.items = (data.items as Array<ListItem | string>).map((item) =>
+          typeof item === 'string' ? { text: '' } : { ...item, text: '' },
+        )
+      }
+      break
+    case 'tag':
+      if (data.tags) data.tags = data.tags.map(() => '')
+      break
+  }
+  return { ...content, content: data }
+}
+
+/** 单元文字摘要（按钮气泡用） */
+function textSummary(text: string): string {
+  const value = (text ?? '').replace(/\s+/g, ' ').trim()
+  return value.length > 60 ? `${value.slice(0, 60)}…` : value
+}
+
 /* ============================================================
  * 一、比对：产出标记表 + 逐处改动清单
  * ============================================================ */
@@ -216,7 +294,7 @@ function contentSummary(content?: Content): string {
   return text.length > 60 ? `${text.slice(0, 60)}…` : text
 }
 
-/** 记一处改动；key 由层级 + 节点 id 组成，全简历唯一 */
+/** 记一处改动；key 由层级 + 节点 id（+ 单元序号）组成，全简历唯一 */
 function addChange(
   diff: ResumeDiff,
   level: ChangeLevel,
@@ -225,13 +303,15 @@ function addChange(
   sectionId: string,
   beforeText = '',
   afterText = '',
+  unitIndex?: number,
 ): void {
   diff.changes.push({
-    key: `${level}:${nodeId}`,
+    key: level === 'unit' ? `unit:${nodeId}:${unitIndex}` : `${level}:${nodeId}`,
     level,
     kind,
     sectionId,
     nodeId,
+    unitIndex,
     beforeText,
     afterText,
   })
@@ -245,6 +325,43 @@ function addChange(
  */
 function markSubtree(row: LayoutWindow, marks: DiffMarks, mark: DiffMark): void {
   marks.rows[row.id] = mark
+}
+
+/**
+ * 比对两边的文字单元：只有"文字变了、其它（类型/样式/结构）完全一样"时，
+ * 才把改动落到具体单元上。
+ *
+ * @returns true = 已按单元标记（调用方不要再标整个内容块）
+ */
+function diffUnits(a: Content, b: Content, sectionId: string, diff: ResumeDiff): boolean {
+  const oldUnits = unitTexts(a)
+  const newUnits = unitTexts(b)
+  if (oldUnits.length === 0 || oldUnits.length !== newUnits.length) return false
+  if (!sameContent(withoutUnitTexts(a), withoutUnitTexts(b))) return false
+
+  let before = diff.before.units[a.id]
+  if (!before) diff.before.units[a.id] = before = {}
+  let after = diff.after.units[b.id]
+  if (!after) diff.after.units[b.id] = after = {}
+
+  let changed = false
+  for (let i = 0; i < oldUnits.length; i++) {
+    if (oldUnits[i] === newUnits[i]) continue
+    before[i] = 'changed'
+    after[i] = 'changed'
+    addChange(
+      diff,
+      'unit',
+      'changed',
+      a.id,
+      sectionId,
+      textSummary(oldUnits[i]),
+      textSummary(newUnits[i]),
+      i,
+    )
+    changed = true
+  }
+  return changed
 }
 
 /** 比一行窗口的内容列表 */
@@ -266,6 +383,8 @@ function diffContents(
       diff.after.contents[id] = 'added'
       addChange(diff, 'content', 'added', id, sectionId, '', contentSummary(b))
     } else if (a && b && !sameContent(a, b)) {
+      // 只改了某一行/某一栏文字 → 只标那一处，不罩住整个内容块
+      if (diffUnits(a, b, sectionId, diff)) continue
       diff.before.contents[id] = 'changed'
       diff.after.contents[id] = 'changed'
       addChange(diff, 'content', 'changed', id, sectionId, contentSummary(a), contentSummary(b))
@@ -466,6 +585,57 @@ function mergeList<T extends { id: string }>(
   return out
 }
 
+/**
+ * 单元级还原：把用户点过 ↺ 的那几个文字单元换回修改前。
+ *
+ * 只处理"文字被替换"（单元数相同）的情况 —— 结构差异在比对阶段就按内容级
+ * 处理了，这里拿到的 key 一定是落在同一位置的替换。
+ */
+function restoreUnits(before: Content, after: Content, reverted: RevertedSet): Content {
+  const prefix = `unit:${after.id}:`
+  let touched = false
+  for (const key of reverted) {
+    if (key.startsWith(prefix)) {
+      touched = true
+      break
+    }
+  }
+  if (!touched) return after
+
+  const oldTexts = unitTexts(before)
+  const pick = (i: number, current: string) =>
+    reverted.has(`${prefix}${i}`) && oldTexts[i] !== undefined ? oldTexts[i] : current
+  const data: ContentData = { ...(after.content ?? {}) }
+
+  switch (after.type) {
+    case 'iconText':
+      data.text = pick(0, data.text ?? '')
+      break
+    case 'twoColumn':
+      if (data.columns) data.columns = data.columns.map((col, i) => pick(i, col ?? ''))
+      break
+    case 'timeRange':
+      if (reverted.has(`${prefix}0`)) {
+        data.start = before.content?.start ?? ''
+        data.end = before.content?.end ?? ''
+      }
+      break
+    case 'listText':
+      if (data.items) {
+        data.items = (data.items as Array<ListItem | string>).map((item, i) =>
+          typeof item === 'string'
+            ? { text: pick(i, item) }
+            : { ...item, text: pick(i, item?.text ?? '') },
+        )
+      }
+      break
+    case 'tag':
+      if (data.tags) data.tags = data.tags.map((tag, i) => pick(i, tag ?? ''))
+      break
+  }
+  return { ...after, content: data }
+}
+
 /** 合并一个叶子窗口的内容列表 */
 function mergeContents(
   beforeContents: Content[],
@@ -484,8 +654,8 @@ function mergeContents(
     (b) => {
       const a = beforeMap.get(b.id)
       if (a) {
-        // 两边都有：还原了就整块换回改前（type / content / style 一起换）
-        return isReverted(reverted, 'content', b.id) ? a : b
+        // 两边都有：整块还原 → 换回改前；只还原了某几行文字 → 逐单元换回
+        return isReverted(reverted, 'content', b.id) ? a : restoreUnits(a, b, reverted)
       }
       // 新增内容：还原 = 不采用；预览时保留成"已忽略"占位，方便再点回来
       if (!isReverted(reverted, 'content', b.id)) return b
@@ -633,8 +803,8 @@ export function mergeResume(
  * 三、给对比弹窗拼操作表
  * ============================================================ */
 
-/** 改动层级 → DiffMarks / DiffControls 的键（单数 → 复数） */
-const BUCKET: Record<ChangeLevel, keyof DiffMarks> = {
+/** 改动层级 → DiffMarks / DiffControls 的键（单数 → 复数）；单元级单独处理 */
+const BUCKET: Record<'section' | 'row' | 'content', 'sections' | 'rows' | 'contents'> = {
   section: 'sections',
   row: 'rows',
   content: 'contents',
@@ -654,11 +824,20 @@ export function buildControls(
     //    右栏那个按钮只在"已还原"时才会真的渲染出来。
     const onThisSide = change.kind === 'removed' || side === 'after'
     if (!onThisSide) continue
-    controls[BUCKET[change.level]][change.nodeId] = {
+    const view: ChangeView = {
       kind: change.kind,
       reverted: reverted.has(change.key),
       toggle: () => toggle(change.key),
     }
+    if (change.level === 'unit') {
+      // 单元级：按钮挂在内容里的第 i 行/栏上
+      const index = change.unitIndex ?? 0
+      let bucket = controls.units[change.nodeId]
+      if (!bucket) controls.units[change.nodeId] = bucket = {}
+      bucket[index] = view
+      continue
+    }
+    controls[BUCKET[change.level]][change.nodeId] = view
   }
   return controls
 }

@@ -52,6 +52,10 @@ const contentMark = (id: string) => props.marks?.contents[id]
 
 /** 取某个内容的切换操作 */
 const contentView = (id: string) => props.controls?.contents[id]
+
+/** 取某个内容内部的单元标记 / 单元操作（一次 patch 只改其中一行文字时用） */
+const unitMarks = (id: string) => props.marks?.units[id]
+const unitViews = (id: string) => props.controls?.units[id]
 </script>
 
 <template>
@@ -96,6 +100,8 @@ const contentView = (id: string) => props.controls?.contents[id]
         :content="b"
         :diff-mark="contentMark(b.id)"
         :diff-view="contentView(b.id)"
+        :diff-units="unitMarks(b.id)"
+        :diff-unit-views="unitViews(b.id)"
         :data-content-id="b.id"
       />
     </div>

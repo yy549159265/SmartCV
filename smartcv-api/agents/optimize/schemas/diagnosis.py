@@ -32,6 +32,7 @@ class DiagnosisItem(BaseModel):
         "",
         description=(
             "kind=text 时必填：该坐标当前正文的开头片段，最多 60 字，逐字来自简历；"
+            "纯文本，不要加 Markdown 标记（**、`、列表符号），否则优化阶段核对不上；"
             "kind=structure 时留空"
         ),
     )

@@ -10,6 +10,9 @@
  *
  * 另外支持可选的 diffMark：「优化简历」页的对比弹窗用它把改动过的内容块高亮出来。
  * 不传（预览、分页测量层、PDF 导出三处都不传）时，渲染结果与没有这个属性时完全一致。
+ *
+ * 再细一层 diffUnits / diffUnitViews：后端一次 patch 只替换一个「文字单元」
+ * （列表项 / 某一栏 / 标签…），这时只高亮那一行，不罩住整个内容块。
  */
 import { computed, type CSSProperties } from 'vue'
 import DiffActionButton from './DiffActionButton.vue'
@@ -26,10 +29,18 @@ const props = defineProps<{
   diffMark?: DiffMark
   /** 这处改动的操作态（对比弹窗用）；不传 = 只显示高亮、不能切换 */
   diffView?: ChangeView
+  /** 内容内部逐个文字单元的标记（序号与后端坐标的 i 一致）；不传 = 不标单元 */
+  diffUnits?: Record<number, DiffMark>
+  /** 逐个文字单元的操作态；不传 = 只显示高亮、不能切换 */
+  diffUnitViews?: Record<number, ChangeView>
 }>()
 
 /** 实际挂到 data-diff 上的标记：还原过的改动换成"已还原 / 已忽略"两档样式 */
 const diffAttr = computed(() => resolveDiffAttr(props.diffMark, props.diffView))
+
+/** 第 i 个文字单元：高亮 + 切换按钮（一次 patch 只改一个单元时用） */
+const unitAttr = (i: number) => resolveDiffAttr(props.diffUnits?.[i], props.diffUnitViews?.[i])
+const unitView = (i: number) => props.diffUnitViews?.[i]
 
 /** 最终生效样式（已处理继承） */
 const eff = computed(() => effectiveContentStyle(props.row, props.section, props.content))
@@ -117,8 +128,12 @@ const imageStyle = computed<CSSProperties>(() => {
     <div
       v-if="content.type === 'iconText'"
       class="pb-icontext"
+      :class="{ 'diff-action-host': !!unitView(0) }"
+      :data-diff="unitAttr(0)"
       :style="{ justifyContent: JUSTIFY_MAP[eff.textAlign] }"
     >
+      <!-- 单元级改动（后端只改了这段文字）：按钮浮在这一行左侧 -->
+      <DiffActionButton v-if="unitView(0)" class="diff-action-float" :view="unitView(0)!" />
       <!-- 图标可能是 emoji，也可能是品牌 SVG（v-html 两种都能渲染） -->
       <span v-if="content.content.icon" class="pb-icon" v-html="content.content.icon" />
       <div class="pb-text" v-html="md(content.content.text)" />
@@ -138,7 +153,10 @@ const imageStyle = computed<CSSProperties>(() => {
         <span v-if="i > 0 && content.content.separator" class="pb-sep">
           {{ content.content.separator }}
         </span>
-        <div class="pb-col" v-html="md(col)" />
+        <div class="pb-col-wrap" :data-diff="unitAttr(i)">
+          <DiffActionButton v-if="unitView(i)" class="diff-action-float" :view="unitView(i)!" />
+          <div class="pb-col" v-html="md(col)" />
+        </div>
       </template>
     </div>
 
@@ -146,8 +164,10 @@ const imageStyle = computed<CSSProperties>(() => {
     <div
       v-else-if="content.type === 'timeRange'"
       class="pb-timerange"
+      :data-diff="unitAttr(0)"
       :style="{ justifyContent: JUSTIFY_MAP[eff.textAlign] }"
     >
+      <DiffActionButton v-if="unitView(0)" class="diff-action-float" :view="unitView(0)!" />
       <span>{{ content.content.start }}</span>
       <span class="pb-dash"> - </span>
       <span>{{ content.content.end }}</span>
@@ -159,7 +179,15 @@ const imageStyle = computed<CSSProperties>(() => {
       class="pb-tags"
       :style="{ justifyContent: JUSTIFY_MAP[eff.textAlign] }"
     >
-      <span v-for="(t, i) in content.content.tags" :key="i" class="pb-tag">{{ t }}</span>
+      <span
+        v-for="(t, i) in content.content.tags"
+        :key="i"
+        class="pb-tag"
+        :data-diff="unitAttr(i)"
+      >
+        {{ t }}
+        <DiffActionButton v-if="unitView(i)" class="diff-action-float" :view="unitView(i)!" />
+      </span>
     </div>
 
     <!-- 列表文字型：圆点无序列表 / 数字有序列表，每项支持 Markdown 与缩进层级。
@@ -170,11 +198,14 @@ const imageStyle = computed<CSSProperties>(() => {
         v-for="(item, i) in listItems"
         :key="i"
         class="pb-list-item"
+        :data-diff="unitAttr(i)"
         :style="{
           marginLeft: `${(item.indent ?? 0) * INDENT_STEP}px`,
           justifyContent: JUSTIFY_MAP[eff.textAlign],
         }"
       >
+        <!-- 单元级改动：按钮浮在这一行左侧（后端坐标的 i = 这一项的序号） -->
+        <DiffActionButton v-if="unitView(i)" class="diff-action-float" :view="unitView(i)!" />
         <span class="pb-list-marker">
           {{ content.content.listType === 'ordered' ? `${i + 1}.` : '•' }}
         </span>
@@ -264,6 +295,10 @@ const imageStyle = computed<CSSProperties>(() => {
   display: flex;
   align-items: baseline;
   gap: 6px;
+}
+/* 每栏外面包一层：给"这一栏改了"的高亮和切换按钮留定位基准（不传 marks 时无额外效果） */
+.pb-col-wrap {
+  min-width: 0;
 }
 .pb-col {
   flex: 0 1 auto;

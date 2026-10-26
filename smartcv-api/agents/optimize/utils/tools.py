@@ -27,8 +27,19 @@ from agents.optimize.utils.markdown import locate_unit, resume_to_markdown, writ
 
 
 def _norm_text(text: str) -> str:
-    """去掉所有空白，用于原文核对（容忍换行、缩进、全半角空格差异）。"""
-    return re.sub(r"\s+", "", text or "")
+    """去掉空白和 Markdown 装饰，用于原文核对。
+
+    诊断 agent 有时会把 quote 写成 `**加粗**`、`` `代码` `` 或带列表符号，
+    而简历原文是纯文本；不抹掉这些标记，核对必然对不上，优化阶段就会误判成
+    「原文核对失败」而不执行。两侧都走同一个函数，所以是安全的。
+    """
+    value = re.sub(r"\s+", "", text or "")
+    # 强调 / 代码 / 删除线符号：原文里没有，纯装饰
+    value = re.sub(r"[*`~]", "", value)
+    # 成对的下划线强调（__加粗__ / _斜体_）：只去掉包裹符号，单词里的下划线（user_id）不动
+    value = re.sub(r"_{1,2}([^_\s]+?)_{1,2}", r"\1", value)
+    # 行首列表符号（"- xxx" / "• xxx"）
+    return re.sub(r"^[-+•·]+", "", value)
 
 
 class OptimizeStore:

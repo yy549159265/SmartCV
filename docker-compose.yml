@@ -2,6 +2,7 @@
 # 用法：docker compose up -d
 #   - frontend（nginx:80）→ 浏览器访问 http://localhost:5173
 #   - backend（FastAPI:8600）→ /api 被 frontend 的 nginx 反向代理到这里
+#   - searxng（SearXNG:8080）→ 诊断 agent 的 web_search 工具用的自建搜索
 # 说明：改用已构建并打 tag 的镜像（smartcv-frontend:v1 / smartcv-backend:v1），不再从源码构建。
 #   镜像需先在本地存在（docker tag <镜像ID> smartcv-<端>:v1）；不存在则 compose 会试图拉取（本地名拉不到会失败）。
 services:
@@ -11,6 +12,15 @@ services:
       - "8600:8600"
     volumes:
       - /opt/smartcv/stats:/app/data
+    environment:
+      # 诊断 agent 的 web_search 走自建 SearXNG（容器网络内用服务名）
+      # 本地直接跑后端、只用容器起 searxng 时，默认值 http://127.0.0.1:8080 同样可用
+      SEARXNG_URL: http://searxng:8080
+      # 可选：单次返回条数 / 超时秒数（不填用代码里的 5 条、8 秒）
+      # WEB_SEARCH_MAX_RESULTS: "5"
+      # WEB_SEARCH_TIMEOUT: "8"
+    depends_on:
+      - searxng
     healthcheck:
       # 纯 TCP 拨号检测：端口能连上即认为就绪（uvicorn 已监听）
       test: ["CMD", "python", "-c", "import socket,sys; s=socket.socket(); s.settimeout(3); s.connect(('127.0.0.1',8600)); s.close()"]
@@ -33,3 +43,26 @@ services:
       timeout: 3s
       retries: 5
       start_period: 10s
+
+  # 自建搜索：只给诊断 agent 的 web_search 用，不需要任何 API Key。
+  # 配置在 ./searxng/settings.yml（必须开启 search.formats 里的 json）。
+  # 镜像来自 Docker Hub，国内拉取慢可换成自己的镜像源或加速地址。
+  searxng:
+    image: docker.io/searxng/searxng:latest
+    ports:
+      # 只绑本机，方便 curl 调试；后端在容器网络内直接用 http://searxng:8080
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./searxng:/etc/searxng
+    environment:
+      SEARXNG_BASE_URL: http://searxng:8080/
+      # 私有时可以换成自己的随机串；不暴露到公网，够用
+      SEARXNG_SECRET: ${SEARXNG_SECRET:-smartcv-searxng-secret}
+    restart: unless-stopped
+    healthcheck:
+      # SearXNG 自带 /healthz（容器内是 wget/busybox）
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s

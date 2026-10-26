@@ -69,7 +69,10 @@ docker compose up -d                    # 一键起前后端
 | 服务 | 镜像 | 访问                  |
 |---|---|-----------------------|
 | 前端 `frontend` | `registry.cn-hangzhou.aliyuncs.com/smartcv/smartcv-frontend:v1` | http://localhost:5173 |
-| 后端 `backend` | `registry.cn-hangzhou.aliyuncs.com/smartcv/smartcv-backend:v1` | http://localhost:8700 |
+| 后端 `backend` | `registry.cn-hangzhou.aliyuncs.com/smartcv/smartcv-backend:v1` | http://localhost:8600 |
+| 搜索 `searxng` | `searxng/searxng:latest`（Docker Hub） | 仅本机 http://127.0.0.1:8080 |
+
+`searxng` 是自建搜索，供诊断 agent 的 `web_search` 工具查公开资料，不需要 API Key；配置在 `searxng/settings.yml`（必须保留 `search.formats` 里的 `json`）。国内服务器要禁用连不上的引擎（Google / DuckDuckGo / Brave / Wikipedia 等），否则请求会一直挂到超时；`outgoing.max_request_timeout` 是整次搜索的硬上限。本地直接跑后端时，默认连 `http://127.0.0.1:8080`；容器内通过 `SEARXNG_URL=http://searxng:8080` 连接。
 
 停止：`docker compose down`。
 

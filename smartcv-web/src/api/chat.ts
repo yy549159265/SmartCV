@@ -7,8 +7,10 @@
  *     - { type: "status",      stage, text }         阶段开始（convert）
  *     - { type: "agent_start", agent, label }        进入 agent（诊断/优化/摘要）
  *     - { type: "agent_end",   agent, label }        结束 agent
+ *     - { type: "resume_markdown", text }           诊断 agent 的输入：带位置编号的简历文本
  *     - { type: "tool_call",   tool, args }          优化 agent 调用工具（patch_content 等）
  *     - { type: "tool_result", tool, result }        工具返回
+ *     - { type: "web_search",  query, results, error }  诊断 agent 联网搜索的结果
  *     - { type: "delta",       stage, text }         阶段内逐 token 流式（打字机）
  *     - { type: "ask_question", questionId, title, questions }  诊断 agent 反问，等用户回答
  *     - { type: "ask_question_closed", questionId, reason }     问题被关闭（超时）
@@ -52,6 +54,21 @@ export interface DiagnosisItem {
   status?: DiagnosisStatus
   /** 判定理由（change/skip）或失败原因（failed） */
   note?: string
+}
+
+/** 一条联网搜索结果（诊断 agent 的 web_search 工具返回） */
+export interface WebSearchResult {
+  title: string
+  url: string
+  content: string
+}
+
+/** 诊断 agent 的一次联网搜索 */
+export interface WebSearchItem {
+  query: string
+  results: WebSearchResult[]
+  /** 搜索失败时的错误信息；成功时为空 */
+  error?: string
 }
 
 export interface ChatResumePayload {
@@ -103,6 +120,8 @@ export interface ChatHandlers {
   onAgentStart?: (agent: string, label: string) => void
   /** 诊断 agent 的输入：带位置编号的简历 Markdown */
   onResumeMarkdown?: (text: string) => void
+  /** 诊断 agent 联网搜索：query + 结果（前端在「Web 搜索」区单独展示） */
+  onWebSearch?: (item: WebSearchItem) => void
   /** 优化 agent 调用工具（patch_content 等） */
   onToolCall?: (tool: string, args: Record<string, unknown>) => void
   /** 工具执行返回 */
@@ -175,6 +194,13 @@ export async function sendChatMessage(
         break
       case 'resume_markdown':
         handlers?.onResumeMarkdown?.(String(ev.text ?? ''))
+        break
+      case 'web_search':
+        handlers?.onWebSearch?.({
+          query: String(ev.query ?? ''),
+          results: Array.isArray(ev.results) ? (ev.results as WebSearchResult[]) : [],
+          error: ev.error ? String(ev.error) : undefined,
+        })
         break
       case 'delta':
         handlers?.onDelta?.(

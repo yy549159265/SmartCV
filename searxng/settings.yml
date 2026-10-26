@@ -1,0 +1,78 @@
+# SearXNG 配置：只给诊断 agent 的 web_search 工具用
+#
+# 上游默认配置全部继承，这里只覆盖必要的几项：
+#   - 必须开启 search.formats 里的 json，后端按 format=json 请求；
+#   - 私有实例，关闭 limiter，否则程序化请求会被当成爬虫拦掉；
+#   - 默认中文，国内引擎为主（Google 直连通常不可用，先禁用）。
+#
+# 修改后重启容器生效：docker compose restart searxng
+use_default_settings: true
+
+general:
+  instance_name: "SmartCV Search"
+
+server:
+  limiter: false
+  public_instance: false
+  image_proxy: false
+
+search:
+  safe_search: 0
+  default_lang: "zh-CN"
+  formats:
+    - html
+    - json
+
+outgoing:
+  # 单个引擎的连接超时；整个搜索请求的硬上限。
+  # 没有上限时，被墙引擎的 DNS/TCP 会一直挂着，整个 /search 能卡几十秒。
+  request_timeout: 3.0
+  max_request_timeout: 6.0
+
+engines:
+  # 只保留国内可直连的引擎。默认配置里 Google / DuckDuckGo / Brave /
+  # Startpage / Wikipedia 等在国内连不上，请求会一直挂到超时。
+  # 能直连的改成 disabled: false 即可。
+  - name: google
+    disabled: true
+  - name: google cse
+    disabled: true
+  - name: google news
+    disabled: true
+  - name: google videos
+    disabled: true
+  - name: google scholar
+    disabled: true
+  # 需要 Tor 代理，没配代理时加载即报错
+  - name: ahmia
+    disabled: true
+  - name: torch
+    disabled: true
+  - name: duckduckgo
+    disabled: true
+  - name: brave
+    disabled: true
+  - name: startpage
+    disabled: true
+  - name: mojeek
+    disabled: true
+  - name: dogpile
+    disabled: true
+  - name: findborg
+    disabled: true
+  - name: yandex api
+    disabled: true
+  - name: wolframalpha_api
+    disabled: true
+  - name: wikipedia
+    disabled: true
+  - name: wikidata
+    disabled: true
+  - name: bing
+    disabled: false
+  - name: baidu
+    disabled: false
+  - name: sogou
+    disabled: false
+  - name: 360search
+    disabled: false

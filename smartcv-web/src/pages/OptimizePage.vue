@@ -17,7 +17,7 @@ import AskQuestionCard from '@/components/AskQuestionCard.vue'
 import { useResumeStore } from '@/stores/resume'
 import { useOptimizeStore, type ChatItem, type ChatStep } from '@/stores/optimize'
 import { useStatsStore } from '@/stores/stats'
-import type { ChatAnswer } from '@/api/chat'
+import type { ChatAnswer, DiagnosisItem } from '@/api/chat'
 
 /** 各 agent 生命周期的友好文案：running（进行中）/ done（完成） */
 const AGENT_STATUS: Record<string, { running: string; done: string }> = {
@@ -26,10 +26,79 @@ const AGENT_STATUS: Record<string, { running: string; done: string }> = {
   summarize: { running: '总结中', done: '总结完成' },
 }
 
+/** 诊断项的审查状态文案：默认「待分析」，优化 agent 审查后更新 */
+const DIAG_STATUS_LABEL: Record<string, string> = {
+  pending: '待分析',
+  change: '待修改',
+  skip: '不更改',
+  done: '已修改',
+  failed: '未执行',
+}
+
+/** 诊断结论面板里的状态统计顺序：待修改 → 已修改 → 不更改 → 未执行 → 待分析 */
+const DIAG_STATUS_ORDER = ['change', 'done', 'skip', 'failed', 'pending'] as const
+
+/** 按状态统计诊断项，只返回数量非 0 的状态（面板标题右侧的小徽章） */
+function diagCounts(items: DiagnosisItem[]) {
+  const counts: Record<string, number> = {}
+  for (const item of items) {
+    const status = item.status ?? 'pending'
+    counts[status] = (counts[status] ?? 0) + 1
+  }
+  return DIAG_STATUS_ORDER.filter((status) => counts[status]).map((status) => ({
+    status,
+    label: DIAG_STATUS_LABEL[status],
+    count: counts[status] as number,
+  }))
+}
+
+/** 诊断卡前置状态：优先用 store 并入的 lead；旧会话（HMR 保留的状态）从紧邻的状态行补 */
+function leadText(m: Extract<ChatItem, { kind: 'agent' }>, i: number): string {
+  if (m.lead) return m.lead
+  const prev = optimizeStore.messages[i - 1]
+  return m.agent === 'diagnose' && prev?.kind === 'status' ? prev.text : ''
+}
+
+/** 紧跟诊断 agent 的状态行已经在卡片内展示，不再单独占一行 */
+function isMergedStatus(i: number): boolean {
+  const next = optimizeStore.messages[i + 1]
+  return next?.kind === 'agent' && next.agent === 'diagnose'
+}
+
+/** 已成功修改的诊断条数（优化 agent 完成时展示） */
+function doneCount(): number {
+  for (let i = optimizeStore.messages.length - 1; i >= 0; i--) {
+    const m = optimizeStore.messages[i]
+    if (m.kind === 'agent' && m.agent === 'diagnose' && m.diagnosis.length) {
+      return m.diagnosis.filter((d) => d.status === 'done').length
+    }
+  }
+  return 0
+}
+
+/** 诊断结论弹窗：保存当前查看的诊断块（引用，状态更新会实时反映到弹窗） */
+const diagShow = ref(false)
+const diagDetail = ref<Extract<ChatItem, { kind: 'agent' }> | null>(null)
+
+function openDiagDetail(m: Extract<ChatItem, { kind: 'agent' }>) {
+  diagDetail.value = m
+  diagShow.value = true
+}
+
 /** 取出 agent 块当前应该显示的状态文案 */
 function statusText(m: Extract<ChatItem, { kind: 'agent' }>): string {
   const map = AGENT_STATUS[m.agent]
   if (!map) return m.label
+  if (m.agent === 'diagnose' && m.status === 'done') {
+    // 诊断完成后直接带出问题条数；哪些要改由上方「诊断结论」的状态统计展示
+    return m.diagnosis.length
+      ? `${map.done} · 发现 ${m.diagnosis.length} 处问题`
+      : `${map.done} · 未发现问题`
+  }
+  if (m.agent === 'optimize' && m.status === 'done') {
+    // 条数来自逐条诊断的执行状态，和诊断结论弹窗里的「已修改」一致
+    return `${map.done} · 确认修改 ${doneCount()} 处`
+  }
   return m.status === 'done' ? map.done : map.running
 }
 
@@ -185,7 +254,12 @@ function onSubmitQuestion(questionId: string, answers: ChatAnswer[]) {
 
 // 反问卡片出现时自动滚到底部，别让用户错过等待回答的问题
 watch(
-  () => optimizeStore.messages.some((m) => m.kind === 'question' && m.status === 'pending'),
+  () =>
+    optimizeStore.messages.some(
+      (m) =>
+        m.kind === 'agent' &&
+        m.questions.some((q) => q.status === 'pending' || q.status === 'submitting'),
+    ),
   async (pending) => {
     if (!pending) return
     await nextTick()
@@ -416,7 +490,7 @@ function onApplyDiff() {
           v-for="(m, i) in optimizeStore.messages"
           :key="i"
           class="chat-msg"
-          :class="{ 'from-user': m.kind === 'user', 'question-msg': m.kind === 'question' }"
+          :class="{ 'from-user': m.kind === 'user' }"
         >
           <!-- 用户消息：右侧气泡 -->
           <div v-if="m.kind === 'user'" class="msg-block from-user">
@@ -429,7 +503,11 @@ function onApplyDiff() {
           </div>
 
           <!-- 阶段状态：convert 等非 agent 阶段（正在解析 → 已完成） -->
-          <div v-else-if="m.kind === 'status'" class="msg-block from-process">
+          <div
+            v-else-if="m.kind === 'status'"
+            v-show="!isMergedStatus(i)"
+            class="msg-block from-process"
+          >
             <div class="status-line" :class="{ done: m.done }">
               <span class="status-mark">
                 <span v-if="m.done" class="check">✓</span>
@@ -439,14 +517,36 @@ function onApplyDiff() {
             </div>
           </div>
 
-          <!-- 诊断 agent 反问：暂停等待用户选择；提交后原 SSE 流继续 -->
-          <div v-else-if="m.kind === 'question'" class="msg-block from-process">
-            <AskQuestionCard :item="m" @submit="onSubmitQuestion" />
-          </div>
-
           <!-- agent 块：诊断 / 优化 / 摘要统一卡片，状态头 + 回答(常显) + 思考/工具(各自折叠) -->
           <div v-else class="msg-block from-process">
+            <!-- ✦ 诊断结论入口：放在诊断卡最前面，闪烁提示可点击 -->
+            <button
+              v-if="m.diagnosis.length"
+              type="button"
+              class="diag-entry"
+              @click="openDiagDetail(m)"
+            >
+              <span class="diag-entry-icon" aria-hidden="true">✦</span>
+              <span class="diag-entry-main">
+                <span class="diag-entry-title">诊断结论</span>
+                <span class="diag-report-count">{{ m.diagnosis.length }} 处</span>
+              </span>
+              <span class="diag-entry-chips">
+                <span
+                  v-for="c in diagCounts(m.diagnosis)"
+                  :key="c.status"
+                  class="diag-chip"
+                  :class="c.status"
+                >
+                  {{ c.label }} {{ c.count }}
+                </span>
+              </span>
+              <span class="diag-entry-action">查看详情 →</span>
+            </button>
+
             <div class="agent-card">
+              <!-- convert 阶段结束状态：并入诊断卡，作为卡片的第一行（不带对勾，避免和下方状态头重复） -->
+              <div v-if="leadText(m, i)" class="agent-lead">{{ leadText(m, i) }}</div>
               <!-- 状态头：running = 绿色闪烁帧，done = 绿色对勾 -->
               <div class="agent-status" :class="m.status">
                 <span class="status-mark">
@@ -457,6 +557,19 @@ function onApplyDiff() {
               </div>
 
               <div class="agent-body">
+                <!-- 🧭 位置诊断：诊断 agent 实际收到的带位置编号的简历文本 -->
+                <div v-if="m.markdown" class="agent-block">
+                  <button class="agent-sub-toggle" @click="m.markdownOpen = !m.markdownOpen">
+                    <span class="chevron">{{ m.markdownOpen ? '▾' : '▸' }}</span>
+                    <span>位置诊断</span>
+                    <span class="field-tip">
+                      <span class="field-hint">{{ m.markdown.split('\n').length }} 行</span>
+                      <span class="tip-bubble">发给诊断 agent 的简历文本；每行开头的 [s:章节 r:窗口 c:内容 i:子项] 用来定位</span>
+                    </span>
+                  </button>
+                  <pre v-if="m.markdownOpen" class="agent-markdown">{{ m.markdown }}</pre>
+                </div>
+
                 <!-- 💭 思考过程：模型 reasoning_content 字段，折叠；模型没返回思考则给提示 -->
                 <div class="agent-block">
                   <button class="agent-sub-toggle" @click="m.thinkingOpen = !m.thinkingOpen">
@@ -477,7 +590,7 @@ function onApplyDiff() {
                     <span>工具调用</span>
                     <span class="field-tip">
                       <span class="field-hint">{{ m.steps.length }} 次</span>
-                      <span class="tip-bubble">该 agent 实际调用的工具，如 patch_content 按坐标就地改简历</span>
+                      <span class="tip-bubble">该 agent 实际调用的工具，如 review_diagnosis 审查诊断、patch_content 执行修改</span>
                     </span>
                   </button>
                   <div v-if="m.toolsOpen" class="steps">
@@ -486,6 +599,33 @@ function onApplyDiff() {
                       <div v-if="row.result" class="tool-result">↳ {{ row.result }}</div>
                     </div>
                   </div>
+                </div>
+
+                <!-- ❓ 追问记录：排在工具之后；待回答时展示表单，答完/失效后折叠成一行 -->
+                <div v-if="m.questions.length" class="agent-block">
+                  <template v-for="q in m.questions" :key="q.questionId">
+                    <AskQuestionCard
+                      v-if="q.status === 'pending' || q.status === 'submitting'"
+                      :item="q"
+                      @submit="onSubmitQuestion"
+                    />
+                    <template v-else>
+                      <button class="agent-sub-toggle" @click="m.questionsOpen = !m.questionsOpen">
+                        <span class="chevron">{{ m.questionsOpen ? '▾' : '▸' }}</span>
+                        <span>追问记录</span>
+                        <span class="field-tip">
+                          <span class="field-hint">
+                            {{ q.questions.length }} 个问题 ·
+                            {{ q.status === 'answered' ? '已回答' : '已失效' }}
+                          </span>
+                          <span class="tip-bubble">诊断 agent 在诊断前向你确认的信息；点开可回看问题和答案</span>
+                        </span>
+                      </button>
+                      <div v-if="m.questionsOpen" class="question-archive">
+                        <AskQuestionCard :item="q" @submit="onSubmitQuestion" />
+                      </div>
+                    </template>
+                  </template>
                 </div>
 
                 <!-- 💬 回答：模型 content 字段，折叠；内容按 Markdown 渲染 -->
@@ -549,6 +689,70 @@ function onApplyDiff() {
       </div>
     </section>
   </main>
+
+  <!-- 诊断结论弹窗：从时间线最前面的入口打开；状态随优化过程实时更新 -->
+  <n-modal
+    v-model:show="diagShow"
+    display-directive="if"
+    preset="card"
+    style="width: 980px; max-width: 94vw"
+  >
+    <template #header>
+      <div class="diag-modal-head">
+        <span class="diag-report-icon" aria-hidden="true">✦</span>
+        <span class="diag-modal-title">诊断结论</span>
+        <span class="diag-report-count">{{ diagDetail?.diagnosis.length ?? 0 }} 处</span>
+        <span class="diag-report-chips">
+          <span
+            v-for="c in diagDetail ? diagCounts(diagDetail.diagnosis) : []"
+            :key="c.status"
+            class="diag-chip"
+            :class="c.status"
+          >
+            {{ c.label }} {{ c.count }}
+          </span>
+        </span>
+      </div>
+    </template>
+
+    <div v-if="diagDetail" class="diag-modal-list">
+      <div
+        v-for="(d, di) in diagDetail.diagnosis"
+        :key="di"
+        class="diag-item"
+        :class="`s-${d.status ?? 'pending'}`"
+      >
+        <div class="diag-head">
+          <span class="diag-index">{{ di + 1 }}</span>
+          <span v-if="d.quote" class="diag-quote">「{{ d.quote }}」</span>
+          <span v-else class="diag-tag">结构调整</span>
+          <span class="diag-status" :class="d.status ?? 'pending'">
+            {{ DIAG_STATUS_LABEL[d.status ?? 'pending'] }}
+          </span>
+        </div>
+        <!-- 标签列固定宽度，标题和每条正文左边缘对齐，长文也整齐 -->
+        <div class="diag-grid">
+          <span class="diag-label">问题</span>
+          <span class="diag-value">{{ d.reason }}</span>
+          <span class="diag-label">方向</span>
+          <span class="diag-value">{{ d.suggestion }}</span>
+          <span class="diag-label">依据</span>
+          <span class="diag-value">{{ d.evidence }}</span>
+          <template v-if="d.note">
+            <span class="diag-label">{{ d.status === 'failed' ? '失败原因' : '判定理由' }}</span>
+            <span class="diag-value">{{ d.note }}</span>
+          </template>
+        </div>
+      </div>
+    </div>
+
+    <template #footer>
+      <div class="diag-modal-footer">
+        <span class="diag-modal-hint">状态会随优化过程实时更新；位置编号仅内部使用，不展示</span>
+        <n-button size="small" type="primary" @click="diagShow = false">关闭</n-button>
+      </div>
+    </template>
+  </n-modal>
 
   <!-- AI 修改对比弹窗：后端返回改好的简历后自动弹出；
        每处可单独 ← 还原 / → 恢复，点「确定应用」才把结果写回简历 -->
@@ -783,10 +987,19 @@ function onApplyDiff() {
 .from-user .msg-block {
   align-items: flex-end;
 }
-/* 反问卡片是表单，占满对话栏宽度更好操作 */
-.chat-msg.question-msg .msg-block {
+/* 过程消息（阶段状态 / agent 卡）统一占满对话栏，保证各 agent 卡长度一致 */
+.msg-block.from-process {
   width: 100%;
   max-width: 100%;
+}
+/* 并入诊断卡的前置状态行（convert 完成提示） */
+.agent-lead {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+  line-height: 1.6;
 }
 /* 过程 agent（诊断/优化）：可折叠卡片，默认收起 */
 .from-process {
@@ -978,6 +1191,288 @@ function onApplyDiff() {
   overflow-wrap: anywhere;
   border-top: 1px solid var(--border);
   padding-top: 6px;
+}
+/* 位置诊断：带 [s:章节 r:窗口 c:内容 i:子项] 的简历文本，等宽展示、内部滚动 */
+.agent-markdown {
+  margin: 0;
+  padding: 8px 10px;
+  max-height: 320px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-bg);
+  color: var(--text-secondary);
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+/* 诊断结论入口：整宽按钮，呼吸闪烁提示可点，点开是大弹窗 */
+.diag-entry {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--primary-soft);
+  border-radius: var(--radius-md);
+  background: linear-gradient(180deg, var(--primary-faint), var(--panel-bg));
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  animation: diag-breathe 2.4s ease-in-out infinite;
+}
+.diag-entry:hover {
+  border-color: var(--primary);
+  background: var(--primary-faint);
+}
+.diag-entry-icon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: #fff;
+  font-size: 12px;
+  line-height: 1;
+}
+.diag-entry-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.diag-entry-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+.diag-entry-chips {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+.diag-entry-action {
+  margin-left: auto;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--primary);
+  white-space: nowrap;
+}
+@keyframes diag-breathe {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(75, 107, 94, 0);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(75, 107, 94, 0.16);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .diag-entry {
+    animation: none;
+  }
+}
+.diag-report-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: #fff;
+  font-size: 11px;
+  line-height: 1;
+}
+.diag-report-count {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--primary-soft);
+  color: var(--primary-hover);
+  font-size: 10.5px;
+  font-weight: 700;
+}
+.diag-report-chips {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+.diag-chip {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  color: var(--text-tertiary);
+  font-size: 10.5px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.diag-chip.change {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+.diag-chip.done {
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+.diag-chip.failed {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+/* 诊断结论弹窗：大尺寸、列表内部滚动，每个条目独立小卡 */
+.diag-modal-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+.diag-modal-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+.diag-modal-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 68vh;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.diag-modal-footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.diag-modal-hint {
+  flex: 1;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+.diag-item {
+  position: relative;
+  padding: 10px 12px 10px 15px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-soft);
+  font-size: 12px;
+  line-height: 1.6;
+}
+/* 左侧状态色条：扫一眼就知道哪几处要改 / 已改 / 未执行 */
+.diag-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 9px;
+  bottom: 9px;
+  width: 3px;
+  border-radius: 0 2px 2px 0;
+  background: var(--border-strong);
+}
+.diag-item.s-change::before {
+  background: var(--warning);
+}
+.diag-item.s-done::before {
+  background: var(--primary);
+}
+.diag-item.s-failed::before {
+  background: var(--danger);
+}
+.diag-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-bottom: 3px;
+}
+.diag-index {
+  flex: none;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: var(--panel-bg);
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 17px;
+  text-align: center;
+}
+.diag-quote {
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.diag-tag {
+  flex: none;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: var(--surface-sunken);
+  color: var(--text-tertiary);
+  font-size: 10px;
+  line-height: 17px;
+}
+/* 审查状态徽章：待分析/不更改 灰，待修改 琥珀，已修改 绿，未执行 红 */
+.diag-status {
+  flex: none;
+  margin-left: auto;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: var(--surface-sunken);
+  color: var(--text-tertiary);
+  font-size: 10px;
+  line-height: 17px;
+  white-space: nowrap;
+}
+.diag-status.change {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+.diag-status.done {
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+.diag-status.failed {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+/* 正文两列：标签右对齐、值左对齐，所有条目的正文左边缘对齐 */
+.diag-grid {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 5px 8px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--border);
+}
+.diag-label {
+  color: var(--text-tertiary);
+  font-size: 10.5px;
+  line-height: 1.7;
+  text-align: right;
+  white-space: nowrap;
+}
+.diag-value {
+  min-width: 0;
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+/* 已结束的反问回看区 */
+.question-archive {
+  margin-top: 4px;
+}
+/* 反问卡嵌在 agent 卡里时去掉外阴影，避免两层浮层 */
+.agent-card :deep(.ask-card) {
+  box-shadow: none;
 }
 /* 回答：Markdown 渲染结果，样式收敛一点更紧凑 */
 .agent-answer {

@@ -41,7 +41,7 @@ class ChatTask:
         self.error: str | None = None
         self.resume: Any = None          # 最终改好的 Section[]（dict 列表）
         self.summary: str | None = None  # 主 agent 生成的修改说明
-        self.diagnosis: str | None = None
+        self.diagnosis: list[dict] | None = None  # 结构化诊断项
         self.events: deque = deque(maxlen=_EVENT_CACHE_MAXLEN)  # (event_id, sse文本)
         self.queue: asyncio.Queue = asyncio.Queue(maxsize=_QUEUE_MAXSIZE)
         self._seq = itertools.count(1)
@@ -83,7 +83,7 @@ class ChatTask:
         self._answer_future = None
         self._question_id = None
 
-    def finish(self, resume: Any, summary: str, diagnosis: str) -> None:
+    def finish(self, resume: Any, summary: str, diagnosis: list[dict]) -> None:
         self.resume = resume
         self.summary = summary
         self.diagnosis = diagnosis

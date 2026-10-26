@@ -4,7 +4,8 @@
  * 存：jd（职位描述）+ messages（对话时间线）。
  *
  * 时间线是混合列表，每项是 user 气泡 / 错误气泡 / 某个 agent 的运行块：
- *   - 诊断 agent：过程（可折叠，含思考正文 + 生命周期步骤）
+ *   - 诊断 agent：过程（可折叠，含思考正文 + 生命周期步骤）+ 反问记录
+ *     （待回答时完整展示，答完/失效后折叠成「追问记录」）+ 结构化诊断项
  *   - 优化 agent：过程（可折叠，含工具调用步骤）
  *   - 摘要 agent：回答（正常对话气泡，就是给用户看的修改说明）
  * 即：除 summarize 外都是"过程"，默认折叠；只有 summarize 的正文作为回答直接展示。
@@ -20,6 +21,7 @@ import {
   sendChatMessage,
   type AskQuestion,
   type ChatAnswer,
+  type DiagnosisItem,
 } from '@/api/chat'
 import { getProviderSettings, missingProviderFields } from '@/api/provider'
 import { useResumeStore } from '@/stores/resume'
@@ -48,19 +50,43 @@ export type QuestionItem = {
   expiresAt: number
 }
 
-/** 对话时间线的一条：用户消息 / 错误 / 阶段状态 / 反问 / 某个 agent 的运行块 */
+/** 对话时间线的一条：用户消息 / 错误 / 阶段状态 / 某个 agent 的运行块 */
 export type ChatItem =
   | { kind: 'user'; text: string }
   | { kind: 'error'; text: string }
   | { kind: 'status'; text: string; done: boolean }
-  | QuestionItem
-  | { kind: 'agent'; agent: string; label: string; text: string; thinking: string; steps: ChatStep[]; thinkingOpen: boolean; toolsOpen: boolean; answerOpen: boolean; status: 'running' | 'done' }
+  | {
+      kind: 'agent'
+      agent: string
+      label: string
+      text: string
+      thinking: string
+      steps: ChatStep[]
+      thinkingOpen: boolean
+      toolsOpen: boolean
+      answerOpen: boolean
+      diagnosis: DiagnosisItem[]
+      /** 进入该 agent 前最后一条阶段状态（如「已完成位置标记，准备诊断」），并入卡片内展示 */
+      lead: string
+      /** 诊断 agent 的输入：带位置编号的简历 Markdown（「位置诊断」折叠行展示） */
+      markdown: string
+      /** 「位置诊断」是否展开 */
+      markdownOpen: boolean
+      /** 诊断 agent 的反问记录：待回答时常显，答完/失效后折叠成一行 */
+      questions: QuestionItem[]
+      /** 已结束的反问记录是否展开 */
+      questionsOpen: boolean
+      status: 'running' | 'done'
+    }
 
-/** 在时间线里按 questionId 找反问卡片 */
+/** 在时间线里按 questionId 找反问（反问挂在诊断 agent 块上） */
 function findQuestion(messages: ChatItem[], questionId: string): QuestionItem | undefined {
-  return messages.find(
-    (m): m is QuestionItem => m.kind === 'question' && m.questionId === questionId,
-  )
+  for (const m of messages) {
+    if (m.kind !== 'agent') continue
+    const hit = m.questions.find((q) => q.questionId === questionId)
+    if (hit) return hit
+  }
+  return undefined
 }
 
 /**
@@ -75,16 +101,19 @@ function revertedList(pending: { reverted: string[] }): string[] {
   return pending.reverted
 }
 
-/** 把 patch_content 的坐标参数格式化成可读串：[s:0 r:0 c:0 i:0] 新文字（超长截断） */
+/** 把工具参数格式化成可读串（不展示坐标，用户不需要理解位置编号） */
 function formatToolArgs(tool: string, args: Record<string, unknown>): string {
   if (tool === 'ask_user_question') {
     return `${String(args.title ?? '向用户反问')} · ${String(args.questions ?? 0)} 个问题`
   }
+  if (tool === 'review_diagnosis') {
+    const decision = args.decision === 'change' ? '需要修改' : '不修改'
+    return `诊断 ${String(args.index ?? '?')} · ${decision}`
+  }
   if (tool !== 'patch_content') return JSON.stringify(args)
-  const { s, r, c, i } = args
   const text = String(args.text ?? '')
   const shown = text.length > 40 ? `${text.slice(0, 40)}…` : text
-  return `[s:${s} r:${r} c:${c} i:${i}] ${shown}`
+  return `诊断 ${String(args.index ?? '?')} → ${shown}`
 }
 
 export const useOptimizeStore = defineStore('optimize', {
@@ -142,6 +171,15 @@ export const useOptimizeStore = defineStore('optimize', {
         return null
       }
 
+      // 诊断项的归属块：最近一个带诊断列表的 diagnose 块（优化 agent 会更新它的状态）
+      const diagnosisOwner = (): Extract<ChatItem, { kind: 'agent' }> | null => {
+        for (let i = this.messages.length - 1; i >= 0; i--) {
+          const m = this.messages[i]
+          if (m.kind === 'agent' && m.agent === 'diagnose' && m.diagnosis.length) return m
+        }
+        return null
+      }
+
       try {
         await sendChatMessage(trimmed, this.jd, resumeStore.resume, provider, {
           // convert 阶段（纯代码，非 agent）：显示「正在解析 → 已完成」一条状态
@@ -158,7 +196,19 @@ export const useOptimizeStore = defineStore('optimize', {
           // 每个 agent 单独开一个块。生命周期用 status：running → done；
           // 思考(reasoning_content) 进 thinking，正文(content) 进 text，前端分区展示。
           onAgentStart: (agent, label) => {
-            this.messages.push({ kind: 'agent', agent, label, text: '', thinking: '', steps: [], thinkingOpen: false, toolsOpen: false, answerOpen: true, status: 'running' })
+            // convert 阶段结束的状态行并进诊断卡里展示（不再单独占一行）
+            let lead = ''
+            const prev = this.messages[this.messages.length - 1]
+            if (agent === 'diagnose' && prev?.kind === 'status') {
+              lead = prev.text
+              this.messages.pop()
+            }
+            this.messages.push({ kind: 'agent', agent, label, text: '', thinking: '', steps: [], thinkingOpen: false, toolsOpen: false, answerOpen: true, diagnosis: [], lead, markdown: '', markdownOpen: false, questions: [], questionsOpen: false, status: 'running' })
+          },
+          // 诊断 agent 的输入简历（带位置编号），挂在诊断块上供「位置诊断」展开查看
+          onResumeMarkdown: (text) => {
+            const b = lastAgent()
+            if (b) b.markdown = text
           },
           onDelta: (_stage, tok, kind) => {
             const b = lastAgent()
@@ -177,10 +227,27 @@ export const useOptimizeStore = defineStore('optimize', {
             const b = lastAgent()
             if (b) b.status = 'done'
           },
-          // 诊断 agent 反问：插一张选择题卡片。原 SSE 流保持连接，后端在等答案。
+          // 诊断完成：结构化诊断项挂到诊断 agent 块上（只展示文字，坐标不渲染）
+          onDiagnosis: (items) => {
+            const b = lastAgent()
+            if (b) b.diagnosis = items.map((it) => ({ ...it, status: 'pending', note: '' }))
+          },
+          // 优化 agent 逐条审查/执行后，回写对应诊断项的展示状态
+          onDiagnosisStatus: ({ index, status, reason }) => {
+            const item = diagnosisOwner()?.diagnosis[index]
+            if (!item) return
+            item.status = status
+            item.note = reason
+          },
+          // 诊断 agent 反问：挂到当前诊断 agent 块里展示（答完后原地折叠成「追问记录」）。
+          // 原 SSE 流保持连接，后端在等答案。
           onAskQuestion: (payload) => {
+            const owner = [...this.messages]
+              .reverse()
+              .find((m) => m.kind === 'agent' && m.agent === 'diagnose')
+            if (!owner || owner.kind !== 'agent') return
             const timeoutSeconds = payload.timeoutSeconds ?? 300
-            this.messages.push({
+            owner.questions.push({
               kind: 'question',
               questionId: payload.questionId,
               title: payload.title,
@@ -210,8 +277,9 @@ export const useOptimizeStore = defineStore('optimize', {
         this.sending = false
         // 流已结束，还挂着的反问卡不可能再被后端接收 —— 置为失效
         for (const m of this.messages) {
-          if (m.kind === 'question' && (m.status === 'pending' || m.status === 'submitting')) {
-            m.status = 'expired'
+          if (m.kind !== 'agent') continue
+          for (const q of m.questions) {
+            if (q.status === 'pending' || q.status === 'submitting') q.status = 'expired'
           }
         }
       }

@@ -18,6 +18,7 @@ from langchain.agents import create_agent
 from langgraph.config import get_stream_writer
 from langgraph.types import Command
 
+from agents.optimize.schemas.diagnosis import DiagnosisResult
 from agents.optimize.schemas.task import get_chat_task
 from agents.optimize.utils.checkpointer import get_checkpointer
 from agents.optimize.utils.tools import make_ask_tool
@@ -33,18 +34,13 @@ _ASK_TIMEOUT_SECONDS = 300
 
 
 def build_agent(llm):
-    """诊断 agent：挂反问卷工具，并挂 checkpointer（interrupt 恢复必需）。
 
-    注意：这里的 checkpointer 不能省。诊断 agent 是在 diagnose_node 里用
-    `agent.astream()` 单独跑的一次图执行，并不是外层图的 subgraph 节点，
-    外层图的 checkpointer 不会自动传给这次独立运行。去掉它以后，
-    interrupt 之后执行 `Command(resume=...)` 会直接报
-    "Cannot use Command(resume=...) without checkpointer"。
-    """
     return create_agent(
         model=llm,
-        middleware=[SkillMiddleware(["diagnose"])],
+        middleware=[SkillMiddleware(["diagnose", "coordinate"])],
         tools=[make_ask_tool()],
+        # 诊断结果按实体类输出：位置 + 原因 + 依据 + 方向，不再是一段自由文本
+        response_format=DiagnosisResult,
         checkpointer=get_checkpointer(),
     )
 
@@ -95,17 +91,34 @@ async def _ask_user(session_id: str | None, payload: dict, writer) -> dict:
         task.clear_question(question_id)
 
 
-async def run(llm, markdown: str, jd: str, question: str, session_id: str | None = None) -> str:
-    """跑诊断 agent：发 agent_start → 逐 token 发 delta(diagnose) → agent_end，返回整段诊断。"""
+def _diagnosis_items(structured) -> list[dict]:
+    """把结构化结果规整成普通 dict 列表（兼容 checkpoint 反序列化出的 dict）。"""
+    if structured is None:
+        return []
+    items = structured.get("items") if isinstance(structured, dict) else getattr(structured, "items", None)
+    result: list[dict] = []
+    for item in items or []:
+        result.append(item if isinstance(item, dict) else item.model_dump())
+    return result
+
+
+async def run(llm, markdown: str, jd: str, question: str, session_id: str | None = None) -> list[dict]:
+    """跑诊断 agent：发 agent_start → 思考流式 delta → diagnosis 事件 → agent_end。
+
+    返回结构化诊断项列表；每项含位置、原文片段、原因、依据和修改方向。
+    """
     writer = get_stream_writer()
     writer({"type": "agent_start", "agent": "diagnose", "label": "诊断 agent"})
+    # 把带位置编号的简历文本原样下发：前端「位置诊断」折叠行展开即可看到 agent 的输入
+    writer({"type": "resume_markdown", "text": markdown})
     agent = build_agent(llm)
 
-    jd_text = f"\n\n职位描述（JD）：\n{jd}" if (jd or "").strip() else ""
+    # 输入按类型分块，每块用 <> 标签包裹（system_prompt_diagnose.md 有对应说明）
+    jd_block = f"<JD>\n{jd}\n</JD>\n\n" if (jd or "").strip() else ""
     message = (
-        f"简历内容（Markdown，行首 [s:章节 r:窗口 c:内容 i:子项] 是位置编号，请忽略）：\n{markdown}\n"
-        f"{jd_text}\n"
-        f"\n用户的修改要求：\n{question}"
+        f"<简历>\n{markdown}\n</简历>\n\n"
+        f"{jd_block}"
+        f"<修改要求>\n{question}\n</修改要求>"
     )
 
     # 每次诊断用独立 thread：互不串状态；checkpointer 统一由 main.py 的 lifespan 打开
@@ -123,7 +136,7 @@ async def run(llm, markdown: str, jd: str, question: str, session_id: str | None
         ]
     }
 
-    parts: list[str] = []
+    structured = None
     while True:
         interrupt_value = None
         async for item in agent.astream(
@@ -143,6 +156,12 @@ async def run(llm, markdown: str, jd: str, question: str, session_id: str | None
             if mode == "updates":
                 if isinstance(chunk, dict) and chunk.get("__interrupt__"):
                     interrupt_value = chunk["__interrupt__"][0].value
+                    continue
+                # 结构化输出挂在模型节点的返回值上：{节点名: {"structured_response": ...}}
+                if isinstance(chunk, dict):
+                    for value in chunk.values():
+                        if isinstance(value, dict) and value.get("structured_response") is not None:
+                            structured = value["structured_response"]
                 continue
 
             if mode != "messages":
@@ -155,28 +174,28 @@ async def run(llm, markdown: str, jd: str, question: str, session_id: str | None
             if getattr(msg, "type", "") not in ("ai", "AIMessageChunk"):
                 continue
 
-            # 推理模型把思考放 reasoning_content、答案放 content；两者分开打 kind 发给前端，
-            # 前端据此分成「思考过程」和「回答」两块（每个 agent 都可能两者都有）。
+            # 只转发思考过程。结构化结果（JSON / 工具参数）不推给前端，
+            # 诊断内容在跑完后以 diagnosis 事件一次性下发。
             kwargs = getattr(msg, "additional_kwargs", {}) or {}
             thinking = kwargs.get("reasoning_content") or kwargs.get("reasoning") or ""
-            content = getattr(msg, "content", "") or ""
             if thinking:
-                parts.append(thinking)
                 writer({"type": "delta", "stage": "diagnose", "text": thinking, "kind": "thinking"})
-            if content:
-                parts.append(content)
-                writer({"type": "delta", "stage": "diagnose", "text": content, "kind": "answer"})
 
         if interrupt_value is None:
             break
 
-        # 提问前模型的铺垫（"我需要先确认…"）不算诊断结论；清空后只保留
-        # 拿到答案之后生成的最终诊断，避免被 optimize agent 当成依据。
-        parts.clear()
         answers = await _ask_user(session_id, interrupt_value, writer)
         payload = Command(resume=answers)
 
-    diagnosis = "".join(parts).strip()
+    # updates 里没拿到（例如模型没走结构化输出）时，从最终状态兜底
+    if structured is None:
+        snapshot = await agent.aget_state(config)
+        structured = (snapshot.values or {}).get("structured_response")
+
+    items = _diagnosis_items(structured)
+    if not items:
+        logger.warning("diagnose-agent 没有返回结构化诊断结果")
+    writer({"type": "diagnosis", "count": len(items), "items": items})
     writer({"type": "agent_end", "agent": "diagnose", "label": "诊断 agent"})
-    logger.info("diagnose-agent 输出 %d 字", len(diagnosis))
-    return diagnosis
+    logger.info("diagnose-agent 输出 %d 条诊断", len(items))
+    return items

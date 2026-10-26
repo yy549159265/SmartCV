@@ -10,6 +10,8 @@ from pathlib import Path
 from langchain.agents import create_agent
 from langgraph.config import get_stream_writer
 
+from agents.optimize.utils.diagnosis import format_diagnosis
+
 logger = logging.getLogger("smartcv")
 
 _SYSTEM_PROMPT = (Path(__file__).resolve().parent / "system_prompt_summarize.md").read_text(encoding="utf-8")
@@ -19,24 +21,45 @@ def build_agent(llm):
     return create_agent(model=llm, tools=[])
 
 
-async def run(llm, diagnosis: str, patches: list[dict], session_id: str | None = None) -> str:
+async def run(
+    llm,
+    diagnosis: list[dict],
+    patches: list[dict],
+    reviews: list[dict] | None = None,
+    session_id: str | None = None,
+) -> str:
     """跑主 agent（总结）：发 agent_start → 逐 token 发 delta(summary) → agent_end，返回修改说明。"""
     writer = get_stream_writer()
     writer({"type": "agent_start", "agent": "summarize", "label": "摘要 agent"})
     agent = build_agent(llm)
     if patches:
-        changes = "\n".join(
-            f"- [s:{p['s']} r:{p['r']} c:{p['c']} i:{p['i']}] 「{p['old']}」→「{p['new']}」"
-            for p in patches
-        )
+        # 面向用户的清单不带坐标，避免位置编号泄漏进修改说明
+        changes = "\n".join(f"- 「{p['old']}」→「{p['new']}」" for p in patches)
     else:
         changes = "（没有实际改动）"
-    message = (
-        f"诊断结果：\n{diagnosis}\n\n"
-        f"本次实际改动清单：\n{changes}\n\n"
-        f"请用简短中文总结这次优化做了什么。"
+    # 总结面向用户，不带坐标；带上审查结果，模型才知道哪些诊断没改以及原因
+    diagnosis_text = format_diagnosis(diagnosis, include_coords=False, reviews=reviews)
+    # 数量由代码算好传给模型：LLM 自己数条目会数错（16 条里改了 8 条却写成 7 条）
+    reviews = reviews or []
+    total = len(diagnosis)
+    changed = len(patches)
+    skipped = sum(1 for r in reviews if r.get("status") == "skip")
+    failed = sum(1 for r in reviews if r.get("status") == "failed")
+    unpatched = sum(1 for r in reviews if r.get("status") == "change")
+    unreviewed = sum(1 for r in reviews if r.get("status") == "pending")
+    stats = (
+        f"诊断总数：{total} 处\n"
+        f"实际修改：{changed} 处\n"
+        f"未修改：{total - changed} 处"
+        f"（不需要改 {skipped}、执行失败 {failed}、待执行 {unpatched}、未审查 {unreviewed}）"
     )
-    parts: list[str] = []
+    message = (
+        f"数量统计（系统已算好，必须原样使用）：\n{stats}\n\n"
+        f"诊断结果：\n{diagnosis_text}\n\n"
+        f"本次实际改动清单：\n{changes}\n\n"
+        f"请用简短中文总结这次优化：改了什么；有诊断没改的话，按处理结果说明原因。"
+    )
+    answer_parts: list[str] = []
     async for item in agent.astream(
         {"messages": [{"type": "system", "content": _SYSTEM_PROMPT}, {"type": "human", "content": message}]},
         stream_mode=["messages", "custom"],
@@ -54,12 +77,12 @@ async def run(llm, diagnosis: str, patches: list[dict], session_id: str | None =
         thinking = kwargs.get("reasoning_content") or kwargs.get("reasoning") or ""
         content = getattr(msg, "content", "") or ""
         if thinking:
-            parts.append(thinking)
             writer({"type": "delta", "stage": "summary", "text": thinking, "kind": "thinking"})
         if content:
-            parts.append(content)
+            # 只把回答正文作为 summary 返回，思考过程只流式展示、不落进结果
+            answer_parts.append(content)
             writer({"type": "delta", "stage": "summary", "text": content, "kind": "answer"})
-    summary = "".join(parts).strip()
+    summary = "".join(answer_parts).strip()
     writer({"type": "agent_end", "agent": "summarize", "label": "摘要 agent"})
     logger.info("summarize-agent 输出 %d 字", len(summary))
     return summary

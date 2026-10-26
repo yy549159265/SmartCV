@@ -3,9 +3,10 @@
 流转过程（每个 agent 是独立模块，见 diagnose_agent / optimize_agent / summarize_agent）：
 
   convert    （代码）    把前端 Section[] 拍平成「每行带位置编号」的标记文本
-  diagnose   （诊断 agent）标记文本 + JD(可选) + 用户问题 → 诊断结论（逐 token 流式）
-  optimize   （优化 agent）标记文本 + 诊断 → 反复调用 patch_content(s,r,c,i,text)
-            按坐标就地替换文字，JSON 结构/样式/图片不被破坏；每次落笔发 tool_call/tool_result
+  diagnose   （诊断 agent）标记文本 + JD(可选) + 用户问题 → 结构化诊断项
+             （位置 / 原文片段 / 原因 / 依据 / 修改方向）
+  optimize   （优化 agent）标记文本 + 诊断 → 先 review_diagnosis 逐条审查，再对通过项
+            调用 patch_content(index, text) 就地替换文字；JSON 结构/样式/图片不被破坏
   summarize  （主 agent）诊断 + 改动清单 → 给用户的简短修改说明（逐 token 流式）
 
 事件通道：图内所有事件（status / agent_start / delta / tool_call / tool_result /
@@ -39,7 +40,8 @@ logger = logging.getLogger("smartcv")
 class ChatState(TypedDict):
     resume_sections: list[dict]
     markdown: str
-    diagnosis: str
+    # 结构化诊断项：位置 + 原文片段 + 原因 + 依据 + 修改方向
+    diagnosis: list[dict]
     summary: str
     result_json: list[dict]
 
@@ -59,7 +61,7 @@ async def run_chat_stream(
     """
     if not resume_sections:
         await emit({"type": "error", "message": "简历是空的，请先在「编辑简历」页添加内容"})
-        return {"resume": resume_sections, "summary": "", "diagnosis": ""}
+        return {"resume": resume_sections, "summary": "", "diagnosis": []}
 
     llm = llm or choose_llm(provider)
     # 浅拷贝一层：优化 agent 的 patch 工具在这个副本上就地改，不污染上层入参
@@ -84,7 +86,9 @@ async def run_chat_stream(
         return {"result_json": store.resume}
 
     async def summarize_node(state: ChatState) -> dict:
-        summary = await summarize_agent.run(llm, state["diagnosis"], store.patches, session_id)
+        summary = await summarize_agent.run(
+            llm, state["diagnosis"], store.patches, store.reviews, session_id
+        )
         return {"summary": summary}
 
     graph = StateGraph(ChatState)
@@ -102,7 +106,7 @@ async def run_chat_stream(
     state: ChatState = {
         "resume_sections": resume_sections,
         "markdown": "",
-        "diagnosis": "",
+        "diagnosis": [],
         "summary": "",
         "result_json": resume_sections,
     }
@@ -118,7 +122,7 @@ async def run_chat_stream(
     result = {
         "resume": store.resume,
         "summary": state.get("summary") or "",
-        "diagnosis": state.get("diagnosis") or "",
+        "diagnosis": state.get("diagnosis") or [],
     }
     await emit({"type": "resume", **result})
     await emit({"type": "done"})

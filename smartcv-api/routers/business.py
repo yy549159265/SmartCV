@@ -3,8 +3,6 @@
 这些接口面向简历文件本身，不直接承载 agent 对话。
 （/resume/parse 内部是确定性解析流水线，只在上传文件和返回结果之间短暂处理，
 解析结果直接回给前端，服务端不保存。）
-
-路由统一挂在 /api 下，最终 URL 与拆分前完全一致。
 """
 
 import asyncio
@@ -40,7 +38,6 @@ class StatsIncRequest(BaseModel):
 # ---------- 接口 ----------
 
 
-# 上传pdf解析成json
 @router.post("/resume/parse")
 async def resume_parse(
     request: Request,
@@ -98,7 +95,6 @@ async def resume_parse_status(session_id: str | None = Depends(get_agent_session
     )
 
 
-# 导出pdf简历
 @router.post("/resume/pdf")
 async def resume_pdf(req: PdfRequest):
     try:

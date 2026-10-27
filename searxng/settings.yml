@@ -3,7 +3,7 @@
 # 上游默认配置全部继承，这里只覆盖必要的几项：
 #   - 必须开启 search.formats 里的 json，后端按 format=json 请求；
 #   - 私有实例，关闭 limiter，否则程序化请求会被当成爬虫拦掉；
-#   - 默认中文，国内引擎为主（Google 直连通常不可用，先禁用）。
+#   - 默认中文，国内引擎为主。
 #
 # 修改后重启容器生效：docker compose restart searxng
 use_default_settings: true

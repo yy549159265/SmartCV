@@ -11,10 +11,8 @@ HTTP 状态码仍然保留意义：2xx 成功、4xx/5xx 失败。
 
 
 def ok(data=None, message: str = "ok") -> dict:
-    """成功响应：code=0。"""
     return {"code": 0, "message": message, "data": data}
 
 
 def error(code: int, message: str) -> dict:
-    """失败响应：code 非 0，data 恒为 None。"""
     return {"code": code, "message": message, "data": None}

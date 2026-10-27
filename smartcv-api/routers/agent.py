@@ -1,7 +1,4 @@
-"""Agent 接口：润色 / 优化对话（SSE）/ 提示词与技能预览。
-
-路由统一挂在 /api 下，最终 URL 与拆分前完全一致。
-"""
+"""Agent 接口：润色 / 优化对话（SSE）/ 提示词与技能预览。"""
 
 import asyncio
 import logging
@@ -24,7 +21,6 @@ logger = logging.getLogger("smartcv")
 
 router = APIRouter(prefix="/api", tags=["agent"])
 
-# agents/ 目录（本文件在 routers/ 下，所以往上退一级）
 _AGENTS_DIR = Path(__file__).resolve().parent.parent / "agents"
 
 
@@ -74,7 +70,6 @@ class ChatAnswerRequest(BaseModel):
 # ---------- 接口 ----------
 
 
-# 文字润色
 @router.post("/polish")
 async def polish(
     req: PolishRequest,

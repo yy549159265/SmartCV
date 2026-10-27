@@ -1,13 +1,6 @@
 # SmartCV 后端 API 镜像
-# ============================================================================
 # 构建上下文 = smartcv-api/（docker build -f smartcv-api/Dockerfile smartcv-api）
-#
-# 注意：
-#   - docling 会拉 torch/transformers/opencv 等大依赖，镜像很大、构建/首次运行都慢。
-#   - 模型（docling 版面/表格/OCR 全在 docling-models/，含 EasyOcr/ 中文）构建时
-#     COPY 进镜像，运行时完全离线，不再联网下载。
-#   - 本机已用 Python 3.14 跑通；镜像改用 3.12-slim 以保证 ML 轮子可用，需按实际微调版本。
-# ============================================================================
+# 本机开发用 Python 3.14；镜像固定 3.12-slim，依赖版本见 requirements.txt。
 
 FROM python:3.12-slim
 
@@ -19,7 +12,8 @@ RUN set -eux; \
         [ -f "$f" ] && sed -i 's|deb.debian.org|mirrors.aliyun.com|g; s|security.debian.org|mirrors.aliyun.com|g' "$f" || true; \
     done
 
-# OpenCV 运行库 + curl（docling 用）；不装 gcc（大部分包已有轮子）。
+# curl 供健康检查/调试；fonts-liberation 保证 Chromium 导出的 PDF 字体可用。
+# 不装 gcc：依赖都有预编译轮子。
 RUN apt-get update \
     && apt-get install -y --no-install-recommends fonts-liberation curl \
     && rm -rf /var/lib/apt/lists/*

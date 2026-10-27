@@ -10,8 +10,7 @@ from langchain_core.tools import BaseTool, tool
 from langgraph.prebuilt import ToolRuntime
 from langgraph.runtime import Runtime
 
-# 技能根目录：相对本文件推导（agents/middleware/skillmiddleware.py → ../skill）。
-# 不依赖进程启动时的 CWD，Windows / Linux 下路径都成立。
+# 技能根目录 agents/skill/：相对本文件推导，不依赖进程启动时的 CWD。
 SKILL_ROOT = Path(__file__).resolve().parent.parent / "skill"
 
 
@@ -38,14 +37,12 @@ def _make_load_skill_tool(allowed_names: Sequence[str]) -> BaseTool:
 
         skill_dir = SKILL_ROOT / skill_name
 
-        # 不传 file_path → 加载 SKILL.md
         if file_path is None:
             skill_file = skill_dir / "SKILL.md"
             if not skill_file.exists():
                 return f"技能 '{skill_name}' 的 SKILL.md 缺失"
             return skill_file.read_text(encoding="utf-8")
 
-        # 传了 file_path → 加载指定文件（类似 cat）
         target_file = skill_dir / file_path
 
         # 路径安全验证，防止 ../../../etc/passwd
@@ -69,7 +66,7 @@ def _make_load_skill_tool(allowed_names: Sequence[str]) -> BaseTool:
 class SkillMiddleware(AgentMiddleware):
     """按名字白名单加载技能的中间件。
 
-    用法：SkillMiddleware(["md2json", "resume"])
+    用法：SkillMiddleware(["diagnose", "coordinate"])
     只从 agents/skill/ 目录下找与名单同名的技能目录并加载。
     """
 

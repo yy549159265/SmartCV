@@ -30,8 +30,8 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from uuid import UUID
 
-# 开启致命错误转储：docling 里是 C++/PyTorch/OpenCV 原生代码，万一访问违规
-# （segfault）Python 不会报错、进程直接没，faulthandler 能把崩溃点堆栈打出来。
+# 开启致命错误转储：原生扩展（Playwright / OpenCV 等）发生访问违规（segfault）时
+# Python 不会报错、进程直接没，faulthandler 能把崩溃点堆栈打出来。
 faulthandler.enable()
 
 # 业务日志：uvicorn 默认只配它自己 uvicorn.* 那套 logger，root logger 仍停在
@@ -192,8 +192,6 @@ app.include_router(agent_router.router)
 if __name__ == "__main__":
     import uvicorn
 
-    # PyCharm 调试入口：直接跑本文件即可。
-    # debug 时别开 reload —— reload 会另起一个子进程，断点进不去。
-    # 端口默认 8700（8600 可能被 Windows Hyper-V/WSL 预留段占用），可用环境变量覆盖。
+    # PyCharm 调试入口；debug 时别开 reload —— reload 会另起子进程，断点进不去。
     port = int(os.getenv("SMARTCV_API_PORT", "8700"))
     uvicorn.run("main:app", host="127.0.0.1", port=port, reload=False)

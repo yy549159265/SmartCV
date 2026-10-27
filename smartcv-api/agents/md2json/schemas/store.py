@@ -21,13 +21,13 @@ class Step(IntEnum):
     不牵连调用点。
     """
 
-    UPLOAD = 0  # 文件上传与校验
-    PARSE = 1  # 正在解析简历为 MarkDown 格式
-    CLEAN = 2  # 正在清洗解析结果
-    SEGMENT = 3  # 正在识别简历章节
-    CONVERT = 4  # 正在生成简历 JSON
-    VALIDATE = 5  # 正在校验内容完整性
-    DONE = 6  # 完成
+    UPLOAD = 0
+    PARSE = 1
+    CLEAN = 2
+    SEGMENT = 3
+    CONVERT = 4
+    VALIDATE = 5
+    DONE = 6
 
 
 # 步骤展示名，顺序与 Step 一一对应；前端弹窗显示的就是这些文案，要改只改这里

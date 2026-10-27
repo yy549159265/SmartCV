@@ -1,8 +1,7 @@
 """导出统计：PDF / JSON 导出次数，存 JSON 文件，跨容器重建保留。
 
 写路径优先级：环境变量 SMARTCV_STATS_FILE > 容器内固定 /app/data/stats.json
-（对应 compose 挂载 /opt/smartcv/stats，与 stats.py 放在主目录还是 services/ 无关）
-> 开发机 smartcv-api/data/stats.json。
+（对应 compose 挂载 /opt/smartcv/stats）> 开发机 smartcv-api/data/stats.json。
 写入用线程锁 + 临时文件原子替换，避免并发请求把文件写坏。
 """
 

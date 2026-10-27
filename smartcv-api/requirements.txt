@@ -1,9 +1,7 @@
 # SmartCV 后端依赖
-# 说明：docling（PDF 解析）会连带安装 torch/transformers/opencv 等大型包，镜像较大、首次拉取较慢。
-# 版本：全部锁定为当前开发机（.venv）实际跑通并已下载好 docling 模型的版本。
-#       尤其 docling==2.123.0 不能动——docling-models/ 里的模型文件夹名就是它生成的，
-#       升级 docling 后模型名对不上，会离线找不到模型直接报错。
-# 模型：docling 完全离线读 docling-models/（HF_ENDPOINT 等镜像配置只在 Dockerfile，见那里）。
+# 版本：全部锁定为当前开发机（.venv）实际跑通的版本。
+# docling 本地解析已停用，下面的 docling / pypdfium2 / easyocr 注释保留以便恢复；
+# 恢复时 docling 版本必须与 docling-models/ 里的模型目录名一致，否则离线找不到模型。
 
 # Web 框架
 fastapi==0.141.1
@@ -26,10 +24,10 @@ aiosqlite==0.22.1
 pyyaml==6.0.3
 httpx==0.28.1
 
-## PDF 解析（docling / pypdfium2）
+## PDF 本地解析（已停用，保留以便恢复）
 #docling==2.123.0
 #pypdfium2==5.13.0
-## OCR 引擎：扫描件路径用 EasyOCR（中文 ch_sim + en），docling 运行时要它，必须显式装
+## OCR 引擎：docling 扫描件路径用 EasyOCR（中文 ch_sim + en）
 #easyocr==1.7.2
 
 # PDF 导出（无头 Chromium 打印 HTML）

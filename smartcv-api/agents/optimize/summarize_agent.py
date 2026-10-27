@@ -1,7 +1,7 @@
 """主 agent（总结）：根据诊断 + 实际改动清单，输出给用户的简短修改说明。
 
 所有事件（agent_start / 逐 token delta / agent_end）都经 get_stream_writer()
-发成 LangGraph custom 事件，由外层 optimize_graph 转发成 SSE 推到前端。
+发成 LangGraph custom 事件，由外层 graph.py 转发成 SSE 推到前端。
 """
 
 import logging

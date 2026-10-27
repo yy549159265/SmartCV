@@ -13,10 +13,10 @@ from pydantic import BaseModel, Field
 class ProviderConfig(BaseModel):
     """一次请求携带的 AI 供应商配置。每个字段必填、不能为空（空字符串会校验失败）。"""
 
-    provider: str = Field(min_length=1)  # 供应商类型：openai-compatible / deepseek / zhipu / qwen / custom
-    baseUrl: str = Field(min_length=1)  # API 地址（openai 兼容接口的根地址）
-    apiKey: str = Field(min_length=1)  # API Key
-    model: str = Field(min_length=1)  # 模型名
+    provider: str = Field(min_length=1)  # openai-compatible / deepseek / zhipu / qwen / custom
+    baseUrl: str = Field(min_length=1)  # openai 兼容接口的根地址
+    apiKey: str = Field(min_length=1)
+    model: str = Field(min_length=1)
 
 
 def provider_config(

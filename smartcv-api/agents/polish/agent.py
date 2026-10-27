@@ -112,7 +112,6 @@ def run_polish_agent(
     )
 
     parsed = result.get("parsed")
-    # 如果解析对象失败，退回到手动解析
     if isinstance(parsed, PolishedItems):
         items = [str(i) for i in parsed.items]
     else:

@@ -6,7 +6,7 @@
   - 拿到答案后用 Command(resume=...) 继续同一个诊断 agent，最后输出诊断结论。
 
 所有事件（agent_start / 逐 token delta / agent_end / ask_question）都经
-get_stream_writer() 发成 LangGraph custom 事件，由外层 optimize_graph 转发成 SSE。
+get_stream_writer() 发成 LangGraph custom 事件，由外层 graph.py 转发成 SSE。
 """
 
 import asyncio

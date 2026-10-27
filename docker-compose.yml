@@ -1,10 +1,8 @@
-# SmartCV 前后端编排
-# 用法：docker compose up -d
-#   - frontend（nginx:80）→ 浏览器访问 http://localhost:5173
-#   - backend（FastAPI:8600）→ /api 被 frontend 的 nginx 反向代理到这里
-#   - searxng（SearXNG:8080）→ 诊断 agent 的 web_search 工具用的自建搜索
-# 说明：改用已构建并打 tag 的镜像（smartcv-frontend:v1 / smartcv-backend:v1），不再从源码构建。
-#   镜像需先在本地存在（docker tag <镜像ID> smartcv-<端>:v1）；不存在则 compose 会试图拉取（本地名拉不到会失败）。
+# SmartCV 前后端编排（docker compose up -d）
+#   frontend（nginx:80）→ 浏览器访问 http://localhost:5173，/api 由 nginx 反代到 backend
+#   backend（FastAPI:8600）
+#   searxng（SearXNG:8080）→ 诊断 agent 的 web_search 工具用的自建搜索
+# 镜像为预构建的 v1 版本：本地缺失时 compose 会从阿里云仓库拉取，需先 docker login。
 services:
   backend:
     image: registry.cn-hangzhou.aliyuncs.com/smartcv/smartcv-backend:v1

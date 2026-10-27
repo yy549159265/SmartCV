@@ -1,30 +1,9 @@
-"""
-文档解析服务：把 PDF / Word 解析成结构化文本（Markdown）。
+"""文档解析服务：把 PDF / Word 上传到 MinerU 云解析，拿回 Markdown 与 content_list。
 
-注意：docling 本地解析已停用（太耗服务器资源），目前只走 MinerU 云解析；
-docling / pypdfium2 / easyocr 相关代码与依赖均已注释保留，恢复时取消注释即可。
+docling 本地解析已停用（太耗服务器资源），相关代码与依赖以注释保留；
+恢复时取消注释，并打开 requirements.txt 里 docling / pypdfium2 / easyocr 那几行。
 
-按"是否有文字层"分两条路径（见 parse_resume_document，流程图）：
-
-  A. 有文字层的电子版 PDF / Word
-      直接抽取文字，零 OCR、快、100% 准确。
-  B. 扫描/图片型 PDF（无文字层）
-      渲染页面为图片 → 版面分析模型（标题/段落/表格/照片区）
-      → OCR 提取文字 + TableFormer 还原表格。
-
-docling 也提供按区域自动判断（OcrMode.DEFAULT / PDF_AWARE_LAYOUT_REGIONS），
-但那是把 OCR 模型挂在整个 pipeline 上——即使文字层齐全，EasyOCR 权重照样加载。
-这里在文档级别先判一次，文字层齐全就直接用不带 OCR 的转换器，真正零 OCR。
-
-注意：
-  - 需要安装 docling：pip install docling
-  - 首次跑扫描件路径会下载布局/表格/EasyOCR 中文模型权重（一次性）
-  - .docx / .pdf 支持好；老的 .doc（二进制格式）docling 支持有限，
-    建议让用户另存为 .docx 或 .pdf
-
-MinerU 云解析服务：把本地 PDF/Word 上传到 MinerU，拿回 Markdown。
-
-与 docling 本地解析不同，MinerU 是异步云服务，v4 Standard API 流程：
+MinerU 是异步云服务，v4 Standard API 流程：
   1. POST /file-urls/batch        申请 OSS 签名上传链接 → batch_id + file_urls
   2. PUT 文件字节到 file_urls[0]  （签名链接，不要 Content-Type）
   3. 上传完系统自动提交任务，无需再调提交接口
@@ -44,9 +23,7 @@ import zipfile
 from io import BytesIO
 
 import httpx
-# ---- docling 本地解析已停用（太耗服务器资源），只保留 MinerU 云解析 ----
-# 依赖已从 requirements.txt 注释，这里也注释掉对应 import。
-# 需要恢复时：取消下方注释 + 打开 requirements.txt 里 docling / pypdfium2 / easyocr 那几行。
+# ---- docling 本地解析已停用，import 与下方相关代码一并注释保留（恢复方式见文件头） ----
 # import pypdfium2 as pdfium
 # from docling.datamodel.base_models import DocumentStream, InputFormat
 # from docling.datamodel.pipeline_options import (
@@ -67,12 +44,10 @@ from schemas.provider import ProviderConfig
 logger = logging.getLogger("smartcv")
 
 _ALLOWED_SUFFIXES = (".pdf", ".docx")
-_MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
+_MAX_FILE_SIZE = 5 * 1024 * 1024
 
 # ====================================================================
-# docling 本地解析已停用（太耗服务器资源），只保留 MinerU 云解析。
-# 以下 docling / pypdfium2 相关代码全部注释保留；需要恢复时取消注释，
-# 并同时打开 requirements.txt 里 docling / pypdfium2 / easyocr 那几行。
+# 以下为已停用的 docling / pypdfium2 本地解析代码（恢复方式见文件头）。
 # ====================================================================
 # 文字层判定阈值：扫描件 pypdfium2 能取到的字符数≈0；真正的电子版简历至少几百字。
 # 取 50 把"只剩页码之类的残缺文字层"也归到 OCR 路径（正确性优先）。
@@ -373,7 +348,7 @@ async def parse_resume_document(
 
     # 1. 文件上传与校验
     store.start_step(Step.UPLOAD)
-    # 只允许 .pdf / .docx（老的 .doc 二进制格式 docling 支持有限，让用户另存）
+    # 只允许 .pdf / .docx（老的 .doc 二进制格式需用户另存）
     filename = file.filename or ""
     if not filename.lower().endswith(_ALLOWED_SUFFIXES):
         store.fail_step(Step.UPLOAD, "只支持 .pdf / .docx 格式")
@@ -387,7 +362,7 @@ async def parse_resume_document(
     store.finish_step(Step.UPLOAD)
     await check_disconnected()
 
-    # 2. 文档解析：MinerU 云解析 or docling 本地
+    # 2. 文档解析：MinerU 云解析
     store.start_step(Step.PARSE)
     if parser == "mineru":
         if not mineru_token:
@@ -405,8 +380,7 @@ async def parse_resume_document(
                 detail=f"MinerU 连接失败（{e.__class__.__name__}）：{reason}",
             )
     else:
-        # docling 本地解析已停用（太耗服务器资源），只保留 MinerU。
-        # 原 docling 路径代码注释保留，恢复时取消注释（并恢复 requirements.txt 依赖）：
+        # docling 本地解析已停用，原路径代码在此注释保留（恢复方式见文件头）：
         # is_pdf = filename.lower().endswith(".pdf")
         # converter = _ocr_converter if is_pdf and not _has_text_layer(content) else _fast_converter
         # def _convert() -> str:

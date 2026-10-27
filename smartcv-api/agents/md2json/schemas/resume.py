@@ -1,8 +1,7 @@
 """简历结构化输出的实体类。
 
-与 agents/skill/md2json/schema.md 的字段定义一一对应。
-作为 response_format 传给 create_agent，让模型输出受约束的结构化 JSON，
-再解析成强类型对象返回，保证输出稳定。
+这是前后端约定的简历 JSON 契约：解析流水线生成 Section[] 返回前端，
+/api/chat 也用同一套模型解析前端传回的简历。
 """
 
 from __future__ import annotations

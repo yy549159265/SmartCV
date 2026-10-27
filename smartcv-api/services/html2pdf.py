@@ -48,7 +48,7 @@ def _driver_tmp_dir() -> Path | None:
 
 
 # 防呆：别让超大 HTML 打爆后端内存
-_MAX_HTML_SIZE = 2 * 1024 * 1024  # 2MB
+_MAX_HTML_SIZE = 2 * 1024 * 1024
 
 
 async def _get_browser():

@@ -15,11 +15,29 @@ from langgraph.config import get_stream_writer
 
 from agents.utils.skillmiddleware import SkillMiddleware
 from agents.optimize.utils.diagnosis import format_diagnosis
+from agents.optimize.utils.markdown import locate_unit
 from agents.optimize.utils.tools import OptimizeStore, make_patch_tools
 
 logger = logging.getLogger("smartcv")
 
 _SYSTEM_PROMPT = (Path(__file__).resolve().parent / "system_prompt_optimize.md").read_text(encoding="utf-8")
+
+
+def _target_texts(store: OptimizeStore, diagnosis: list[dict]) -> list[str]:
+    """按诊断序号取出目标位置的完整原文，给优化 agent 当「原文」看。
+
+    诊断里的 quote 被截到 60 字，而 patch_content 替换的是整个文字单元；
+    只给片段时模型会照着片段改写，片段之后的正文被整段丢掉。
+    """
+    texts: list[str] = []
+    for item in diagnosis:
+        coords = [item.get(key) for key in ("s", "r", "c", "i")]
+        if item.get("kind") == "structure" or not all(isinstance(v, int) for v in coords):
+            texts.append("")
+            continue
+        located = locate_unit(store.resume, *coords)
+        texts.append(located[3] if located else "")
+    return texts
 
 
 async def run(
@@ -48,7 +66,9 @@ async def run(
     )
     jd_block = f"<JD>\n{jd}\n</JD>\n\n" if (jd or "").strip() else ""
     # 优化 agent 用 0 起的「诊断 N」编号，和 review_diagnosis / patch_content 的 index 对齐
-    diagnosis_text = format_diagnosis(diagnosis, include_coords=True, zero_based=True)
+    diagnosis_text = format_diagnosis(
+        diagnosis, include_coords=True, zero_based=True, full_texts=_target_texts(store, diagnosis)
+    )
     # 输入用 <> 标签分隔，和诊断 agent 的输入格式保持一致，避免模型把几段内容混读
     message = (
         f"<简历>\n{markdown}\n</简历>\n\n"

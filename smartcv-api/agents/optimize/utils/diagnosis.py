@@ -29,6 +29,7 @@ def format_diagnosis(
     include_coords: bool = True,
     zero_based: bool = False,
     reviews: list[dict[str, Any]] | None = None,
+    full_texts: list[str] | None = None,
 ) -> str:
     """把 DiagnosisItem 列表拼成按条编号的文本。
 
@@ -38,6 +39,9 @@ def format_diagnosis(
         zero_based: 编号是否从 0 开始（优化 agent 的 index 是 0 起）。
         reviews: 按 index 对齐的审查结果；传入时每条附一行「处理结果」，
             让总结 agent 能区分哪些改了、哪些没改以及原因。
+        full_texts: 按 index 对齐的目标位置完整原文。quote 被截到 60 字，而
+            patch_content 替换的是整个文字单元；只给片段时模型容易照着片段改写，
+            把片段之后的正文整段丢掉。优化 agent 必须传，总结 agent 不需要。
     """
     if not items:
         return "（没有诊断项）"
@@ -58,6 +62,9 @@ def format_diagnosis(
                     f"c:{item.get('c')} i:{item.get('i')}]"
                 )
             quote = item.get("quote") or ""
+            if full_texts is not None and index < len(full_texts) and full_texts[index]:
+                # 优先给完整原文：片段只是定位用的引子，替换时要按整段来
+                quote = full_texts[index]
             if quote:
                 head += f" 原文：「{quote}」"
 

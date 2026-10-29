@@ -15,6 +15,7 @@
 """
 
 import json
+import logging
 import re
 from typing import Any
 
@@ -23,7 +24,10 @@ from langgraph.config import get_stream_writer
 from langgraph.types import interrupt
 from pydantic import BaseModel, Field
 
+from agents.optimize.schemas.diagnosis import QUOTE_MAX_LEN
 from agents.optimize.utils.markdown import locate_unit, resume_to_markdown, write_text_unit
+
+logger = logging.getLogger("smartcv")
 
 
 def _norm_text(text: str) -> str:
@@ -40,6 +44,28 @@ def _norm_text(text: str) -> str:
     value = re.sub(r"_{1,2}([^_\s]+?)_{1,2}", r"\1", value)
     # 行首列表符号（"- xxx" / "• xxx"）
     return re.sub(r"^[-+•·]+", "", value)
+
+
+def _lost_tail(old: str, quote: str, new: str) -> bool:
+    """替换文字是否只照着「被截断的原文片段」改写，把片段之后的正文整段丢掉。
+
+    诊断里的 quote 最多 QUOTE_MAX_LEN 字，而 patch_content 替换的是整个文字单元。
+    模型拿片段当原文改写时，新文字长度会和片段差不多，原文后半段（几百字的经历、
+    链接）就凭空消失。这种情况退回重写，不能写进简历。
+    """
+    # 片段没被截断 → 模型手里就是整段原文，不存在这个问题。
+    # 用原始长度判断：_norm_text 会去掉空白，归一化后的长度比截断上限只会更短。
+    if len((quote or "").strip()) < QUOTE_MAX_LEN:
+        return False
+    normalized_old = _norm_text(old)
+    normalized_quote = _norm_text(quote)
+    if not normalized_old.startswith(normalized_quote):
+        return False
+    normalized_new = _norm_text(new)
+    if len(normalized_old) - len(normalized_quote) <= 20:
+        return False
+    # 新文字与片段长度相当 = 按片段改写，片段之后的内容整段丢失
+    return len(normalized_new) <= len(normalized_quote) + 20
 
 
 class OptimizeStore:
@@ -170,6 +196,9 @@ def make_patch_tools(store: OptimizeStore):
 
         只替换文字，不增删内容，结构与排版不变；同一个诊断只能成功修改一次。
 
+        text 必须是该坐标的**完整**新文字：只改其中一句时，这段文字的其他内容
+        （后半句、链接、数字）要原样保留；只写片段部分会被拒绝。
+
         Args:
             index: 诊断序号（0 起）
             text: 替换后的完整文字
@@ -223,6 +252,17 @@ def make_patch_tools(store: OptimizeStore):
         if new == old.strip():
             # 模型给了个和原文一样的版本：这是笔误，不算执行失败，允许它改了再试
             return _tool_error(writer, "patch_content", f"诊断 {index} 的新文字和原文相同，请重写后再调用")
+
+        if _lost_tail(old, quote, new):
+            # 只照着 60 字的原文片段改写，会把片段之后的正文整段删掉：保持 change 状态让它重写
+            logger.warning("patch_content 拦截疑似截断的替换：诊断 %d，「%s」→「%s」", index, old, new)
+            return _tool_error(
+                writer,
+                "patch_content",
+                f"诊断 {index} 的新文字明显短于原文，疑似只照着「原文」片段改写，"
+                f"会把片段之后的正文丢掉。该坐标的完整原文是「{old}」，请保留片段之后的内容，"
+                "重新给出整段替换文字后再调用",
+            )
 
         write_text_unit(content, unit_type, unit_index, new)
         review["status"] = "done"

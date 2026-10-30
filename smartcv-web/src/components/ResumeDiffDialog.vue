@@ -248,21 +248,31 @@ function onClose() {
 .diff-header-extra {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 .diff-count {
-  font-size: 13px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--warning-soft);
+  font-size: 12px;
   font-weight: 600;
   color: var(--warning);
+  white-space: nowrap;
 }
 .diff-count.none {
+  background: var(--surface-soft);
   color: var(--text-tertiary);
   font-weight: 400;
 }
 .diff-reverted {
-  font-size: 12px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--success-soft);
+  font-size: 11.5px;
   font-weight: 600;
-  color: var(--primary);
+  color: var(--success);
+  white-space: nowrap;
 }
 .diff-legend {
   display: flex;
@@ -278,26 +288,26 @@ function onClose() {
 }
 /* 图例色块：与下面两栏的配色保持一致 */
 .legend-dot {
-  width: 10px;
-  height: 10px;
+  width: 9px;
+  height: 9px;
   border-radius: 2px;
 }
 .legend-dot.before {
-  background: #4b6b5e;
+  background: var(--success);
 }
 .legend-dot.after {
-  background: #a94f4a;
+  background: var(--danger);
 }
 .legend-dot.reverted {
   background: transparent;
-  border: 1px dashed #4b6b5e;
+  border: 1px dashed var(--success);
 }
 
 /* ---------- 左 / 右两栏 ---------- */
 .diff-body {
   display: flex;
   align-items: stretch;
-  gap: 12px;
+  gap: 14px;
 }
 .diff-col {
   flex: 1 1 50%;
@@ -305,8 +315,16 @@ function onClose() {
   display: flex;
   flex-direction: column;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   overflow: hidden;
+  background: var(--panel-bg);
+}
+/* 打开弹窗时两栏从各自一侧轻轻对齐到中间；只动内容，不碰弹窗开合 */
+.diff-col-before {
+  animation: diff-col-left 0.32s var(--ease) both;
+}
+.diff-col-after {
+  animation: diff-col-right 0.32s var(--ease) 0.05s both;
 }
 /* ---------- 改动的配色：按「栏」区分，而不是按改动类型 ----------
  * 左栏 = 修改前的原始内容（绿色）；右栏 = AI 修改（红色）。
@@ -314,20 +332,24 @@ function onClose() {
  * （绿色）—— 与"仍是 AI 修改"的红色一眼可分。
  * 这里用 :deep 是因为 [data-diff] 挂在三个预览子组件的内部元素上。 */
 .diff-col-before :deep([data-diff]) {
-  --diff-color: #4b6b5e;
-  --diff-bg: rgba(75, 107, 94, 0.12);
+  --diff-color: var(--success);
+  --diff-bg: rgba(63, 143, 90, 0.12);
 }
 .diff-col-after :deep([data-diff]) {
-  --diff-color: #a94f4a;
+  --diff-color: var(--danger);
   --diff-bg: rgba(169, 79, 74, 0.11);
 }
 .diff-col-after :deep([data-diff='restored']) {
-  --diff-color: #4b6b5e;
-  --diff-bg: rgba(75, 107, 94, 0.1);
+  --diff-color: var(--success);
+  --diff-bg: rgba(63, 143, 90, 0.1);
 }
 .diff-col-after :deep([data-diff='ignored']) {
-  --diff-color: #8a9199;
-  --diff-bg: rgba(138, 145, 153, 0.1);
+  --diff-color: var(--text-tertiary);
+  --diff-bg: rgba(138, 145, 166, 0.1);
+}
+/* 逐处还原 / 恢复时，标记颜色平滑过渡，让"这一块变了"看得见 */
+.diff-col :deep([data-diff]) {
+  transition: background-color 0.18s var(--ease), box-shadow 0.18s var(--ease);
 }
 
 .col-head {
@@ -335,31 +357,53 @@ function onClose() {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 8px 12px;
+  padding: 9px 14px;
   background: var(--surface-soft);
   border-bottom: 1px solid var(--border);
 }
+/* 栏头小圆点：颜色与这一栏的改动标记一致（左绿 / 右红） */
 .col-title {
-  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
   font-weight: 600;
   color: var(--text);
 }
-.col-hint {
-  font-size: 12px;
-  color: var(--text-tertiary);
+.col-title::before {
+  content: '';
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
 }
-/* 滚动容器：高度固定，超出才有得滚（同步滚动的前提） */
+.diff-col-before .col-title::before {
+  background: var(--success);
+}
+.diff-col-after .col-title::before {
+  background: var(--danger);
+}
+.col-hint {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--panel-bg);
+  font-size: 11px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+/* 滚动容器：高度固定，超出才有得滚（同步滚动的前提）；
+   工作区 / 纸面阴影与页面预览共用同一组变量 */
 .col-scroll {
   height: 68vh;
   overflow: auto;
-  padding: 16px;
-  background: var(--surface-sunken);
+  padding: 20px 18px 40px;
+  background: var(--doc-workspace);
 }
 /* 纸面：宽度 / 缩放走 inline style（与页面预览共用 previewZoom） */
 .col-paper {
   margin: 0 auto;
-  background: var(--panel-bg);
-  box-shadow: var(--shadow-paper);
+  background: var(--doc-paper);
+  box-shadow: var(--doc-paper-shadow);
   padding: 24px;
 }
 
@@ -379,15 +423,37 @@ function onClose() {
   font-weight: 700;
 }
 .tip-before {
-  color: #4b6b5e;
+  color: var(--success);
   font-weight: 600;
 }
 .tip-after {
-  color: #a94f4a;
+  color: var(--danger);
   font-weight: 600;
 }
 .diff-footer-actions {
   display: flex;
   gap: 8px;
+}
+
+/* 两栏从各自一侧轻微收拢，给弹窗内部一个"打开"的节奏（弹窗本身仍瞬时开合） */
+@keyframes diff-col-left {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes diff-col-right {
+  from {
+    opacity: 0;
+    transform: translateX(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 </style>

@@ -140,6 +140,14 @@ export const CONTENT_PRESETS: ContentPreset[] = [
     content: { columns: ['**XX 大学**', '计算机科学与技术 · 本科'], separator: '|' },
   },
   {
+    id: 'preset-content-project-time',
+    name: '项目时间段',
+    desc: '分栏展示项目名称与起止时间',
+    icon: '📁',
+    type: 'twoColumn',
+    content: { columns: ['**XX 项目**', '2023.03 - 2023.09'], separator: '|' },
+  },
+  {
     id: 'preset-content-job-time',
     name: '工作时间段',
     desc: '展示工作起止时间',
@@ -192,12 +200,14 @@ export const CONTENT_PRESETS: ContentPreset[] = [
 
 /* ==================== 章节预设 ==================== */
 
-/** 布局窗口预设：一个窗口 = 布局方向 + 若干内容预设 */
+/** 布局窗口预设：一个窗口 = 布局方向 + 若干内容预设（容器窗口还可以嵌套子窗口预设） */
 export interface LayoutWindowPreset {
-  /** 该窗口内内容的排列方式 */
+  /** 该窗口内内容的排列方式（容器窗口 = 子窗口的排列方向） */
   layout: SectionLayout
-  /** 窗口自带的内容预设 */
+  /** 窗口自带的内容预设（叶子窗口用） */
   contents?: ContentPreset[]
+  /** 窗口自带的子窗口预设（容器窗口用，例如教育经历一行三栏） */
+  rows?: LayoutWindowPreset[]
 }
 
 /** 章节预设的结构 */
@@ -253,13 +263,13 @@ export interface RowPreset {
   rows?: number
 }
 
-/** 通用布局：窗口布局 */
+/** 通用布局：空白布局（空白窗口，从零创建页面结构） */
 export const GENERIC_ROW_PRESETS: RowPreset[] = [
   {
     id: 'preset-row-layout',
-    name: '窗口布局',
-    desc: '拖入章节后，内容可在窗口内自由排列',
-    icon: '🧩',
+    name: '空白布局',
+    desc: '空白的布局窗口，从零搭建页面结构',
+    icon: '⬜',
     layout: 'vertical',
   },
 ]
@@ -323,17 +333,99 @@ export function createRowFromPreset(preset: RowPreset): LayoutWindow {
 }
 
 /**
+ * 一条教育经历：外框横排三栏（学校 + 标签 ｜ 专业学历 ｜ 在校时间）。
+ * 模板自带两条，拖进画布后直接替换文字即可。
+ */
+function educationRow(suffix: string): LayoutWindowPreset {
+  return {
+    layout: 'horizontal',
+    rows: [
+      {
+        layout: 'vertical',
+        contents: [
+          {
+            id: `preset-content-school-${suffix}`,
+            name: '学校',
+            desc: '学校名称，可带标签',
+            icon: '🎓',
+            type: 'iconText',
+            content: { icon: '', text: 'XX大学', tags: ['985', '211'] },
+          },
+        ],
+      },
+      {
+        layout: 'vertical',
+        contents: [
+          {
+            id: `preset-content-major-${suffix}`,
+            name: '专业学历',
+            desc: '专业与学历分栏展示',
+            icon: '📘',
+            type: 'twoColumn',
+            content: { columns: ['计算机科学与技术 ', '硕士'], separator: '|' },
+          },
+        ],
+      },
+      {
+        layout: 'vertical',
+        contents: [
+          {
+            id: `preset-content-school-time-${suffix}`,
+            name: '在校时间',
+            desc: '展示在校起止时间',
+            icon: '📅',
+            type: 'timeRange',
+            content: { start: '2026', end: '至今' },
+          },
+        ],
+      },
+    ],
+  }
+}
+
+/**
+ * 一组专业技能：居中标题 + 有序列表。
+ * 工程技能 / LLM 技能共用同一结构，只有标题与条目不同。
+ */
+function skillRow(key: string, title: string, items: string[]): LayoutWindowPreset {
+  return {
+    layout: 'vertical',
+    contents: [
+      {
+        id: `preset-content-skill-title-${key}`,
+        name: `${title}标题`,
+        desc: '居中的技能分组标题',
+        icon: '🛠️',
+        type: 'iconText',
+        content: { icon: '', text: title },
+        style: { textAlign: 'center' },
+      },
+      {
+        id: `preset-content-skill-list-${key}`,
+        name: `${title}列表`,
+        desc: '有序列表展示技能条目',
+        icon: LIST_TEXT_ICON,
+        type: 'listText',
+        content: { listType: 'ordered', items: items.map((text) => ({ text, indent: 0 })) },
+      },
+    ],
+  }
+}
+
+/**
  * 【预设】章节 —— 带默认标题与布局窗口的章节。
- * 一个章节预设可以组合多个布局窗口，例如"工作经历章节" =
- * 两个竖向窗口（每个窗口 = 时间段 + 职责列表）。
+ * 一个章节预设可以组合多个布局窗口：
+ *  - 教育经历 = 两条横向三栏（学校 ｜ 专业学历 ｜ 在校时间）；
+ *  - 工作经历 = 公司名称 + 两组「时间段 + 职责列表」；
+ *  - 专业技能 = 工程技能 / LLM 技能两组「居中标题 + 有序列表」。
  */
 export const SECTION_PRESETS: SectionPreset[] = [
   {
     id: 'preset-section-intro',
-    name: '个人介绍',
+    name: '个人简介',
     desc: '一行展示职位、电话、地址',
     icon: '👤',
-    title: '个人介绍',
+    title: '个人简介',
     rows: [
       {
         layout: 'horizontal',
@@ -353,40 +445,35 @@ export const SECTION_PRESETS: SectionPreset[] = [
     ],
   },
   {
-    id: 'preset-section-contact',
-    name: '联系方式',
-    desc: '一行展示电话、邮箱、城市',
-    icon: '📞',
-    title: '联系方式',
-    rows: [
-      {
-        layout: 'horizontal',
-        contents: [contentById('preset-content-phone'), contentById('preset-content-email'), contentById('preset-content-location')],
-      },
-    ],
-  },
-  {
     id: 'preset-section-education',
     name: '教育经历',
-    desc: '分栏展示多条教育经历',
+    desc: '每行展示学校、专业学历与在校时间',
     icon: '🎓',
     title: '教育经历',
-    rows: [
-      {
-        layout: 'vertical',
-        contents: [contentById('preset-content-education'), contentById('preset-content-education')],
-      },
-    ],
+    rows: [educationRow('1'), educationRow('2')],
   },
   {
     id: 'preset-section-work',
     name: '工作经历',
-    desc: '两个竖向窗口：时间段 + 工作职责',
+    desc: '公司名称 + 时间段与工作职责',
     icon: '💼',
     title: '工作经历',
     rows: [
       {
         layout: 'vertical',
+        contents: [
+          {
+            id: 'preset-content-company',
+            name: '公司名称',
+            desc: '公司名称',
+            icon: '🏢',
+            type: 'iconText',
+            content: { icon: '', text: 'XXX公司' },
+          },
+        ],
+      },
+      {
+        layout: 'vertical',
         contents: [contentById('preset-content-job-time'), contentById('preset-content-duty')],
       },
       {
@@ -396,16 +483,31 @@ export const SECTION_PRESETS: SectionPreset[] = [
     ],
   },
   {
-    id: 'preset-section-skill',
-    name: '技能标签',
-    desc: '横向排列的技能标签',
-    icon: '🏷️',
-    title: '专业技能',
+    id: 'preset-section-project',
+    name: '项目经历',
+    desc: '分栏展示项目名称与时间，附项目职责',
+    icon: '💻',
+    title: '项目经历',
     rows: [
       {
-        layout: 'horizontal',
-        contents: [contentById('preset-content-skills'), contentById('preset-content-skills'), contentById('preset-content-skills')],
+        layout: 'vertical',
+        contents: [contentById('preset-content-project-time'), contentById('preset-content-duty')],
       },
+      {
+        layout: 'vertical',
+        contents: [contentById('preset-content-project-time'), contentById('preset-content-duty')],
+      },
+    ],
+  },
+  {
+    id: 'preset-section-skill',
+    name: '专业技能',
+    desc: '工程技能与 LLM 技能两组',
+    icon: '🛠️',
+    title: '专业技能',
+    rows: [
+      skillRow('engineering', '工程技能', ['后端：', '前端：', '中间件：', '运维：']),
+      skillRow('llm', 'LLM技能', ['框架', 'RAG', '记忆', '评测']),
     ],
   },
   {
@@ -445,8 +547,24 @@ export function createContentFromPreset(preset: ContentPreset): Content {
 }
 
 /**
+ * 工厂函数：由窗口预设生成一个"真正的布局窗口"。
+ * 内容与嵌套子窗口都生成全新实例（新 id + 深拷贝的内容）。
+ */
+function createWindowFromPreset(preset: LayoutWindowPreset): LayoutWindow {
+  const window: LayoutWindow = {
+    id: uid(),
+    layout: preset.layout,
+    contents: (preset.contents ?? []).map((p) => createContentFromPreset(p)),
+  }
+  if (preset.rows) {
+    window.rows = preset.rows.map(createWindowFromPreset)
+  }
+  return window
+}
+
+/**
  * 工厂函数：由章节预设生成一个"真正的章节实例"。
- * 如果预设自带布局窗口（rows），也一并生成（每个窗口 = 新 id + 拷贝的内容）。
+ * 如果预设自带布局窗口（rows），也一并生成（容器窗口里的子窗口递归生成）。
  */
 export function createSectionFromPreset(preset: SectionPreset): Section {
   return {
@@ -454,10 +572,6 @@ export function createSectionFromPreset(preset: SectionPreset): Section {
     kind: 'section',
     title: preset.title,
     style: { ...(preset.style ?? {}) },
-    rows: (preset.rows ?? []).map((row) => ({
-      id: uid(),
-      layout: row.layout,
-      contents: (row.contents ?? []).map((p) => createContentFromPreset(p)),
-    })),
+    rows: (preset.rows ?? []).map(createWindowFromPreset),
   }
 }

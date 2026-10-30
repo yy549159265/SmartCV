@@ -26,9 +26,13 @@ async def run(
     diagnosis: list[dict],
     patches: list[dict],
     reviews: list[dict] | None = None,
+    locations: list[str] | None = None,
     session_id: str | None = None,
 ) -> str:
-    """跑主 agent（总结）：发 agent_start → 逐 token 发 delta(summary) → agent_end，返回修改说明。"""
+    """跑主 agent（总结）：发 agent_start → 逐 token 发 delta(summary) → agent_end，返回修改说明。
+
+    locations 与 diagnosis 按序对齐，给每条诊断标出「哪一处」，总结按位置逐行列出。
+    """
     writer = get_stream_writer()
     writer({"type": "agent_start", "agent": "summarize", "label": "摘要 agent"})
     agent = build_agent(llm)
@@ -38,7 +42,9 @@ async def run(
     else:
         changes = "（没有实际改动）"
     # 总结面向用户，不带坐标；带上审查结果，模型才知道哪些诊断没改以及原因
-    diagnosis_text = format_diagnosis(diagnosis, include_coords=False, reviews=reviews)
+    diagnosis_text = format_diagnosis(
+        diagnosis, include_coords=False, reviews=reviews, locations=locations
+    )
     # 数量由代码算好传给模型：LLM 自己数条目会数错（16 条里改了 8 条却写成 7 条）
     reviews = reviews or []
     total = len(diagnosis)
@@ -57,7 +63,7 @@ async def run(
         f"数量统计（系统已算好，必须原样使用）：\n{stats}\n\n"
         f"诊断结果：\n{diagnosis_text}\n\n"
         f"本次实际改动清单：\n{changes}\n\n"
-        f"请用简短中文总结这次优化：改了什么；有诊断没改的话，按处理结果说明原因。"
+        f"请按输出格式逐条列出：哪一处改了、哪一处没改及原因。"
     )
     answer_parts: list[str] = []
     async for item in agent.astream(

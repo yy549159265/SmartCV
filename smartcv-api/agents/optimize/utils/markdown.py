@@ -94,6 +94,30 @@ def locate_unit(resume: list[dict], s: int, r: int, c: int, i: int):
     return contents[c], unit_type, unit_index, old
 
 
+def describe_location(resume: list[dict], item: dict) -> str:
+    """把诊断坐标翻译成人能看懂的位置（章节标题 + 条目序号）。
+
+    总结 agent 按这个位置写清单，下一轮诊断靠它知道「上一轮改了哪里」，
+    所以要用标题而不是纯编号。
+    """
+    if item.get("kind") == "structure" or not isinstance(item.get("s"), int):
+        return "整体结构"
+    s = item["s"]
+    if not 0 <= s < len(resume):
+        return "简历"
+    title = (resume[s].get("title") or "").strip() or f"第 {s + 1} 章"
+    coords = [item.get(key) for key in ("r", "c", "i")]
+    located = locate_unit(resume, s, *coords) if all(isinstance(v, int) for v in coords) else None
+    if located is None:
+        return title
+    unit_type, i = located[1], item["i"]
+    if unit_type == "item":
+        return f"{title}·第 {i + 1} 条"
+    if unit_type == "tag":
+        return f"{title}·第 {i + 1} 个标签"
+    return title
+
+
 def write_text_unit(content: dict, unit_type: str, unit_index: int, text: str) -> None:
     """把定位到的文字单元写回 content 节点（就地改，不动其它字段）。"""
     data = content.setdefault("content", {})

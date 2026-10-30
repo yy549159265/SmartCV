@@ -1,11 +1,11 @@
 /**
- * "Agent 设置"页接口
+ * "高级设置"页接口
  *
  * 后端：GET /api/agent/md（见 smartcv-api/routers/agent.py）
  *   出参：统一响应 { code, message, data }，data = { prompts, skills }：
  *     - prompts：后端 agent 用的提示词（system_prompt 开头的 md）
  *     - skills：技能文档（agents/skill 目录下的 md）
- *   两组分开返回，前端在「md预览」里分组只读查看。
+ *   两组分开返回，前端在「提示词预览」里分组只读查看。
  */
 import { unwrap } from '@/api/error'
 import { apiFetch } from '@/api/http'

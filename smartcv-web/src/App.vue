@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * 应用入口：顶部工具条 + 页面
- *   主页（默认）/ 编辑简历 / 优化简历 / Agent 设置
+ *   主页（默认）/ 编辑简历 / 优化简历 / 高级设置
  *
  * 简历的"从哪来"统一走主页（导入 PDF / 导入 JSON / 新建），编辑页不再提供导入入口。
  * 所有页面读写同一个 Pinia store（stores/resume.ts）—— 单一数据源。
@@ -12,20 +12,11 @@ import HomePage from '@/pages/HomePage.vue'
 import EditorPage from '@/pages/EditorPage.vue'
 import OptimizePage from '@/pages/OptimizePage.vue'
 import ProviderSettingsPage from '@/pages/ProviderSettingsPage.vue'
-import { useResumeStore } from '@/stores/resume'
-import { useClickPopover } from '@/composables/useClickPopover'
-import { message } from '@/utils/feedback'
 import { brandSvg } from '@/data/icons'
-import BrandMark from '@/components/BrandMark.vue'
 import { themeOverrides } from '@/styles/naive-theme'
-
-const store = useResumeStore()
 
 /** GitHub 仓库跳转图标（头部右侧，新标签打开） */
 const githubSvg = brandSvg(siGithub)
-
-/** 清空确认弹层（受控，点外部自动关闭） */
-const { show: clearConfirmShow, triggerRef: clearTriggerRef } = useClickPopover()
 
 /* ---------- 顶部页面栏 ---------- */
 
@@ -37,25 +28,17 @@ const PAGES: { key: PageKey; label: string }[] = [
   { key: 'home', label: '主页' },
   { key: 'editor', label: '编辑简历' },
   { key: 'optimize', label: '优化简历' },
-  { key: 'provider', label: 'Agent 设置' },
+  { key: 'provider', label: '高级设置' },
 ]
-
-/* ---------- 保存 ---------- */
-
-/** 手动保存：立即写入浏览器 localStorage */
-function onSave() {
-  store.saveToStorage()
-  message.success('已保存到浏览器本地（刷新/关闭浏览器后内容仍在）')
-}
 </script>
 
 <template>
   <n-config-provider :theme-overrides="themeOverrides">
     <div class="app-shell">
-      <!-- 顶部工具条：品牌 + 页面栏 + 数据操作 -->
+      <!-- 顶部工具条：品牌 + 页面栏 + GitHub -->
       <header class="app-header">
         <div class="brand">
-          <BrandMark :size="22" />
+          <img class="brand-icon" src="/favicon.svg" alt="" width="22" height="22" />
           <span class="brand-name">SmartCV</span>
         </div>
 
@@ -81,20 +64,6 @@ function onSave() {
           title="GitHub 仓库"
           v-html="githubSvg"
         />
-        <n-button size="small" quaternary @click="onSave">保存</n-button>
-        <n-popconfirm
-          v-model:show="clearConfirmShow"
-          positive-text="清空"
-          negative-text="取消"
-          @positive-click="store.clearAll()"
-        >
-          <template #trigger>
-            <span ref="clearTriggerRef" class="trigger-wrap">
-              <n-button size="small" quaternary type="error">清空</n-button>
-            </span>
-          </template>
-          确定清空所有内容吗？
-        </n-popconfirm>
       </div>
     </header>
 
@@ -133,6 +102,12 @@ function onSave() {
   gap: 10px;
   flex: none;
 }
+.brand-icon {
+  display: block;
+  flex: none;
+  width: 22px;
+  height: 22px;
+}
 .brand-name {
   font-family: var(--font-display);
   font-size: 18px;
@@ -142,30 +117,36 @@ function onSave() {
   color: var(--text);
 }
 
-/* 页面栏：下划线式导航，不用胶囊底、不用投影 */
+/* 页面栏：下划线式导航，不用胶囊底、不用投影；hover 给一条全高的极浅色带 */
 .page-tabs {
   display: flex;
   align-items: stretch;
-  gap: 24px;
+  gap: 2px;
   height: 100%;
 }
 .page-tab {
   position: relative;
   flex: none;
-  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 12px;
+  margin: 0 2px;
   border: none;
+  border-radius: 6px;
   background: transparent;
   font-size: 13px;
   white-space: nowrap;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: color 0.16s var(--ease);
+  transition:
+    color 0.16s var(--ease),
+    background 0.16s var(--ease);
 }
 .page-tab::after {
   content: '';
   position: absolute;
-  left: 0;
-  right: 0;
+  left: 8px;
+  right: 8px;
   bottom: -1px;
   height: 2px;
   border-radius: 2px 2px 0 0;
@@ -174,6 +155,7 @@ function onSave() {
 }
 .page-tab:hover {
   color: var(--text);
+  background: var(--surface-soft);
 }
 .page-tab.active {
   color: var(--text);
@@ -187,25 +169,27 @@ function onSave() {
   margin-left: auto;
   display: flex;
   align-items: center;
-  gap: 2px;
 }
-/* 触发器包装：给 ref 一个原生元素（n-button 的实例没有 contains） */
-.trigger-wrap {
-  display: inline-flex;
-}
-/* GitHub 跳转图标：内联 SVG 1.1em，hover 加深，去掉链接下划线 */
+/* GitHub 跳转图标：内联 SVG 1.1em，hover 给一圈浅底，去掉链接下划线 */
 .github-link {
   display: inline-flex;
   align-items: center;
-  padding: 4px 8px;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
   margin-right: 6px;
+  border-radius: 7px;
   color: var(--text-tertiary);
   text-decoration: none;
   font-size: 1.05em;
-  transition: color 0.2s var(--ease);
+  transition:
+    color 0.16s var(--ease),
+    background 0.16s var(--ease);
 }
 .github-link:hover {
   color: var(--text);
+  background: var(--surface-soft);
 }
 
 /* ---------- 窄屏：页面栏可横向滚动，标题与操作保持单行 ---------- */

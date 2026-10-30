@@ -57,8 +57,13 @@ const tooltip = computed(() =>
   line-height: 1;
   cursor: pointer;
   user-select: none;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
-  transition: transform 0.12s ease, background 0.12s ease, color 0.12s ease;
+  box-shadow:
+    0 1px 2px rgba(28, 33, 48, 0.12),
+    0 4px 10px -6px rgba(28, 33, 48, 0.28);
+  transition:
+    transform 0.16s var(--ease),
+    background-color 0.16s var(--ease),
+    box-shadow 0.16s var(--ease);
 }
 /* 已还原：虚线圈 + 淡底色，和"仍采用 AI 修改"一眼区分 */
 .diff-action.reverted {
@@ -66,8 +71,11 @@ const tooltip = computed(() =>
   background: var(--diff-bg, rgba(0, 0, 0, 0.04));
 }
 .diff-action:hover {
-  transform: scale(1.15);
+  transform: scale(1.12);
   background: var(--panel-bg, #fff);
+  box-shadow:
+    0 1px 2px rgba(28, 33, 48, 0.12),
+    0 6px 14px -6px rgba(28, 33, 48, 0.32);
 }
 .diff-action:active {
   transform: scale(0.94);

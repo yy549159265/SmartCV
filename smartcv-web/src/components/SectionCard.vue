@@ -279,7 +279,7 @@ function onRemove() {
 
       <!-- 无窗口提示：铺满整个落点区并居中，pointer-events:none 不挡拖放（空白章节也能承接拖入） -->
       <div v-if="section.rows.length === 0" class="section-empty">
-        从左侧拖「布局窗口」或内容到这里
+        从上方组件库拖入布局或内容
       </div>
     </div>
   </div>

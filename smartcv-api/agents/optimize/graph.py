@@ -20,16 +20,18 @@ resume 事件，前端据此重绘。
 
 import logging
 import uuid
-from typing import Callable, Awaitable
+from typing import Annotated, Callable, Awaitable
 
+from langchain_core.messages import AIMessage, AnyMessage, HumanMessage
 from langgraph.config import get_stream_writer
 from langgraph.constants import END, START
 from langgraph.graph import StateGraph
+from langgraph.graph.message import add_messages
 from typing_extensions import TypedDict
 
 from agents.optimize import diagnose_agent, optimize_agent, summarize_agent
 from agents.optimize.utils.checkpointer import get_checkpointer
-from agents.optimize.utils.markdown import resume_to_markdown
+from agents.optimize.utils.markdown import describe_location, resume_to_markdown
 from agents.optimize.utils.tools import OptimizeStore
 from agents.utils.choose_llm import choose_llm
 from schemas.provider import ProviderConfig
@@ -37,7 +39,17 @@ from schemas.provider import ProviderConfig
 logger = logging.getLogger("smartcv")
 
 
+def _last_summary(messages: list[AnyMessage] | None) -> str:
+    """取最近一条 AI 消息的正文，也就是上一轮的 summary；没有就返回空串。"""
+    for message in reversed(messages or []):
+        if isinstance(message, AIMessage):
+            return (message.content or "").strip()
+    return ""
+
+
 class ChatState(TypedDict):
+    # 跨轮上下文：每轮的「用户问题」和「总结」按序追加（add_messages），不覆盖
+    messages: Annotated[list[AnyMessage], add_messages]
     resume_sections: list[dict]
     markdown: str
     # 结构化诊断项：位置 + 原文片段 + 原因 + 依据 + 修改方向
@@ -76,7 +88,11 @@ async def run_chat_stream(
         return {"markdown": markdown}
 
     async def diagnose_node(state: ChatState) -> dict:
-        diagnosis = await diagnose_agent.run(llm, state["markdown"], jd, question, session_id)
+        # 上一轮的总结（改了/没改哪些位置）作为本轮诊断的上下文
+        history = _last_summary(state.get("messages"))
+        diagnosis = await diagnose_agent.run(
+            llm, state["markdown"], jd, question, session_id, history
+        )
         return {"diagnosis": diagnosis}
 
     async def optimize_node(state: ChatState) -> dict:
@@ -86,10 +102,12 @@ async def run_chat_stream(
         return {"result_json": store.resume}
 
     async def summarize_node(state: ChatState) -> dict:
+        locations = [describe_location(store.resume, item) for item in state["diagnosis"]]
         summary = await summarize_agent.run(
-            llm, state["diagnosis"], store.patches, store.reviews, session_id
+            llm, state["diagnosis"], store.patches, store.reviews, locations, session_id
         )
-        return {"summary": summary}
+        # summary 同时写进 messages，下一轮诊断从这里取
+        return {"summary": summary, "messages": [AIMessage(content=summary)]}
 
     graph = StateGraph(ChatState)
     graph.add_node("convert", convert_node)
@@ -104,6 +122,8 @@ async def run_chat_stream(
     compiled = graph.compile(checkpointer=get_checkpointer())
 
     state: ChatState = {
+        # add_messages 会把本次问题追加到同一 thread 的历史后面，而不是覆盖
+        "messages": [HumanMessage(content=question)],
         "resume_sections": resume_sections,
         "markdown": "",
         "diagnosis": [],

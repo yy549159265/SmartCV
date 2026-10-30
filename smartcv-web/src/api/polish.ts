@@ -38,7 +38,7 @@ export async function polishTexts(
   const p = getProviderSettings()
   const missing = missingProviderFields(p)
   if (missing.length) {
-    throw new Error(`请先在「供应商设置」填齐：${missing.join('、')}`)
+    throw new Error(`请先在「高级设置」填齐：${missing.join('、')}`)
   }
 
   const res = await apiFetch('/api/polish', {

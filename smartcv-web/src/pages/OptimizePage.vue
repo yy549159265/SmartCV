@@ -7,7 +7,7 @@
  *  - 右侧：JD 输入（可选，有 JD 就粘贴，没有就不填）+ AI 对话栏。
  *
  * 对话走 SSE 流式（见 src/api/chat.ts）：诊断"思考"正文 + steps 执行过程 +
- * 摘要"修改说明"气泡；供应商配置在「供应商设置」页（localStorage 保存）。
+ * 摘要"修改说明"气泡；供应商配置在「高级设置」页（localStorage 保存）。
  */
 import { nextTick, ref, computed, watch } from 'vue'
 import type { InputInst } from 'naive-ui'
@@ -50,6 +50,12 @@ function diagCounts(items: DiagnosisItem[]) {
     label: DIAG_STATUS_LABEL[status],
     count: counts[status] as number,
   }))
+}
+
+/** 诊断结论占位的文案：正在等用户回答时，不要说「正在生成」 */
+function diagPendingText(m: Extract<ChatItem, { kind: 'agent' }>): string {
+  const waiting = m.questions.some((q) => q.status === 'pending' || q.status === 'submitting')
+  return waiting ? '等待你的回答' : '正在生成诊断结论'
 }
 
 /** 诊断卡前置状态：优先用 store 并入的 lead；旧会话（HMR 保留的状态）从紧邻的状态行补 */
@@ -145,6 +151,7 @@ import { previewZoom, ZOOM_LEVELS } from '@/composables/usePreviewZoom'
 import { CONTENT_WIDTH, PAGE_HEIGHT, PAGE_PADDING, PAGE_WIDTH } from '@/utils/constants'
 import { pageRunSpecs, type PageUnit, type RunSpec } from '@/utils/pagination'
 import { exportResumePdf } from '@/api/pdf'
+import { resumeFilename } from '@/composables/useResumeName'
 import { polishTexts } from '@/api/polish'
 import type { Section } from '@/types'
 import { downloadJson } from '@/utils/download'
@@ -187,9 +194,9 @@ const pageStyle = computed(() => ({
 
 /* ---------- 导出 ---------- */
 
-/** 导出 JSON：下载当前简历数据文件（下载成功后计数 +1） */
+/** 导出 JSON：下载当前简历数据文件（以简历名称命名，下载成功后计数 +1） */
 function onExportJson() {
-  downloadJson(resumeStore.resume, 'smartcv-resume.json')
+  downloadJson(resumeStore.resume, `${resumeFilename()}.json`)
   statsStore.inc('json')
 }
 
@@ -221,7 +228,7 @@ async function onExportPdf() {
       throw new Error('简历排版还没准备好，请稍后重试')
     }
 
-    await exportResumePdf(exportFlowEl.value)
+    await exportResumePdf(exportFlowEl.value, resumeFilename())
     await statsStore.inc('pdf')
     message.success('PDF 已导出（后端生成，与预览一致）')
   } catch (err) {
@@ -438,9 +445,9 @@ function onApplyDiff() {
     <section class="chat-panel">
       <!-- JD 输入区：可选折叠 -->
       <div class="jd-section">
-        <button class="jd-toggle" @click="jdExpanded = !jdExpanded">
-          <span>{{ jdExpanded ? '▾' : '▸' }}</span>
-          JD 职位描述（可选，有就粘贴）
+        <button class="jd-toggle" :class="{ open: jdExpanded }" @click="jdExpanded = !jdExpanded">
+          <span class="jd-caret" aria-hidden="true"></span>
+          <span class="jd-toggle-text">JD 职位描述（可选，有就粘贴）</span>
         </button>
         <div v-if="jdExpanded" class="jd-body">
           <n-input
@@ -455,39 +462,49 @@ function onApplyDiff() {
 
       <!-- 对话栏 -->
       <div class="chat-header">
-        <span class="panel-title">简历修改对话</span>
-        <span class="panel-spacer" />
-        <!-- 对比弹窗关掉后简历仍是旧的，这里留个入口，想好了再点开应用 -->
-        <n-button
-          v-if="optimizeStore.pendingDiff"
-          size="tiny"
-          type="primary"
-          ghost
-          @click="optimizeStore.openDiff()"
-        >
-          查看修改对比
-        </n-button>
-        <span
-          class="session-id"
-          :title="`会话 id：${sessionId}（诊断 / 优化 / 摘要等 agent 共用）`"
-        >
-          会话 {{ shortSessionId }}
+        <span class="chat-heading">
+          <span class="chat-heading-icon" aria-hidden="true">✦</span>
+          <span class="panel-title">简历修改对话</span>
         </span>
-        <n-button
-          size="tiny"
-          quaternary
-          :disabled="optimizeStore.sending"
-          @click="onNewConversation"
-        >
-          新建会话
-        </n-button>
+        <span class="panel-spacer" />
+        <!-- 右侧操作整组对齐；窄面板放不下时整组换行并靠右，不会被裁掉 -->
+        <div class="chat-actions">
+          <!-- 对比弹窗关掉后简历仍是旧的，这里留个入口，想好了再点开应用 -->
+          <n-button
+            v-if="optimizeStore.pendingDiff"
+            size="tiny"
+            type="primary"
+            ghost
+            @click="optimizeStore.openDiff()"
+          >
+            查看修改对比
+          </n-button>
+          <span
+            class="session-id"
+            :title="`会话 id：${sessionId}（诊断 / 优化 / 摘要等 agent 共用）`"
+          >
+            会话 {{ shortSessionId }}
+          </span>
+          <n-button
+            size="tiny"
+            quaternary
+            :disabled="optimizeStore.sending"
+            @click="onNewConversation"
+          >
+            新建会话
+          </n-button>
+        </div>
       </div>
 
       <div ref="chatListEl" class="chat-list">
         <!-- 空状态 -->
         <div v-if="optimizeStore.messages.length === 0" class="chat-empty">
-          描述你想怎么改这份简历，例如：<br />
-          「把工作经历写得更量化一点」「帮我把自我评价改得简洁有力」
+          <span class="chat-empty-icon" aria-hidden="true">✦</span>
+          <p class="chat-empty-title">描述你想怎么改这份简历，例如：</p>
+          <div class="chat-empty-examples">
+            <span>「把工作经历写得更量化一点」</span>
+            <span>「帮我把自我评价改得简洁有力」</span>
+          </div>
         </div>
 
         <!-- 时间线：用户消息 / 过程 agent 块 / 摘要回答气泡 -->
@@ -524,6 +541,17 @@ function onApplyDiff() {
 
           <!-- agent 块：诊断 / 优化 / 摘要统一卡片，状态头 + 回答(常显) + 思考/工具(各自折叠) -->
           <div v-else class="msg-block from-process">
+            <!-- 诊断结论占位：思考/工具阶段先占住结论的位置并持续扫光，
+                 避免用户以为没在诊断；结论一到就换成下方可点的「诊断结论」入口 -->
+            <div
+              v-if="m.agent === 'diagnose' && m.status === 'running' && !m.diagnosis.length"
+              class="diag-pending"
+            >
+              <span class="diag-pending-icon" aria-hidden="true">✦</span>
+              <span class="diag-pending-text">{{ diagPendingText(m) }}</span>
+              <span class="diag-pending-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+            </div>
+
             <!-- ✦ 诊断结论入口：放在诊断卡最前面，闪烁提示可点击 -->
             <button
               v-if="m.diagnosis.length"
@@ -552,7 +580,7 @@ function onApplyDiff() {
             <div class="agent-card">
               <!-- convert 阶段结束状态：并入诊断卡，作为卡片的第一行（不带对勾，避免和下方状态头重复） -->
               <div v-if="leadText(m, i)" class="agent-lead">{{ leadText(m, i) }}</div>
-              <!-- 状态头：running = 绿色闪烁帧，done = 绿色对勾 -->
+              <!-- 状态头：running = 主题色呼吸，done = 绿色对勾 -->
               <div class="agent-status" :class="m.status">
                 <span class="status-mark">
                   <span v-if="m.status === 'done'" class="check">✓</span>
@@ -565,7 +593,7 @@ function onApplyDiff() {
                 <!-- 🧭 位置诊断：诊断 agent 实际收到的带位置编号的简历文本 -->
                 <div v-if="m.markdown" class="agent-block">
                   <button class="agent-sub-toggle" @click="m.markdownOpen = !m.markdownOpen">
-                    <span class="chevron">{{ m.markdownOpen ? '▾' : '▸' }}</span>
+                    <span class="chevron" :class="{ open: m.markdownOpen }" aria-hidden="true"></span>
                     <span>位置诊断</span>
                     <span class="field-tip">
                       <span class="field-hint">{{ m.markdown.split('\n').length }} 行</span>
@@ -578,7 +606,7 @@ function onApplyDiff() {
                 <!-- 💭 思考过程：模型 reasoning_content 字段，折叠；模型没返回思考则给提示 -->
                 <div class="agent-block">
                   <button class="agent-sub-toggle" @click="m.thinkingOpen = !m.thinkingOpen">
-                    <span class="chevron">{{ m.thinkingOpen ? '▾' : '▸' }}</span>
+                    <span class="chevron" :class="{ open: m.thinkingOpen }" aria-hidden="true"></span>
                     <span>思考过程</span>
                     <span class="field-tip">
                       <span class="field-hint">reasoning_content</span>
@@ -591,7 +619,7 @@ function onApplyDiff() {
                 <!-- 🔧 工具调用：折叠（web_search 单独在下一块展示） -->
                 <div v-if="toolRows(m.steps).length" class="agent-block">
                   <button class="agent-sub-toggle" @click="m.toolsOpen = !m.toolsOpen">
-                    <span class="chevron">{{ m.toolsOpen ? '▾' : '▸' }}</span>
+                    <span class="chevron" :class="{ open: m.toolsOpen }" aria-hidden="true"></span>
                     <span>工具调用</span>
                     <span class="field-tip">
                       <span class="field-hint">{{ toolRows(m.steps).length }} 次</span>
@@ -609,7 +637,7 @@ function onApplyDiff() {
                 <!-- 🌐 Web 搜索：只诊断 agent 会联网；排在工具之后、回答之前 -->
                 <div v-if="m.searches.length" class="agent-block">
                   <button class="agent-sub-toggle" @click="m.searchesOpen = !m.searchesOpen">
-                    <span class="chevron">{{ m.searchesOpen ? '▾' : '▸' }}</span>
+                    <span class="chevron" :class="{ open: m.searchesOpen }" aria-hidden="true"></span>
                     <span>Web 搜索</span>
                     <span class="field-tip">
                       <span class="field-hint">{{ m.searches.length }} 次</span>
@@ -651,7 +679,7 @@ function onApplyDiff() {
                     />
                     <template v-else>
                       <button class="agent-sub-toggle" @click="m.questionsOpen = !m.questionsOpen">
-                        <span class="chevron">{{ m.questionsOpen ? '▾' : '▸' }}</span>
+                        <span class="chevron" :class="{ open: m.questionsOpen }" aria-hidden="true"></span>
                         <span>追问记录</span>
                         <span class="field-tip">
                           <span class="field-hint">
@@ -671,7 +699,7 @@ function onApplyDiff() {
                 <!-- 💬 回答：模型 content 字段，折叠；内容按 Markdown 渲染 -->
                 <div v-if="m.text" class="agent-block">
                   <button class="agent-sub-toggle" @click="m.answerOpen = !m.answerOpen">
-                    <span class="chevron">{{ m.answerOpen ? '▾' : '▸' }}</span>
+                    <span class="chevron" :class="{ open: m.answerOpen }" aria-hidden="true"></span>
                     <span>回答</span>
                   </button>
                   <div v-if="m.answerOpen" class="agent-answer" v-html="renderMarkdown(m.text)"></div>
@@ -813,16 +841,35 @@ function onApplyDiff() {
     v-model:show="enhanceShow"
     display-directive="if"
     preset="card"
-    title="提示词增强"
     style="width: 900px; max-width: 94vw"
   >
+    <template #header>
+      <div class="enhance-modal-head">
+        <span class="enhance-modal-icon" aria-hidden="true">✦</span>
+        <span class="enhance-modal-title">提示词增强</span>
+      </div>
+    </template>
     <div class="enhance-compare">
-      <div class="enhance-col">
+      <div class="enhance-col before">
         <div class="enhance-col-head">增强前</div>
         <div class="enhance-text">{{ enhanceBefore }}</div>
       </div>
-      <div class="enhance-col">
-        <div class="enhance-col-head">增强后</div>
+      <div class="enhance-arrow" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none">
+          <path
+            d="M5 12h14m-5-5 5 5-5 5"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+      </div>
+      <div class="enhance-col after">
+        <div class="enhance-col-head">
+          <span class="enhance-col-icon" aria-hidden="true">✦</span>
+          <span>增强后</span>
+        </div>
         <div class="enhance-text">{{ enhanceAfter }}</div>
       </div>
     </div>
@@ -908,20 +955,21 @@ function onApplyDiff() {
 .resume-scroll {
   flex: 1;
   overflow: auto;
-  padding: 16px;
+  padding: var(--doc-workspace-pad);
+  /* 工作区：均匀中性浅灰，与纯白纸张形成清晰对比（与「实时预览」同款） */
+  background: var(--doc-workspace);
 }
 /* 与「实时预览」同款分页：一张张 A4 纸 + 页间距 + 页码 */
 .page-stack {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 24px;
-  padding-bottom: 24px;
+  gap: var(--doc-page-gap);
 }
 .a4-page {
   position: relative;
-  background: #fff;
-  box-shadow: var(--shadow-paper);
+  background: var(--doc-paper);
+  box-shadow: var(--doc-paper-shadow);
   /* 宽度 / 最小高 / 内边距 / 缩放由 pageStyle 动态设置（与实时预览的 A4 纸张一致） */
 }
 .page-number {
@@ -953,43 +1001,133 @@ function onApplyDiff() {
 
 .jd-section {
   border-bottom: 1px solid var(--border);
+  background: var(--panel-bg);
 }
 .jd-toggle {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   width: 100%;
-  padding: 10px 16px;
+  padding: 9px 16px;
   border: none;
   background: transparent;
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 600;
   color: var(--text-secondary);
   text-align: left;
   cursor: pointer;
-  transition: background 0.14s var(--ease), color 0.14s var(--ease);
+  transition: background 0.16s var(--ease), color 0.16s var(--ease);
 }
 .jd-toggle:hover {
   background: var(--surface-soft);
   color: var(--text);
 }
+/* 折叠箭头：用边框画的小折角，展开时旋转 90°，不占额外宽度 */
+.jd-caret {
+  flex: none;
+  position: relative;
+  width: 11px;
+  height: 11px;
+  color: var(--text-tertiary);
+  transition: color 0.16s var(--ease);
+}
+.jd-caret::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  border-radius: 1px;
+  transform: translateY(-50%) rotate(-45deg);
+  transition: transform 0.2s var(--ease);
+}
+.jd-toggle.open .jd-caret::before {
+  transform: translateY(-50%) rotate(45deg);
+}
+.jd-toggle.open .jd-caret,
+.jd-toggle:hover .jd-caret {
+  color: var(--primary);
+}
+.jd-toggle-text {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
 .jd-body {
   padding: 0 16px 12px;
+  animation: block-reveal 0.22s var(--ease) both;
 }
 
 .chat-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 10px 16px;
+  flex-wrap: wrap;
+  gap: 8px;
+  row-gap: 6px;
+  padding: 9px 16px;
   border-bottom: 1px solid var(--border);
+  background: var(--panel-bg);
+}
+/* 右侧操作整组：宽度够时靠右，窄到换行时也整组贴右，不会散成左对齐 */
+.chat-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  row-gap: 6px;
+  margin-left: auto;
+}
+.chat-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex: none;
+  min-width: 0;
+}
+.chat-heading-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 19px;
+  height: 19px;
+  border-radius: 6px;
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-size: 10px;
+  line-height: 1;
 }
 .session-id {
-  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--surface-soft);
+  font-size: 10.5px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   color: var(--text-tertiary);
   white-space: nowrap;
   cursor: help;
+  transition: background 0.16s var(--ease), color 0.16s var(--ease);
+}
+.session-id:hover {
+  background: var(--surface-sunken);
+  color: var(--text-secondary);
+}
+/* 对话栏变窄时先让会话 id（辅助信息）让位，避免右侧按钮被裁掉 */
+@media (max-width: 980px) {
+  .session-id {
+    display: none;
+  }
+}
+@media (max-width: 780px) {
+  .chat-header {
+    gap: 6px;
+  }
+  .chat-heading-icon {
+    display: none;
+  }
 }
 
 .chat-list {
@@ -1000,16 +1138,53 @@ function onApplyDiff() {
   flex-direction: column;
   gap: 12px;
 }
+/* 空状态：一枚柔和的 AI 标记 + 两条示例，把「怎么开口」变得具体 */
 .chat-empty {
   margin: auto;
-  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 9px;
+  max-width: 340px;
+  padding: 24px 8px;
   text-align: center;
-  color: var(--text-secondary);
+  animation: msg-in 0.35s var(--ease) both;
+}
+.chat-empty-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-size: 16px;
+  line-height: 1;
+}
+.chat-empty-title {
+  margin: 0;
   font-size: 12.5px;
-  line-height: 1.9;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+.chat-empty-examples {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.chat-empty-examples span {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--text-tertiary);
+  font-size: 11.5px;
+  line-height: 1.6;
 }
 .chat-msg {
   display: flex;
+  animation: msg-in 0.3s var(--ease) both;
 }
 .chat-msg.from-user {
   justify-content: flex-end;
@@ -1054,9 +1229,9 @@ function onApplyDiff() {
   background: var(--surface-soft);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  padding: 6px 10px;
+  padding: 7px 11px;
 }
-/* 状态头：running 主题色柔光呼吸 / done 主题色对勾 */
+/* 状态头：running 主题色柔光呼吸 / done 完成绿 */
 .agent-status {
   display: inline-flex;
   align-items: center;
@@ -1071,13 +1246,15 @@ function onApplyDiff() {
   color: var(--primary-hover);
   cursor: default;
   user-select: none;
+  transition: background 0.2s var(--ease), color 0.2s var(--ease);
 }
 .agent-status.running {
   /* 柔光呼吸：背景 + 圆点一起明暗变化，跑到哪个 agent 一眼可见 */
-  animation: status-blink 1.2s ease-in-out infinite;
+  animation: status-blink 1.6s ease-in-out infinite;
 }
 .agent-status.done {
-  background: var(--primary-soft);
+  background: var(--success-soft);
+  color: var(--success);
   cursor: default;
 }
 .status-text {
@@ -1096,6 +1273,11 @@ function onApplyDiff() {
   font-weight: 700;
   line-height: 1;
 }
+.agent-status.done .check,
+.status-line.done .check {
+  color: var(--success);
+  animation: check-in 0.32s var(--ease);
+}
 .status-mark .pulse {
   width: 8px;
   height: 8px;
@@ -1107,11 +1289,11 @@ function onApplyDiff() {
   0%,
   100% {
     background: var(--primary-soft);
-    box-shadow: 0 0 0 0 rgba(75, 107, 94, 0);
+    box-shadow: 0 0 0 0 rgba(71, 83, 199, 0);
   }
   50% {
     background: var(--primary-faint);
-    box-shadow: 0 0 0 4px rgba(75, 107, 94, 0.16);
+    box-shadow: 0 0 0 4px rgba(71, 83, 199, 0.14);
   }
 }
 @keyframes dot-pulse {
@@ -1123,9 +1305,47 @@ function onApplyDiff() {
     transform: scale(1.3);
   }
 }
+@keyframes check-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.12);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+/* 折叠箭头：边框画的折角，展开时旋转 90°，避免两个字形切换时的跳动 */
 .chevron {
-  font-size: 9px;
+  position: relative;
+  flex: none;
+  width: 11px;
+  height: 11px;
   color: var(--text-tertiary);
+  transition: color 0.16s var(--ease);
+}
+.chevron::before {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 50%;
+  width: 4.5px;
+  height: 4.5px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  border-radius: 1px;
+  transform: translateY(-50%) rotate(-45deg);
+  transition: transform 0.2s var(--ease);
+}
+.chevron.open::before {
+  transform: translateY(-50%) rotate(45deg);
+}
+.agent-sub-toggle:hover .chevron,
+.chevron.open {
+  color: var(--primary);
 }
 /* 阶段状态行：convert 等非 agent 阶段（中性 pending → 主题色已完成） */
 .status-line {
@@ -1140,8 +1360,8 @@ function onApplyDiff() {
   color: var(--text-secondary);
 }
 .status-line.done {
-  background: var(--primary-soft);
-  color: var(--primary-hover);
+  background: var(--success-soft);
+  color: var(--success);
 }
 .status-line-text {
   white-space: nowrap;
@@ -1156,22 +1376,26 @@ function onApplyDiff() {
   border-top: 1px solid var(--border);
   padding-top: 6px;
 }
-/* 思考/工具的折叠开关行（标题可点） */
+/* 思考/工具的折叠开关行（标题可点）：负外边距让文字仍与卡片内文左对齐 */
 .agent-sub-toggle {
   display: inline-flex;
   align-items: center;
   gap: 5px;
   align-self: flex-start;
+  margin-left: -6px;
+  padding: 2px 6px;
   border: none;
+  border-radius: 6px;
   background: transparent;
-  padding: 0;
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 600;
   color: var(--text-tertiary);
   cursor: pointer;
+  transition: background 0.16s var(--ease), color 0.16s var(--ease);
 }
 .agent-sub-toggle:hover {
   color: var(--text-secondary);
+  background: var(--panel-bg);
 }
 /* 字段小提示：悬浮弹出解释气泡 */
 .field-tip {
@@ -1182,8 +1406,9 @@ function onApplyDiff() {
   font-size: 9px;
   font-weight: 500;
   padding: 1px 5px;
+  border: 1px solid var(--border);
   border-radius: 6px;
-  background: var(--surface-soft);
+  background: var(--panel-bg);
   color: var(--text-tertiary);
   cursor: help;
 }
@@ -1209,18 +1434,33 @@ function onApplyDiff() {
   z-index: 30;
   opacity: 0;
   visibility: hidden;
-  transition: opacity 0.15s ease, visibility 0.15s ease;
+  transform: translate(-50%, 4px);
+  transition:
+    opacity 0.16s var(--ease),
+    transform 0.16s var(--ease),
+    visibility 0.16s var(--ease);
   pointer-events: none;
 }
 .field-tip:hover .tip-bubble {
   opacity: 1;
   visibility: visible;
+  transform: translate(-50%, 0);
 }
 .agent-body {
   display: flex;
   flex-direction: column;
   gap: 6px;
   margin-top: 2px;
+}
+/* 折叠内容出现时轻轻下落，减少"凭空冒出来"的生硬感 */
+.agent-think,
+.agent-markdown,
+.steps,
+.searches,
+.question-archive,
+.agent-answer,
+.diag-pending {
+  animation: block-reveal 0.22s var(--ease) both;
 }
 /* 诊断思考正文：正常字体，与步骤区分 */
 .agent-think {
@@ -1248,6 +1488,103 @@ function onApplyDiff() {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+/* 诊断结论占位：思考阶段占住「诊断结论」的位置，扫光 + 跳动圆点表示还在诊断 */
+.diag-pending {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 10px 12px;
+  overflow: hidden;
+  border: 1px dashed var(--primary-soft);
+  border-radius: var(--radius-md);
+  background: var(--primary-faint);
+  color: var(--primary-hover);
+  font-size: 13px;
+}
+.diag-pending::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 25%,
+    rgba(71, 83, 199, 0.1) 50%,
+    transparent 75%
+  );
+  transform: translateX(-100%);
+  animation: diag-pending-scan 1.8s ease-in-out infinite;
+  pointer-events: none;
+}
+/* 文字压在扫描光带上面 */
+.diag-pending-icon,
+.diag-pending-text,
+.diag-pending-dots {
+  position: relative;
+  z-index: 1;
+}
+.diag-pending-icon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-size: 12px;
+  line-height: 1;
+  animation: diag-pending-breathe 1.8s ease-in-out infinite;
+}
+.diag-pending-text {
+  font-weight: 600;
+}
+.diag-pending-dots {
+  display: inline-flex;
+  gap: 3px;
+}
+.diag-pending-dots i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--primary);
+  opacity: 0.25;
+  animation: diag-pending-dot 1.2s ease-in-out infinite;
+}
+.diag-pending-dots i:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.diag-pending-dots i:nth-child(3) {
+  animation-delay: 0.4s;
+}
+@keyframes diag-pending-scan {
+  to {
+    transform: translateX(100%);
+  }
+}
+@keyframes diag-pending-breathe {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(71, 83, 199, 0);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(71, 83, 199, 0.14);
+  }
+}
+@keyframes diag-pending-dot {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+
 /* 诊断结论入口：整宽按钮，呼吸闪烁提示可点，点开是大弹窗 */
 .diag-entry {
   display: flex;
@@ -1263,11 +1600,13 @@ function onApplyDiff() {
   font: inherit;
   text-align: left;
   cursor: pointer;
-  animation: diag-breathe 2.4s ease-in-out infinite;
+  animation: diag-breathe 2.6s ease-in-out infinite;
+  transition: border-color 0.16s var(--ease), transform 0.16s var(--ease);
 }
 .diag-entry:hover {
   border-color: var(--primary);
   background: var(--primary-faint);
+  transform: translateY(-1px);
 }
 .diag-entry-icon {
   flex: none;
@@ -1299,19 +1638,25 @@ function onApplyDiff() {
   flex-wrap: wrap;
 }
 .diag-entry-action {
+  display: inline-flex;
+  align-items: center;
   margin-left: auto;
   font-size: 11.5px;
   font-weight: 600;
   color: var(--primary);
   white-space: nowrap;
+  transition: transform 0.16s var(--ease);
+}
+.diag-entry:hover .diag-entry-action {
+  transform: translateX(2px);
 }
 @keyframes diag-breathe {
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgba(75, 107, 94, 0);
+    box-shadow: 0 0 0 0 rgba(71, 83, 199, 0);
   }
   50% {
-    box-shadow: 0 0 0 4px rgba(75, 107, 94, 0.16);
+    box-shadow: 0 0 0 4px rgba(71, 83, 199, 0.14);
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1323,8 +1668,8 @@ function onApplyDiff() {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 21px;
+  height: 21px;
   border-radius: 50%;
   background: var(--primary);
   color: #fff;
@@ -1360,8 +1705,8 @@ function onApplyDiff() {
   color: var(--warning);
 }
 .diag-chip.done {
-  background: var(--primary-soft);
-  color: var(--primary);
+  background: var(--success-soft);
+  color: var(--success);
 }
 .diag-chip.failed {
   background: var(--danger-soft);
@@ -1382,7 +1727,7 @@ function onApplyDiff() {
 .diag-modal-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 9px;
   max-height: 68vh;
   overflow-y: auto;
   padding-right: 4px;
@@ -1399,12 +1744,32 @@ function onApplyDiff() {
 }
 .diag-item {
   position: relative;
-  padding: 10px 12px 10px 15px;
+  padding: 11px 13px 11px 16px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 9px;
   background: var(--surface-soft);
   font-size: 12px;
   line-height: 1.6;
+  animation: diag-item-in 0.28s var(--ease) both;
+}
+/* 列表出现时按顺序轻微错峰，长列表也不会"整块砸下来" */
+.diag-item:nth-child(2) {
+  animation-delay: 0.03s;
+}
+.diag-item:nth-child(3) {
+  animation-delay: 0.06s;
+}
+.diag-item:nth-child(4) {
+  animation-delay: 0.09s;
+}
+.diag-item:nth-child(5) {
+  animation-delay: 0.12s;
+}
+.diag-item:nth-child(6) {
+  animation-delay: 0.15s;
+}
+.diag-item:nth-child(n + 7) {
+  animation-delay: 0.18s;
 }
 /* 左侧状态色条：扫一眼就知道哪几处要改 / 已改 / 未执行 */
 .diag-item::before {
@@ -1421,7 +1786,7 @@ function onApplyDiff() {
   background: var(--warning);
 }
 .diag-item.s-done::before {
-  background: var(--primary);
+  background: var(--success);
 }
 .diag-item.s-failed::before {
   background: var(--danger);
@@ -1477,8 +1842,8 @@ function onApplyDiff() {
   color: var(--warning);
 }
 .diag-status.done {
-  background: var(--primary-soft);
-  color: var(--primary);
+  background: var(--success-soft);
+  color: var(--success);
 }
 .diag-status.failed {
   background: var(--danger-soft);
@@ -1626,13 +1991,16 @@ function onApplyDiff() {
   display: flex;
   flex-direction: column;
   gap: 1px;
-  padding-left: 12px;
+  padding: 2px 6px 2px 10px;
   color: inherit;
   text-decoration: none;
   border-left: 2px solid transparent;
+  border-radius: 0 6px 6px 0;
+  transition: background 0.16s var(--ease), border-color 0.16s var(--ease);
 }
 .search-result:hover {
-  border-left-color: var(--primary-soft);
+  border-left-color: var(--primary);
+  background: var(--panel-bg);
 }
 .search-title {
   color: var(--text-secondary);
@@ -1674,6 +2042,10 @@ function onApplyDiff() {
   flex-wrap: wrap;
   column-gap: 6px;
 }
+.tool-name {
+  color: var(--text-secondary);
+  font-weight: 600;
+}
 .tool-result {
   padding-left: 12px;
   color: var(--text-tertiary);
@@ -1692,6 +2064,7 @@ function onApplyDiff() {
   background: var(--primary);
   color: #fff;
   border-bottom-right-radius: 4px;
+  box-shadow: 0 8px 18px -12px rgba(71, 83, 199, 0.55);
 }
 .from-ai .bubble {
   background: var(--surface-soft);
@@ -1712,62 +2085,224 @@ function onApplyDiff() {
   display: flex;
   align-items: flex-end;
   gap: 8px;
-  padding: 10px 16px;
+  padding: 12px 16px 14px;
   border-top: 1px solid var(--border);
+  background: var(--panel-bg);
 }
+/* 输入框平时是浅灰内衬，聚焦时变纯白并亮起一圈靛蓝柔光 */
 .chat-input :deep(.n-input) {
   flex: 1;
+  border-radius: 11px;
+  background-color: var(--surface-soft);
+  transition: background-color 0.2s var(--ease), box-shadow 0.2s var(--ease);
+}
+.chat-input :deep(.n-input--focus) {
+  background-color: var(--panel-bg);
+  box-shadow: 0 0 0 3px rgba(71, 83, 199, 0.1);
 }
 
 /* ---- 提示词增强 ---- */
 .enhance-loading {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 16px 0;
-  font-size: 12px;
-  color: var(--text-secondary);
+  gap: 7px;
+  padding: 8px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--primary-faint);
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--primary-hover);
+  animation: block-reveal 0.2s var(--ease) both;
+}
+/* 增强提示条自带一条上边线，紧跟其后的输入区不再重复画线 */
+.enhance-loading + .chat-input {
+  border-top: none;
 }
 .enhance-btn {
   align-self: flex-end;
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
+  transition: color 0.16s var(--ease);
+}
+.enhance-btn:not(:disabled):hover {
+  color: var(--primary);
 }
 .enhance-icon {
   width: 18px;
   height: 18px;
+  transition: transform 0.3s var(--ease);
+}
+.enhance-btn:not(:disabled):hover .enhance-icon {
+  transform: rotate(14deg) scale(1.08);
+}
+
+/* 增强前后对比：左 = 原文（安静），右 = 增强结果（靛蓝强调），中间一支箭头 */
+.enhance-modal-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.enhance-modal-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 21px;
+  height: 21px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: #fff;
+  font-size: 11px;
+  line-height: 1;
+}
+.enhance-modal-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
 }
 .enhance-compare {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) 28px minmax(0, 1fr);
+  gap: 10px;
+  align-items: stretch;
 }
 .enhance-col {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
+  background: var(--panel-bg);
+}
+.enhance-col.before {
   background: var(--surface-soft);
+  animation: enhance-col-left 0.34s var(--ease) both;
+}
+.enhance-col.after {
+  border-color: var(--primary-soft);
+  background: var(--panel-bg);
+  box-shadow: 0 12px 30px -24px rgba(71, 83, 199, 0.5);
+  animation: enhance-col-right 0.34s var(--ease) 0.05s both;
 }
 .enhance-col-head {
-  padding: 6px 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
   border-bottom: 1px solid var(--border);
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 600;
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
+}
+.enhance-col.after .enhance-col-head {
+  border-bottom-color: var(--primary-soft);
+  background: var(--primary-faint);
+  color: var(--primary-hover);
+}
+.enhance-col-icon {
+  color: var(--primary);
+  font-size: 10px;
+  line-height: 1;
 }
 .enhance-text {
-  max-height: 48vh;
+  max-height: 46vh;
   overflow: auto;
-  padding: 12px;
+  padding: 12px 14px;
   font-size: 13px;
-  line-height: 1.7;
-  color: var(--text);
+  line-height: 1.75;
+  color: var(--text-secondary);
   white-space: pre-wrap;
   word-break: break-word;
+}
+.enhance-col.after .enhance-text {
+  color: var(--text);
+}
+.enhance-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--primary);
+  animation: arrow-fade 0.3s var(--ease) 0.12s both;
+}
+.enhance-arrow svg {
+  width: 18px;
+  height: 18px;
 }
 .enhance-actions {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+@media (max-width: 640px) {
+  .enhance-compare {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+  /* 只转箭头本身，整行宽度保持正常，避免旋转后的元素撑出弹窗 */
+  .enhance-arrow svg {
+    transform: rotate(90deg);
+  }
+  .enhance-text {
+    max-height: 32vh;
+  }
+}
+
+/* ---- 对话栏动效：新消息落下、折叠内容展开、弹窗内容分段出现 ---- */
+@keyframes msg-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes block-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes diag-item-in {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes enhance-col-left {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes enhance-col-right {
+  from {
+    opacity: 0;
+    transform: translateX(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes arrow-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 0.6;
+  }
 }
 </style>

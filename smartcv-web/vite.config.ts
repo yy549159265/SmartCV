@@ -12,7 +12,7 @@ import vue from '@vitejs/plugin-vue'
 // 注意：Windows 的 Hyper-V/WSL 会预留一些动态端口段，落在里面的端口 bind 会报
 // WinError 10013（不是端口被占用）。查当前预留段：
 //   netsh interface ipv4 show excludedportrange protocol=tcp
-const apiPort = process.env.SMARTCV_API_PORT ?? '8700'
+const apiPort = process.env.SMARTCV_API_PORT ?? '9000'
 
 export default defineConfig({
   plugins: [vue()],

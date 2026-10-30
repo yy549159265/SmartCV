@@ -104,10 +104,18 @@ def _diagnosis_items(structured) -> list[dict]:
     return result
 
 
-async def run(llm, markdown: str, jd: str, question: str, session_id: str | None = None) -> list[dict]:
+async def run(
+    llm,
+    markdown: str,
+    jd: str,
+    question: str,
+    session_id: str | None = None,
+    history: str = "",
+) -> list[dict]:
     """跑诊断 agent：发 agent_start → 思考流式 delta → diagnosis 事件 → agent_end。
 
     返回结构化诊断项列表；每项含位置、原文片段、原因、依据和修改方向。
+    history 是上一轮的修改总结（可能为空），用于「重新生成 / 刚才那处」这类追问。
     """
     writer = get_stream_writer()
     writer({"type": "agent_start", "agent": "diagnose", "label": "诊断 agent"})
@@ -117,7 +125,9 @@ async def run(llm, markdown: str, jd: str, question: str, session_id: str | None
 
     # 输入按类型分块，每块用 <> 标签包裹（system_prompt_diagnose.md 有对应说明）
     jd_block = f"<JD>\n{jd}\n</JD>\n\n" if (jd or "").strip() else ""
+    history_block = f"<上一轮>\n{history.strip()}\n</上一轮>\n\n" if (history or "").strip() else ""
     message = (
+        f"{history_block}"
         f"<简历>\n{markdown}\n</简历>\n\n"
         f"{jd_block}"
         f"<修改要求>\n{question}\n</修改要求>"

@@ -155,7 +155,7 @@ export const useOptimizeStore = defineStore('optimize', {
       const provider = getProviderSettings()
       const missing = missingProviderFields(provider)
       if (missing.length) {
-        this.messages.push({ kind: 'error', text: `⚠️ 请先在「供应商设置」填齐：${missing.join('、')}` })
+        this.messages.push({ kind: 'error', text: `⚠️ 请先在「高级设置」填齐：${missing.join('、')}` })
         return
       }
 

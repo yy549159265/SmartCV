@@ -4,30 +4,32 @@
  * 以及 Markdown 渲染内容的通用样式（.md-body）。
  * 各组件自己的样式写在各自的 <style scoped> 里。
  *
- * 视觉基调：瓷白纸面 + 苔绿墨色。扁平、少阴影，用极细的线
+ * 视觉基调：冷灰底 + 靛蓝主色。扁平、少阴影，用极细的线
  * 和极浅的色阶区分层级，让 A4 纸面成为页面上唯一"有厚度"的东西。
  * ============================================================ */
 
 :root {
   /* ---------- 色板 ---------- */
-  --app-bg: #f2f3f0; /* 瓷白带一点灰绿，不是暖奶油色 */
+  --app-bg: #f6f7f9; /* 冷灰白，偏蓝一点，不是暖奶油色 */
   --panel-bg: #ffffff; /* 纸面 */
-  --surface-soft: #f7f8f5; /* 次级面：工具条、卡片内衬 */
-  --surface-sunken: #eaede7; /* 凹陷面：画布、胶片底 */
-  --border: #e3e6df; /* 发丝线 */
-  --border-strong: #d2d7cf;
-  --text: #242a26; /* 墨绿黑，不用纯黑 */
-  --text-secondary: #5f6862;
-  --text-tertiary: #8b938c;
-  --primary: #4b6b5e; /* 苔绿：低饱和、偏深 */
-  --primary-hover: #3e5a4f;
-  --primary-soft: #e8efea;
-  --primary-faint: #f1f5f2;
+  --surface-soft: #f4f5f8; /* 次级面：工具条、卡片内衬 */
+  --surface-sunken: #eceef3; /* 凹陷面：画布、胶片底 */
+  --border: #e4e6ec; /* 发丝线 */
+  --border-strong: #d3d6df;
+  --text: #1c2130; /* 蓝墨黑，不用纯黑 */
+  --text-secondary: #596175;
+  --text-tertiary: #8a91a6;
+  --primary: #4753c7; /* 靛蓝：低饱和、偏深 */
+  --primary-hover: #3c46b2;
+  --primary-soft: #eceffb;
+  --primary-faint: #f4f5fc;
   --danger: #a94f4a;
   --danger-soft: #f7eae9;
   --warning: #a6763f;
   --warning-soft: #f6efe4;
-  --focus-ring: rgba(75, 107, 94, 0.32);
+  --success: #3f8f5a; /* 完成 / 通过：与对比标记的新增绿保持一致 */
+  --success-soft: #edf4ef;
+  --focus-ring: rgba(71, 83, 199, 0.35);
 
   /* ---------- 形状 ---------- */
   --radius-lg: 14px;
@@ -35,10 +37,25 @@
   --radius-sm: 7px;
   /* 只有纸面配得上阴影：极浅的接触影 + 很长很淡的环境影 */
   --shadow-paper:
-    0 1px 2px rgba(36, 42, 38, 0.04),
-    0 18px 40px -24px rgba(36, 42, 38, 0.24);
-  --shadow-raised: 0 10px 30px -18px rgba(36, 42, 38, 0.25);
+    0 1px 2px rgba(28, 33, 48, 0.04),
+    0 18px 40px -24px rgba(28, 33, 48, 0.2);
+  --shadow-raised: 0 10px 30px -18px rgba(28, 33, 48, 0.22);
   --ease: cubic-bezier(0.2, 0.7, 0.3, 1);
+
+  /* ---------- 简历纸张展示区（「当前简历」与「实时预览」共用） ----------
+     中性浅灰工作区 + 纯白 A4 纸。两个页面的背景、纸张、留白、
+     多页间距全部走这几个变量，避免各写一套导致观感不一致。 */
+  --doc-workspace: #e9ecf1; /* 工作区底色：均匀纯色，不用渐变 */
+  --doc-workspace-pad: 28px 24px 64px; /* 纸张四周留白（顶部略小、底部多留） */
+  --doc-page-gap: 32px; /* 多页之间的垂直间距 */
+  --doc-paper: #ffffff; /* 纸张始终纯白 */
+  /* 发丝环（边界）+ 接触影 + 中距影 + 环境影：只画在纸外，不占布局、不进导出。
+     用户要求阴影更有存在感：加一层中距影，并抬高各层透明度。 */
+  --doc-paper-shadow:
+    0 0 0 1px rgba(28, 33, 48, 0.07),
+    0 2px 6px rgba(28, 33, 48, 0.08),
+    0 10px 20px -8px rgba(28, 33, 48, 0.16),
+    0 24px 48px -16px rgba(28, 33, 48, 0.24);
 
   /* ---------- 字体 ---------- */
   /* 正文沿用系统字体：预览/PDF 也继承它，不能随意更换 */
@@ -76,14 +93,22 @@ button {
   font-family: inherit;
 }
 
-/* 键盘焦点：统一一圈柔和的苔绿光晕，不改变任何盒子尺寸 */
+/* 键盘焦点：统一一圈柔和的靛蓝光晕，不改变任何盒子尺寸 */
 :where(a, button, [role='button'], [tabindex]):focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
 ::selection {
-  background: rgba(75, 107, 94, 0.18);
+  background: rgba(71, 83, 199, 0.16);
+}
+
+/* 用户气泡是深色靛蓝底，上面那层半透明蓝选区与底色几乎重合、看不出选中范围，
+   这里换成白底深字（气泡里的文字一律白色，选中后反而更清楚） */
+.from-user .bubble::selection,
+.from-user .bubble *::selection {
+  background: #fff;
+  color: var(--primary);
 }
 
 /* ============================================================
@@ -102,7 +127,7 @@ button {
   padding-left: 1.4em;
 }
 .md-body code {
-  background: rgba(95, 104, 98, 0.1);
+  background: rgba(89, 97, 117, 0.1);
   padding: 1px 5px;
   border-radius: 4px;
   font-size: 0.9em;
@@ -163,13 +188,13 @@ button {
   height: 10px;
 }
 ::-webkit-scrollbar-thumb {
-  background: #cfd4cc;
+  background: #c6cbd8;
   border: 3px solid transparent;
   border-radius: 999px;
   background-clip: content-box;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #b5bcb3;
+  background: #aeb5c6;
   border: 3px solid transparent;
   background-clip: content-box;
 }
@@ -199,8 +224,8 @@ button {
   box-shadow: -3px 0 0 0 var(--diff-color);
 }
 [data-diff='added'] {
-  --diff-color: #4b6b5e;
-  --diff-bg: rgba(75, 107, 94, 0.12);
+  --diff-color: #3f8f5a;
+  --diff-bg: rgba(63, 143, 90, 0.12);
 }
 [data-diff='removed'] {
   --diff-color: #a94f4a;
@@ -214,8 +239,8 @@ button {
 
 /* 用户在对比弹窗里点了 ←「还原」：这处已经用回修改前的内容（绿色） */
 [data-diff='restored'] {
-  --diff-color: #4b6b5e;
-  --diff-bg: rgba(75, 107, 94, 0.1);
+  --diff-color: #3f8f5a;
+  --diff-bg: rgba(63, 143, 90, 0.1);
   text-decoration: none;
 }
 
@@ -264,10 +289,10 @@ button {
 @keyframes preview-flash {
   0%,
   100% {
-    outline-color: rgba(75, 107, 94, 0.12);
+    outline-color: rgba(71, 83, 199, 0.12);
   }
   50% {
-    outline-color: rgba(75, 107, 94, 0.9);
+    outline-color: rgba(71, 83, 199, 0.9);
   }
 }
 

@@ -1,5 +1,5 @@
 /**
- * 读取"供应商设置"页保存的配置（localStorage，key 与 ProviderSettingsPage 一致）。
+ * 读取「高级设置」页保存的配置（localStorage，key 与 ProviderSettingsPage 一致）。
  * 所有 AI 请求（上传解析 / 润色 / 对话）都带上它，后端据此调 LLM。
  */
 export interface ProviderSettings {

@@ -72,8 +72,9 @@ export function buildResumeHtml(flowEl: HTMLElement): string {
 /**
  * 调后端生成 PDF 并触发下载。
  * 后端成功返回 PDF 二进制；失败返回 { code, message, data } JSON（错误取 message）。
+ * filename 只传文件名主干（不带 .pdf 后缀），必须是调用方清洗过的安全字符串。
  */
-export async function exportResumePdf(flowEl: HTMLElement): Promise<void> {
+export async function exportResumePdf(flowEl: HTMLElement, filename = 'smartcv-resume'): Promise<void> {
   const html = buildResumeHtml(flowEl)
 
   const res = await apiFetch('/api/resume/pdf', {
@@ -87,7 +88,7 @@ export async function exportResumePdf(flowEl: HTMLElement): Promise<void> {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = 'smartcv-resume.pdf'
+  a.download = `${filename}.pdf`
   a.click()
   URL.revokeObjectURL(url)
 }

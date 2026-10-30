@@ -193,5 +193,5 @@ if __name__ == "__main__":
     import uvicorn
 
     # PyCharm 调试入口；debug 时别开 reload —— reload 会另起子进程，断点进不去。
-    port = int(os.getenv("SMARTCV_API_PORT", "8700"))
+    port = int(os.getenv("SMARTCV_API_PORT", "9000"))
     uvicorn.run("main:app", host="127.0.0.1", port=port, reload=False)

@@ -15,6 +15,7 @@ import { onKeyStroke } from '@vueuse/core'
 import { VueDraggable } from 'vue-draggable-plus'
 import SectionCard from './SectionCard.vue'
 import BrandMark from './BrandMark.vue'
+import IconGlyph from './IconGlyph.vue'
 import { useResumeStore } from '@/stores/resume'
 import { createSectionFromPreset } from '@/data/presets'
 import { message } from '@/utils/feedback'
@@ -87,14 +88,9 @@ onKeyStroke('Delete', () => {
 <template>
   <section class="canvas">
     <div class="canvas-toolbar">
+      <span class="canvas-title-icon"><IconGlyph name="pen-line" :size="15" /></span>
       <span class="canvas-title">编辑画布</span>
-      <span class="canvas-hint">从左侧拖入内容，拖动 ⋮⋮ 手柄排序</span>
-      <!-- 快捷键提示（见 main.ts 里的 keydown 监听）：靠 spacer 推到工具栏最右 -->
-      <span class="canvas-spacer" />
-      <span class="canvas-key-hint">
-        <span><kbd>Ctrl</kbd>+<kbd>Z</kbd> 撤回</span>
-        <span><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> 还原</span>
-      </span>
+      <span class="canvas-hint">从上方组件库点击添加，或拖到指定位置；拖动 ⋮⋮ 手柄排序</span>
     </div>
 
     <div class="canvas-scroll">
@@ -118,7 +114,7 @@ onKeyStroke('Delete', () => {
             <BrandMark :size="36" class="canvas-empty-mark" />
             <p>
               画布是空的<br />
-              从左侧拖一个章节到这里
+              从上方组件库点击或拖入章节开始
             </p>
           </div>
 
@@ -135,26 +131,41 @@ onKeyStroke('Delete', () => {
 .canvas {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  /* 占满组件库下方的剩余高度；min-height: 0 让内部滚动区能收缩并出现滚动条 */
+  flex: 1;
+  min-height: 0;
   min-width: 0;
   background: var(--surface-sunken);
   /* 只作为容器查询的参照，不影响列宽（列宽由拖动分隔条决定） */
   container-type: inline-size;
 }
 
+/* 画布工具栏：与组件库面板头部同款格式（图标块 + 粗标题 + 说明） */
 .canvas-toolbar {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 16px;
+  gap: 8px;
+  height: 40px;
+  padding: 0 14px;
   background: var(--panel-bg);
   border-bottom: 1px solid var(--border);
 }
+.canvas-title-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: var(--primary-soft);
+  color: var(--primary);
+}
 .canvas-title {
   flex: none;
-  font-weight: 600;
-  font-size: 13px;
-  white-space: nowrap;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
   color: var(--text);
 }
 .canvas-hint {
@@ -165,41 +176,6 @@ onKeyStroke('Delete', () => {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-}
-
-/* 把右侧的快捷键提示推到工具栏最右 */
-.canvas-spacer {
-  flex: 1;
-}
-
-.canvas-key-hint {
-  flex: none;
-  display: flex;
-  gap: 12px;
-  font-size: 11px;
-  color: var(--text-tertiary);
-  white-space: nowrap;
-}
-.canvas-key-hint kbd {
-  display: inline-block;
-  min-width: 16px;
-  margin: 0 2px;
-  padding: 1px 5px;
-  font-family: inherit;
-  font-size: 10.5px;
-  line-height: 1.5;
-  text-align: center;
-  color: var(--text-secondary);
-  background: var(--surface-soft);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-}
-
-/* 画布列被拖窄时，先让快捷键提示让位，标题与拖拽说明不折行 */
-@container (max-width: 620px) {
-  .canvas-key-hint {
-    display: none;
-  }
 }
 
 .canvas-scroll {

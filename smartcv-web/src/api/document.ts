@@ -65,7 +65,7 @@ export async function parseResumeFile(
   const p = getProviderSettings()
   const missing = missingProviderFields(p)
   if (missing.length) {
-    throw new Error(`请先在「供应商设置」填齐：${missing.join('、')}`)
+    throw new Error(`请先在「高级设置」填齐：${missing.join('、')}`)
   }
 
   // 文件大小限制 5MB（与后端一致），前端先拦，省得上传大文件

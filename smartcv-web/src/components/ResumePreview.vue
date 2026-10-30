@@ -11,7 +11,7 @@
  */
 import { computed, nextTick, ref, watch } from 'vue'
 import { usePagination } from '@/composables/usePagination'
-import { previewZoom, ZOOM_LEVELS } from '@/composables/usePreviewZoom'
+import { previewZoom } from '@/composables/usePreviewZoom'
 import { CONTENT_WIDTH, PAGE_HEIGHT, PAGE_PADDING, PAGE_WIDTH } from '@/utils/constants'
 import { pageRunSpecs, type PageUnit, type RunSpec } from '@/utils/pagination'
 import PreviewSection from './PreviewSection.vue'
@@ -83,17 +83,7 @@ watch(
         {{ store.pagePlan.pages.length }} 页
       </n-tag>
       <div class="preview-spacer" />
-      <n-button-group size="tiny">
-        <n-button
-          v-for="z in ZOOM_LEVELS"
-          :key="z"
-          :type="previewZoom === z ? 'primary' : 'default'"
-          ghost
-          @click="previewZoom = z"
-        >
-          {{ Math.round(z * 100) }}%
-        </n-button>
-      </n-button-group>
+      <span class="preview-zoom-hint">缩放 {{ Math.round(previewZoom * 100) }}%（顶部工具栏调整）</span>
     </div>
 
     <div class="preview-scroll">
@@ -161,12 +151,19 @@ watch(
 .preview-spacer {
   flex: 1;
 }
+.preview-zoom-hint {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
 
 .preview-scroll {
   flex: 1;
   overflow: auto;
-  padding: 20px 12px 60px;
+  padding: var(--doc-workspace-pad);
   position: relative;
+  /* 工作区：均匀中性浅灰，与纯白纸张形成清晰对比（与「当前简历」同款） */
+  background: var(--doc-workspace);
 }
 
 /* 隐藏测量层：移出可视区域，不影响滚动布局 */
@@ -181,14 +178,14 @@ watch(
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 24px;
+  gap: var(--doc-page-gap);
 }
 
 .a4-page {
   position: relative;
-  background: #fff;
-  /* 纸张是界面上唯一有高度感的面，投影保持很淡（不描边，避免影响导出截图） */
-  box-shadow: var(--shadow-paper);
+  background: var(--doc-paper);
+  /* 发丝边界 + 两层柔和投影：范围大、透明度低，纸张自然浮起但不是弹窗 */
+  box-shadow: var(--doc-paper-shadow);
 }
 
 .page-number {

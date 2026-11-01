@@ -269,16 +269,36 @@ const polishInputRef = ref<{ focus: () => void } | null>(null)
 /** 卡片润色只提供这两档；enhance 是「诊断简历」输入框的提示词增强，不在这里选 */
 type ContentPolishMode = 'strict' | 'free'
 const polishMode = ref<ContentPolishMode>('strict')
-/** 每个模式的一句话说明，直接展示给用户，避免只看到名字猜不出差别 */
-const POLISH_MODE_HINTS: Record<ContentPolishMode, string> = {
-  strict: '严格按规则改写，只优化表达，不改变原文内容',
-  free: '像直接问 AI 一样自由发挥，可大幅重写、补充数据',
+
+/** 模式分段胶囊：一句话说明放悬停提示里，界面不占常驻文字 */
+const POLISH_MODES: { key: ContentPolishMode; label: string; hint: string }[] = [
+  { key: 'strict', label: '严谨', hint: '只重构表达，保留原句式，不新增任何数据' },
+  { key: 'free', label: '自由', hint: '可大幅重写、扩写、补充术语；不勾「补充量化数据」就不会编造数字' },
+]
+
+/** 预设润色方向（多选药丸）：发送时拼进 <要求> 传给后端，方向逻辑不写死在后端 */
+const POLISH_DIRECTIONS: { key: string; label: string; text: string }[] = [
+  { key: 'impact', label: '突出成果', text: '突出成果与业务价值' },
+  { key: 'tech', label: '技术深度', text: '突出技术深度与方案设计' },
+  { key: 'terms', label: '专业术语', text: '补充行业术语，提升专业密度' },
+  { key: 'concise', label: '精简表达', text: '压缩篇幅，去掉冗余修饰' },
+  { key: 'quant', label: '补充量化数据', text: '允许补充量化数据（可用具体数值或 XX 占位）' },
+]
+
+/** 已选方向 key（多选药丸状态；与模式一样保留，不随取消重置） */
+const polishDirs = ref<string[]>([])
+
+function togglePolishDir(key: string) {
+  const i = polishDirs.value.indexOf(key)
+  if (i >= 0) polishDirs.value.splice(i, 1)
+  else polishDirs.value.push(key)
 }
-/** 思路输入框的提示语：自由模式鼓励写具体要求；不写就让模型自由发挥 */
+
+/** 思路输入框的提示语：方向可多选，思路始终可选填 */
 const polishPlaceholder = computed(() =>
-  polishMode.value === 'free'
-    ? '写下你的润色要求，不写则由 AI 自由发挥'
-    : '输入你想润色的思路，可以不写',
+  polishDirs.value.length > 0
+    ? '可选：补充更具体的润色要求'
+    : '可选：写点润色要求，不写则按默认规则处理',
 )
 
 /** 当前内容是否有可润色的文字（一个字没写就别润色了） */
@@ -304,11 +324,19 @@ function cancelPolish() {
   polishDescription.value = ''
 }
 
-/** 发送：带着用户填的思路（可为空）与所选模式发起润色；列表型/图标文字型各走各的写回逻辑 */
+/**
+ * 发送：把「预设方向 + 用户思路」拼成 <要求> 文字交给后端，后端只负责执行。
+ * 模式与所选方向保留（下次打开还用上次的），只清空思路输入。
+ */
 async function sendPolish() {
-  const description = polishDescription.value.trim()
-  // 先取出模式：cancelPolish 会清空描述，但模式要保留
+  const parts: string[] = []
+  const dirs = POLISH_DIRECTIONS.filter((d) => polishDirs.value.includes(d.key))
+  if (dirs.length > 0) parts.push(`润色方向：${dirs.map((d) => d.text).join('、')}`)
+  const thought = polishDescription.value.trim()
+  if (thought) parts.push(`用户思路：${thought}`)
+  // 先取出模式与描述：cancelPolish 会清空描述，但模式/方向要保留
   const mode = polishMode.value
+  const description = parts.join('；')
   cancelPolish()
   // 输入区开着期间内容被清空了：静默返回（openPolish 已提示过，不再打扰）
   if (!polishable.value) return
@@ -460,18 +488,38 @@ function onRemove() {
       <template v-if="content.type === 'iconText'">
         <div class="icontext-toolbar">
           <span class="editor-hint">图标文字内容</span>
-          <n-button size="tiny" quaternary type="warning" @click.stop="openPolish">
+          <n-button size="tiny" quaternary class="polish-btn" @click.stop="openPolish">
+            <IconGlyph name="sparkles" :size="12" />
             润色
           </n-button>
         </div>
-        <!-- 润色思路输入区：点「润色」展开，写不写思路都能发送；取消则收起、不发请求 -->
+        <!-- 润色输入区：模式分段胶囊 + 方向多选药丸 + 可选思路（与样式面板同一套视觉语言） -->
         <div v-if="polishShow" class="polish-input">
-          <!-- 模式切换 + 一句话说明：让用户一眼看出两档的差别 -->
-          <n-radio-group v-model:value="polishMode" size="small">
-            <n-radio-button value="strict">严谨</n-radio-button>
-            <n-radio-button value="free">自由</n-radio-button>
-          </n-radio-group>
-          <div class="polish-mode-hint">{{ POLISH_MODE_HINTS[polishMode] }}</div>
+          <div class="polish-mode">
+            <button
+              v-for="m in POLISH_MODES"
+              :key="m.key"
+              type="button"
+              class="polish-mode-btn"
+              :class="{ active: polishMode === m.key }"
+              :title="m.hint"
+              @click="polishMode = m.key"
+            >
+              {{ m.label }}
+            </button>
+          </div>
+          <div class="polish-dirs">
+            <button
+              v-for="d in POLISH_DIRECTIONS"
+              :key="d.key"
+              type="button"
+              class="polish-dir-pill"
+              :class="{ on: polishDirs.includes(d.key) }"
+              @click="togglePolishDir(d.key)"
+            >
+              {{ d.label }}
+            </button>
+          </div>
           <n-input
             ref="polishInputRef"
             v-model:value="polishDescription"
@@ -482,8 +530,8 @@ function onRemove() {
             @keydown.enter.exact.prevent="sendPolish"
           />
           <div class="polish-input-actions">
-            <n-button size="tiny" type="primary" @click.stop="sendPolish">发送</n-button>
             <n-button size="tiny" quaternary @click.stop="cancelPolish">取消</n-button>
+            <n-button size="tiny" type="primary" @click.stop="sendPolish">润色</n-button>
           </div>
         </div>
         <div class="icontext-row">
@@ -637,18 +685,38 @@ function onRemove() {
             <n-radio-button value="ordered">数字列表</n-radio-button>
           </n-radio-group>
           <!-- 润色按钮：只有列表文字型提供 -->
-          <n-button size="tiny" quaternary type="warning" @click.stop="openPolish">
+          <n-button size="tiny" quaternary class="polish-btn" @click.stop="openPolish">
+            <IconGlyph name="sparkles" :size="12" />
             润色
           </n-button>
         </div>
-        <!-- 润色思路输入区：点「润色」展开，写不写思路都能发送；取消则收起、不发请求 -->
+        <!-- 润色输入区：模式分段胶囊 + 方向多选药丸 + 可选思路（与样式面板同一套视觉语言） -->
         <div v-if="polishShow" class="polish-input">
-          <!-- 模式切换 + 一句话说明：让用户一眼看出两档的差别 -->
-          <n-radio-group v-model:value="polishMode" size="small">
-            <n-radio-button value="strict">严谨</n-radio-button>
-            <n-radio-button value="free">自由</n-radio-button>
-          </n-radio-group>
-          <div class="polish-mode-hint">{{ POLISH_MODE_HINTS[polishMode] }}</div>
+          <div class="polish-mode">
+            <button
+              v-for="m in POLISH_MODES"
+              :key="m.key"
+              type="button"
+              class="polish-mode-btn"
+              :class="{ active: polishMode === m.key }"
+              :title="m.hint"
+              @click="polishMode = m.key"
+            >
+              {{ m.label }}
+            </button>
+          </div>
+          <div class="polish-dirs">
+            <button
+              v-for="d in POLISH_DIRECTIONS"
+              :key="d.key"
+              type="button"
+              class="polish-dir-pill"
+              :class="{ on: polishDirs.includes(d.key) }"
+              @click="togglePolishDir(d.key)"
+            >
+              {{ d.label }}
+            </button>
+          </div>
           <n-input
             ref="polishInputRef"
             v-model:value="polishDescription"
@@ -659,8 +727,8 @@ function onRemove() {
             @keydown.enter.exact.prevent="sendPolish"
           />
           <div class="polish-input-actions">
-            <n-button size="tiny" type="primary" @click.stop="sendPolish">发送</n-button>
             <n-button size="tiny" quaternary @click.stop="cancelPolish">取消</n-button>
+            <n-button size="tiny" type="primary" @click.stop="sendPolish">润色</n-button>
           </div>
         </div>
         <div class="list-items">
@@ -901,21 +969,79 @@ function onRemove() {
   color: var(--text-secondary);
 }
 
-/* 润色思路输入区：浅色底 + 虚线边框，和工具栏区分开（虚线暗示"可选填"） */
+/* 润色输入区：模式分段胶囊 + 方向多选药丸 + 思路输入，与样式面板同一套视觉语言 */
 .polish-input {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   padding: 8px;
-  border: 1px dashed rgba(166, 118, 63, 0.34);
-  border-radius: 6px;
-  background: var(--warning-soft);
+  border: 1px solid var(--border);
+  border-radius: 10px;
 }
-/* 模式说明小字：告诉用户当前这档到底做什么（只看到「严谨/深度」猜不出差别） */
-.polish-mode-hint {
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--warning);
+/* 润色触发按钮：图标与文字之间留一点间距 */
+.polish-btn :deep(.n-button__content) {
+  gap: 5px;
+}
+/* 模式分段胶囊：与工具栏缩放 / 样式选项卡同款分段样式 */
+.polish-mode {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+.polish-mode-btn {
+  flex: 1;
+  height: 24px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    background 0.14s var(--ease),
+    color 0.14s var(--ease);
+}
+.polish-mode-btn:hover {
+  color: var(--text);
+}
+.polish-mode-btn.active {
+  background: var(--panel-bg);
+  color: var(--primary);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(28, 33, 48, 0.08);
+}
+/* 预设润色方向：多选药丸（与样式面板的「跟随」药丸同规格） */
+.polish-dirs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.polish-dir-pill {
+  height: 22px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel-bg);
+  font-size: 11px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    border-color 0.14s var(--ease),
+    background 0.14s var(--ease),
+    color 0.14s var(--ease);
+}
+.polish-dir-pill:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.polish-dir-pill.on {
+  border-color: var(--primary);
+  background: var(--primary-faint);
+  color: var(--primary);
+  font-weight: 600;
 }
 .polish-input-actions {
   display: flex;

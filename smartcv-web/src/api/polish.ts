@@ -15,17 +15,19 @@ import { unwrap } from '@/api/error'
 import { apiFetch } from '@/api/http'
 
 /**
- * 润色模式（后端按它选用不同的系统提示词）：
- *  - strict  严谨：规则锁死，只重构表达，不改变原文内容
- *  - free    自由：像直接问 AI，模型自主判断怎么写最好，可补充数据，并优先遵循用户思路
+ * 润色模式（后端基础提示词只有一份 system_prompt_polish.md，模式规则在代码里追加）：
+ *  - strict  严谨：只重构表达，保留原句式，不新增任何数据
+ *  - free    自由：可大幅重写、扩写、补充术语；不主动补量化数据（除非 description 明确要求）
  *  - enhance 提示词增强：把口语化的修改要求改写成明确、可执行的提示词（可参考 JD）
- * 前两者差别在"改写自由度"；enhance 是另一种任务，但复用同一接口与返回结构。
+ * 润色方向 / 方式 / 是否补量化数据完全由前端决定：
+ * description 里拼好「润色方向：…；用户思路：…」传过去，后端只负责执行。
  */
 export type PolishMode = 'strict' | 'free' | 'enhance'
 
 /**
  * @param texts       待处理的文本（一行一条，返回顺序与之一致）
- * @param description 用户的润色描述/思路，可不填（空串时后端按默认规则润色）
+ * @param description 前端拼好的润色要求（预设方向 + 量化数据许可 + 用户思路），
+ *                    可不填（空串时后端只按模式规则润色）
  * @param mode        处理模式，默认 strict（严谨）；enhance = 提示词增强
  * @param context     参考材料（如 JD），可不填；只作上下文，不参与逐条改写
  */

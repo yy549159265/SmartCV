@@ -17,17 +17,42 @@ class PolishedItems(BaseModel):
 
 _PROMPT_DIR = Path(__file__).resolve().parent
 
-# 每种模式各对应一份系统提示词：
-#   strict  （严谨）——规则锁死：只重构表达，数字照用原文、不得凭空造数，克制、篇幅短
-#   free    （自由）——像直接问网页版 AI：自主判断怎么写最好，充分重写，可补充数据，按用户思路走
-#   enhance （提示词增强）——把用户口语化的修改需求改写成可执行的提示词，可参考 JD
-# 前两者差别在"改写自由度"；enhance 是另一种任务，输出仍是 {"items": [...]} 以复用同一接口。
-_MODE_PROMPTS = {
-    "strict": (_PROMPT_DIR / "system_prompt_polish_strict.md").read_text(encoding="utf-8"),
-    "free": (_PROMPT_DIR / "system_prompt_polish_free.md").read_text(encoding="utf-8"),
-    "enhance": (_PROMPT_DIR / "system_prompt_polish_enhance.md").read_text(encoding="utf-8"),
+# 基础提示词只有一份（system_prompt_polish.md，只写"执行框架"：
+# 输入结构、行为准则、输出格式、示例），模式规则在代码里追加 ——
+# 与 optimize 的 diagnose/optimize agent 同一套做法。
+#
+# 润色方向、润色方式、是否补充量化数据**完全由前端传入**（<要求> 区块），
+# 后端不写死任何方向。模式只决定"执行自由度"：
+#   strict  （严谨）——保留原句式、只做必要重构，事实与数字只能来自原文
+#   free    （自由）——可大幅重写、扩写、调详略；但不得自行补充量化数据，
+#                      除非 <要求> 明确要求（前端勾选「补充量化数据」才会出现）
+#   enhance （提示词增强）——独立任务（把口语化需求改写成可执行提示词），
+#            沿用独立 md，输出结构相同以复用同一接口。
+_SYSTEM_PROMPT = (_PROMPT_DIR / "system_prompt_polish.md").read_text(encoding="utf-8")
+_ENHANCE_PROMPT = (_PROMPT_DIR / "system_prompt_polish_enhance.md").read_text(encoding="utf-8")
+
+_MODE_RULES = {
+    "strict": (
+        "\n\n# 本次润色模式：严谨\n"
+        "保留原句式，只做必要重构；事实性数据（数字、规模、奖项等）只能来自原文，"
+        "不得补充或编造任何量化数据；输出长度与原文接近，不做大幅扩写。"
+    ),
+    "free": (
+        "\n\n# 本次润色模式：自由\n"
+        "可以大幅重组句式与结构、充分扩写、调整详略、补充行业术语，"
+        "结合上下文合理推断工作方式、协作角色与产出形态。"
+        "但除非 <要求> 明确要求，否则不得自行补充任何量化数据"
+        "（包括具体数值、百分比和 XX 占位）。"
+    ),
 }
 _DEFAULT_MODE = "strict"
+
+
+def _system_prompt(mode: str) -> str:
+    """基础提示词 + 模式规则；enhance 是独立任务，用单独一份提示词。"""
+    if mode == "enhance":
+        return _ENHANCE_PROMPT
+    return _SYSTEM_PROMPT + _MODE_RULES.get(mode, _MODE_RULES[_DEFAULT_MODE])
 
 # 系统提示词明确要求不要代码围栏，但个别模型仍会加上，解析前先剥掉
 _FENCE = re.compile(r"```(?:json)?\s*(.*?)```", re.S)
@@ -81,7 +106,7 @@ def run_polish_agent(
 ):
     llm = choose_llm(provider)
 
-    system_prompt = _MODE_PROMPTS.get(mode) or _MODE_PROMPTS[_DEFAULT_MODE]
+    system_prompt = _system_prompt(mode)
 
     structured_llm = llm.with_structured_output(
         PolishedItems,

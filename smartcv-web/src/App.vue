@@ -25,6 +25,21 @@ type PageKey = 'home' | 'editor' | 'optimize' | 'references' | 'provider'
 
 const currentPage = ref<PageKey>('home')
 
+/** 高级设置默认打开哪个标签；编辑页的简历库入口可以直接跳到「本地备份」 */
+const settingsTab = ref<'provider' | 'backup' | 'md'>('provider')
+
+/** 顶部导航：点「高级设置」总是回到 OpenAI 设置 */
+function onNav(page: PageKey) {
+  if (page === 'provider') settingsTab.value = 'provider'
+  currentPage.value = page
+}
+
+/** 编辑页 / 其他页面请求打开备份设置 */
+function openBackupSettings() {
+  settingsTab.value = 'backup'
+  currentPage.value = 'provider'
+}
+
 /** 「诊断简历 → 转换成优秀示例」带过来的简历 JSON：交给示例库页，消费后清空 */
 const examplePrefillJson = ref('')
 
@@ -59,7 +74,7 @@ const PAGES: { key: PageKey; label: string }[] = [
           :key="p.key"
           class="page-tab"
           :class="{ active: currentPage === p.key }"
-          @click="currentPage = p.key"
+          @click="onNav(p.key)"
         >
           {{ p.label }}
         </button>
@@ -79,7 +94,10 @@ const PAGES: { key: PageKey; label: string }[] = [
 
     <!-- 页面主体 -->
     <HomePage v-if="currentPage === 'home'" @enter="currentPage = 'editor'" />
-    <EditorPage v-else-if="currentPage === 'editor'" />
+    <EditorPage
+      v-else-if="currentPage === 'editor'"
+      @open-settings="openBackupSettings"
+    />
     <OptimizePage
       v-else-if="currentPage === 'optimize'"
       @open-library="currentPage = 'references'"
@@ -90,7 +108,7 @@ const PAGES: { key: PageKey; label: string }[] = [
       :prefill-json="examplePrefillJson"
       @prefill-consumed="examplePrefillJson = ''"
     />
-    <ProviderSettingsPage v-else />
+    <ProviderSettingsPage v-else :initial-tab="settingsTab" />
     </div>
   </n-config-provider>
 </template>

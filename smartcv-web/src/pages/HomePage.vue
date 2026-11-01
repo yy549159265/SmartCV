@@ -11,13 +11,16 @@
  * 页面结构：Hero（左文案 + 右真实渲染的 A4 演示简历）→ 三步流程 → 继续编辑 → 页脚。
  * Hero 右侧的演示简历是纯展示数据（data/heroResume.ts），直接走预览渲染链。
  */
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useElementSize, useStorage, useWindowSize } from '@vueuse/core'
 import { useResumeStore } from '@/stores/resume'
 import { useStatsStore } from '@/stores/stats'
+import { useDocumentsStore } from '@/stores/documents'
 import { parseResumeFile, type ParseProgress, type ParseStep } from '@/api/document'
 import { message } from '@/utils/feedback'
 import { PAGE_HEIGHT, PAGE_PADDING, PAGE_WIDTH } from '@/utils/constants'
+import { supportsDirectoryPicker } from '@/utils/fs/directoryHandle'
+import { formatRelativeTime } from '@/utils/time'
 import ExampleGallery from '@/components/ExampleGallery.vue'
 import PreviewSection from '@/components/PreviewSection.vue'
 import IconGlyph from '@/components/IconGlyph.vue'
@@ -25,6 +28,9 @@ import { heroResume } from '@/data/heroResume'
 
 const store = useResumeStore()
 const statsStore = useStatsStore()
+const documents = useDocumentsStore()
+/** 浏览器是否支持选择文件夹（Chrome / Edge） */
+const supportsFolder = supportsDirectoryPicker()
 
 /** 打开主页时拉一次导出统计（失败静默，不打扰） */
 onMounted(() => {
@@ -146,8 +152,11 @@ async function onDocChange(e: Event) {
       },
       abort.signal,
     )
-    const ok = store.importResume(data)
-    if (ok) {
+    // 绑定备份文件夹时，解析结果会写成一个新的 JSON 文件；
+    // 未绑定时只替换内存里的简历（和以前一样）
+    const title = file.name.replace(/\.[^.]+$/, '')
+    const result = await documents.createDocument(data, title)
+    if (result === 'ok') {
       message.success(`解析完成，已导入 ${store.resume.length} 个章节`)
       emit('enter')
     } else {
@@ -166,38 +175,88 @@ async function onDocChange(e: Event) {
 
 /* ---------- 导入 JSON ---------- */
 const jsonInputEl = ref<HTMLInputElement | null>(null)
+/** 「导入 JSON」下拉：绑定了备份文件夹时多一个「从备份文件夹打开」 */
+const jsonMenuShow = ref(false)
+/** 备份文件夹文件列表弹窗 */
+const showLibrary = ref(false)
 
 function pickJson() {
+  jsonMenuShow.value = false
   jsonInputEl.value?.click()
 }
 
-function onJsonChange(e: Event) {
+async function onJsonChange(e: Event) {
   const input = e.target as HTMLInputElement
   const file = input.files?.[0]
   input.value = '' // 允许重复导入同一个文件
   if (!file) return
-  const reader = new FileReader()
-  reader.onload = () => {
-    try {
-      const data = JSON.parse(String(reader.result))
-      const ok = store.importResume(data)
-      if (ok) {
-        message.success(`已导入：${store.resume.length} 个章节`)
-        emit('enter')
-      } else {
-        message.error('导入失败：JSON 格式不对（顶层需要是章节数组）')
-      }
-    } catch {
-      message.error('导入失败：文件不是合法的 JSON')
+  try {
+    const data = JSON.parse(await file.text())
+    const title = file.name.replace(/\.json$/i, '')
+    const result = await documents.createDocument(data, title, { conflict: 'ask' })
+    if (result === 'ok') {
+      message.success(`已导入：${store.resume.length} 个章节`)
+      emit('enter')
+    } else if (result === 'invalid') {
+      message.error('导入失败：JSON 格式不对（顶层需要是章节数组）')
     }
+  } catch {
+    message.error('导入失败：文件不是合法的 JSON')
   }
-  reader.readAsText(file)
+}
+
+/* ---------- 从备份文件夹打开 ---------- */
+
+const libraryStatusText = computed(() => {
+  switch (documents.status) {
+    case 'unsupported':
+      return '当前浏览器不支持文件夹'
+    case 'unbound':
+      return '尚未选择文件夹'
+    case 'needs-permission':
+      return '需要授权后才能读取'
+    case 'denied':
+      return '文件夹权限被拒绝'
+    default:
+      return `${documents.files.length} 份简历`
+  }
+})
+
+function openLibrary() {
+  jsonMenuShow.value = false
+  showLibrary.value = true
+}
+
+watch(showLibrary, (show) => {
+  if (show) void documents.refreshIfReady()
+})
+
+async function onLibraryAuthorize() {
+  const ok = await documents.ensurePermission()
+  if (ok) {
+    await documents.refreshFiles()
+    message.success('已获得文件夹读写权限')
+  } else {
+    message.warning('未获得文件夹权限，请在浏览器提示中允许后重试')
+  }
+}
+
+async function onRefreshLibrary() {
+  await documents.refreshFiles()
+}
+
+async function onOpenLibraryFile(name: string) {
+  const ok = await documents.openFile(name)
+  if (ok) {
+    showLibrary.value = false
+    emit('enter')
+  }
 }
 
 /* ---------- 新建 ---------- */
-function onNew() {
-  store.clearAll()
-  emit('enter')
+async function onNew() {
+  const result = await documents.createBlank()
+  if (result === 'ok') emit('enter')
 }
 
 /* ---------- 加载示例 ---------- */
@@ -240,7 +299,40 @@ const showGallery = ref(false)
           </div>
 
           <div class="hero-quiet">
-            <button class="quiet-btn" @click="pickJson">
+            <!-- 绑定了备份文件夹：点「导入 JSON」先选来源 -->
+            <n-popover
+              v-if="documents.isBound && supportsFolder"
+              v-model:show="jsonMenuShow"
+              trigger="click"
+              placement="bottom-start"
+              :width="210"
+            >
+              <template #trigger>
+                <button class="quiet-btn" :class="{ open: jsonMenuShow }">
+                  <IconGlyph name="file-json" :size="14" />
+                  导入 JSON
+                  <IconGlyph name="chevron-down" :size="11" />
+                </button>
+              </template>
+              <div class="json-menu">
+                <button type="button" class="json-menu-item" @click="openLibrary">
+                  <IconGlyph name="folder-open" :size="15" />
+                  <span class="json-menu-copy">
+                    <span class="json-menu-title">从备份文件夹打开</span>
+                    <span class="json-menu-hint">{{ libraryStatusText }}</span>
+                  </span>
+                </button>
+                <button type="button" class="json-menu-item" @click="pickJson">
+                  <IconGlyph name="file-up" :size="15" />
+                  <span class="json-menu-copy">
+                    <span class="json-menu-title">从电脑选择文件</span>
+                    <span class="json-menu-hint">导入后复制到备份文件夹</span>
+                  </span>
+                </button>
+              </div>
+            </n-popover>
+
+            <button v-else class="quiet-btn" @click="pickJson">
               <IconGlyph name="file-json" :size="14" />
               导入 JSON
             </button>
@@ -490,6 +582,72 @@ const showGallery = ref(false)
 
     <!-- 示例模板画廊；载入成功后直接进编辑器 -->
     <ExampleGallery v-model:show="showGallery" @enter="emit('enter')" />
+
+    <!-- 从备份文件夹打开：列出文件夹里的每份简历 JSON -->
+    <n-modal
+      v-model:show="showLibrary"
+      preset="card"
+      title="从备份文件夹打开"
+      style="width: 440px"
+      :bordered="false"
+    >
+      <div class="library-dialog">
+        <div class="library-dialog-head">
+          <span class="library-dialog-folder">
+            <IconGlyph name="folder" :size="14" />
+            {{ documents.folderName || '备份文件夹' }}
+          </span>
+          <span class="library-dialog-status">{{ libraryStatusText }}</span>
+        </div>
+
+        <div v-if="documents.status !== 'ready'" class="library-dialog-empty">
+          <span class="library-dialog-empty-icon"><IconGlyph name="folder" :size="18" /></span>
+          <p class="library-dialog-empty-title">
+            {{ documents.status === 'denied' ? '文件夹权限被拒绝' : '需要授权才能读取文件' }}
+          </p>
+          <p class="library-dialog-empty-text">浏览器重新打开页面后会收回文件夹权限，授权一次即可继续。</p>
+          <n-button size="small" type="primary" @click="onLibraryAuthorize">授权访问</n-button>
+        </div>
+
+        <div v-else class="library-dialog-list">
+          <button
+            v-for="file in documents.files"
+            :key="file.name"
+            type="button"
+            class="library-dialog-item"
+            :class="{ active: documents.currentFile?.toLowerCase() === file.name.toLowerCase() }"
+            @click="onOpenLibraryFile(file.name)"
+          >
+            <span class="library-dialog-item-icon"><IconGlyph name="file-json" :size="15" /></span>
+            <span class="library-dialog-item-copy">
+              <span class="library-dialog-item-name">{{ file.title }}</span>
+              <span class="library-dialog-item-meta">{{ formatRelativeTime(file.mtime) }}</span>
+            </span>
+            <IconGlyph
+              v-if="documents.currentFile?.toLowerCase() === file.name.toLowerCase()"
+              name="check"
+              :size="14"
+              class="library-dialog-item-check"
+            />
+            <IconGlyph v-else name="arrow-right" :size="14" class="library-dialog-item-arrow" />
+          </button>
+
+          <div v-if="!documents.files.length" class="library-dialog-empty">
+            <p class="library-dialog-empty-title">文件夹里还没有 JSON</p>
+            <p class="library-dialog-empty-text">在编辑器里新建一份简历，或把已有 JSON 复制进这个文件夹。</p>
+          </div>
+        </div>
+      </div>
+
+      <template #footer>
+        <div class="library-dialog-foot">
+          <n-button size="small" quaternary :disabled="documents.status !== 'ready'" @click="onRefreshLibrary">
+            <template #icon><IconGlyph name="refresh-cw" :size="13" /></template>
+            刷新
+          </n-button>
+        </div>
+      </template>
+    </n-modal>
 
     <!-- 导入 PDF / Word 对话框：选解析引擎 → 选文件 -->
     <n-modal
@@ -751,6 +909,203 @@ const showGallery = ref(false)
 }
 .quiet-btn:active {
   transform: translateY(0);
+}
+.quiet-btn.open {
+  border-color: var(--primary-soft);
+  background: var(--primary-faint);
+  color: var(--primary-hover);
+}
+
+/* ---------- 导入 JSON 下拉 ---------- */
+.json-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.json-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 9px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.14s var(--ease);
+}
+.json-menu-item:hover {
+  background: var(--surface-soft);
+}
+.json-menu-item .icon-glyph {
+  flex: none;
+  color: var(--text-tertiary);
+}
+.json-menu-item:hover .icon-glyph {
+  color: var(--primary);
+}
+.json-menu-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.json-menu-title {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+.json-menu-hint {
+  font-size: 10.5px;
+  color: var(--text-tertiary);
+}
+
+/* ---------- 从备份文件夹打开（弹窗） ---------- */
+.library-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.library-dialog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.library-dialog-folder {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+.library-dialog-folder .icon-glyph {
+  flex: none;
+  color: var(--primary);
+}
+.library-dialog-status {
+  flex: none;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+.library-dialog-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 340px;
+  overflow: auto;
+}
+.library-dialog-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.14s var(--ease);
+}
+.library-dialog-item:hover {
+  background: var(--surface-soft);
+}
+.library-dialog-item.active {
+  background: var(--primary-faint);
+}
+.library-dialog-item-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: var(--surface-soft);
+  color: var(--text-tertiary);
+}
+.library-dialog-item.active .library-dialog-item-icon {
+  background: var(--panel-bg);
+  color: var(--primary);
+}
+.library-dialog-item-copy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.library-dialog-item-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.library-dialog-item.active .library-dialog-item-name {
+  font-weight: 600;
+  color: var(--primary-hover);
+}
+.library-dialog-item-meta {
+  font-size: 10.5px;
+  color: var(--text-tertiary);
+}
+.library-dialog-item-check {
+  flex: none;
+  color: var(--primary);
+}
+.library-dialog-item-arrow {
+  flex: none;
+  color: var(--text-tertiary);
+  opacity: 0;
+  transition: opacity 0.14s var(--ease);
+}
+.library-dialog-item:hover .library-dialog-item-arrow {
+  opacity: 1;
+}
+.library-dialog-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  padding: 22px 14px;
+  text-align: center;
+}
+.library-dialog-empty-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+  background: var(--surface-soft);
+  color: var(--text-tertiary);
+}
+.library-dialog-empty-title {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.library-dialog-empty-text {
+  margin: 0;
+  max-width: 280px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--text-tertiary);
+}
+.library-dialog-foot {
+  display: flex;
+  justify-content: flex-end;
 }
 
 /* ---------- 信任行：格式支持 + 本地存储 ---------- */

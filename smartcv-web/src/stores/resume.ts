@@ -404,6 +404,28 @@ export const useResumeStore = defineStore('resume', {
       return true
     },
 
+    /** 只校验数据是否是合法简历（不改动当前简历，用于导入前预检） */
+    canOpenResume(data: unknown): boolean {
+      return normalizeResumeData(data) !== null
+    },
+
+    /**
+     * 打开一份已有简历（切换备份文件夹里的文档用）。
+     * 与 importResume 一样整体替换并重新生成 id，但会清空撤销 / 重做历史，
+     * 避免 Ctrl+Z 退回到另一份简历的内容。
+     */
+    openResume(data: unknown): boolean {
+      const normalized = normalizeResumeData(data)
+      if (!normalized) return false
+      this.resume.splice(0, this.resume.length, ...normalized)
+      this.selectedId = null
+      this.collapsedSectionIds = []
+      this.collapsedContentIds = []
+      this.undoStack = []
+      this.redoStack = []
+      return true
+    },
+
     /**
      * 把当前简历保存到浏览器 localStorage（"保存"按钮 / 自动持久化共用）。
      * 注意：应用里还挂了一个自动保存（main.ts 里监听 store 变化防抖写入），

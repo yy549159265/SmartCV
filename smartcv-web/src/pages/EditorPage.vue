@@ -9,7 +9,7 @@
  * 双击恢复默认，宽度用 VueUse 的 useStorage 记忆在浏览器本地。
  * 两栏读写的是同一个 Pinia store（stores/resume.ts）—— 单一数据源。
  */
-import { computed, ref, watchEffect } from 'vue'
+import { computed, ref, watch, watchEffect } from 'vue'
 import { useStorage, useWindowSize } from '@vueuse/core'
 import ComponentLibrary from '@/components/ComponentLibrary.vue'
 import EditCanvas from '@/components/EditCanvas.vue'
@@ -26,8 +26,18 @@ import {
 } from '@/composables/usePageSize'
 import { resumeName } from '@/composables/useResumeName'
 import { useResumeStore } from '@/stores/resume'
+import { useDocumentsStore } from '@/stores/documents'
+import { supportsDirectoryPicker } from '@/utils/fs/directoryHandle'
+import { formatRelativeTime } from '@/utils/time'
+import { sanitizeFileTitle } from '@/utils/filename'
+import { dialog, message } from '@/utils/feedback'
+
+const emit = defineEmits<{ 'open-settings': [] }>()
 
 const store = useResumeStore()
+const documents = useDocumentsStore()
+/** 浏览器是否支持选择文件夹（Chrome / Edge） */
+const supportsFolder = supportsDirectoryPicker()
 
 /* ---------- 左列宽度（useStorage：自动记忆到 localStorage） ---------- */
 
@@ -73,6 +83,158 @@ const canRedo = computed(() => store.redoStack.length > 0)
 
 /** 纸面宽度弹层是否展开 */
 const widthMenuShow = ref(false)
+
+/* ---------- 简历库（备份文件夹） ---------- */
+
+/** 简历库弹层是否展开 */
+const libraryShow = ref(false)
+
+/** 简历名字输入框的本地草稿：失焦 / 回车时才提交，避免每敲一个字就改文件名 */
+const nameDraft = ref(resumeName.value)
+watch(resumeName, (value) => {
+  nameDraft.value = value
+})
+
+const librarySubtitle = computed(() => {
+  switch (documents.status) {
+    case 'unsupported':
+      return '当前浏览器不支持文件夹'
+    case 'unbound':
+      return '尚未选择文件夹'
+    case 'needs-permission':
+      return '需要授权后才能读取'
+    case 'denied':
+      return '文件夹权限被拒绝'
+    case 'ready':
+      return `${documents.files.length} 份简历`
+    default:
+      return ''
+  }
+})
+
+/** 列表里的文件是否是当前正在编辑的那份 */
+function isCurrentFile(name: string): boolean {
+  return documents.currentFile?.toLowerCase() === name.toLowerCase()
+}
+
+function onNameInput(event: Event) {
+  nameDraft.value = (event.target as HTMLInputElement).value
+}
+
+function onNameEnter(event: KeyboardEvent) {
+  ;(event.target as HTMLInputElement).blur()
+}
+
+/** 重名时问用户：保留两份 / 覆盖 / 取消 */
+function askRenameConflict(conflict: string): Promise<'unique' | 'overwrite' | 'cancel'> {
+  return new Promise((resolve) => {
+    let settled = false
+    const finish = (value: 'unique' | 'overwrite' | 'cancel') => {
+      if (settled) return
+      settled = true
+      resolve(value)
+    }
+    dialog.warning({
+      title: '文件夹里已有同名简历',
+      content: `「${conflict}」已经存在。保留两份会自动加序号；覆盖会替换原文件。`,
+      positiveText: '保留两份',
+      negativeText: '覆盖原文件',
+      onPositiveClick: () => finish('unique'),
+      onNegativeClick: () => finish('overwrite'),
+      onClose: () => finish('cancel'),
+      onMaskClick: () => finish('cancel'),
+    })
+  })
+}
+
+/** 提交简历名字：改名会同步重命名备份文件夹里的 JSON */
+async function commitResumeName() {
+  const clean = sanitizeFileTitle(nameDraft.value, '我的简历')
+  nameDraft.value = clean
+  if (clean === resumeName.value) return
+
+  const previous = resumeName.value
+
+  // 文件已存在但权限过期：先在用户的这次操作里申请权限，否则改名只会改显示名
+  if (documents.isBound && documents.currentFile && documents.status !== 'ready') {
+    const granted = await documents.ensurePermission()
+    if (!granted) {
+      message.warning('没有备份文件夹权限，名字暂未修改；请先在简历库里授权')
+      nameDraft.value = previous
+      return
+    }
+    await documents.refreshFiles()
+  }
+
+  const result = await documents.renameCurrent(clean)
+  if (result.ok) return
+
+  if (!result.conflict) {
+    resumeName.value = previous
+    nameDraft.value = previous
+    return
+  }
+
+  const choice = await askRenameConflict(result.conflict)
+  if (choice === 'cancel') {
+    // renameCurrent 已经把显示名改成新名字了，这里恢复旧名字（旧文件本身没动）
+    await documents.renameCurrent(previous)
+    nameDraft.value = resumeName.value
+    return
+  }
+
+  const retry = await documents.renameCurrent(clean, { conflict: choice })
+  if (!retry.ok) {
+    await documents.renameCurrent(previous)
+    nameDraft.value = resumeName.value
+  }
+}
+
+watch(libraryShow, (show) => {
+  if (show) void documents.refreshIfReady()
+})
+
+async function onOpenFile(name: string) {
+  if (isCurrentFile(name)) {
+    libraryShow.value = false
+    return
+  }
+  const ok = await documents.openFile(name)
+  if (ok) libraryShow.value = false
+}
+
+async function onNewDocument() {
+  const result = await documents.createBlank()
+  if (result === 'ok') {
+    nameDraft.value = resumeName.value
+    libraryShow.value = false
+  }
+}
+
+async function onRefreshLibrary() {
+  await documents.refreshFiles()
+  if (documents.status === 'ready') message.success('列表已刷新')
+}
+
+async function onBindFromLibrary() {
+  const ok = await documents.bindFolder()
+  if (ok) message.success(`已连接备份文件夹：${documents.folderName}`)
+}
+
+async function onAuthorizeFromLibrary() {
+  const ok = await documents.ensurePermission()
+  if (ok) {
+    await documents.refreshFiles()
+    message.success('已获得文件夹读写权限')
+  } else {
+    message.warning('未获得文件夹权限，请在浏览器提示中允许后重试')
+  }
+}
+
+function openBackupSettings() {
+  libraryShow.value = false
+  emit('open-settings')
+}
 </script>
 
 <template>
@@ -81,7 +243,121 @@ const widthMenuShow = ref(false)
     <header class="editor-toolbar">
       <div class="editor-name-box">
         <span class="editor-name-label">简历名字：</span>
-        <input v-model="resumeName" class="editor-name" placeholder="给简历起个名字" title="简历名字：导出的 PDF / JSON 文件会以这个名字命名" />
+        <input
+          class="editor-name"
+          :value="nameDraft"
+          placeholder="给简历起个名字"
+          title="简历名字：备份文件夹里的 JSON 与导出的 PDF 都会以这个名字命名"
+          @input="onNameInput"
+          @blur="commitResumeName"
+          @keydown.enter="onNameEnter"
+        />
+        <!-- 简历库：列出备份文件夹里的所有 JSON，点一下切换编辑 -->
+        <n-popover
+          v-model:show="libraryShow"
+          trigger="click"
+          placement="bottom-start"
+          :width="320"
+        >
+          <template #trigger>
+            <button
+              type="button"
+              class="editor-library-btn"
+              :class="{ bound: documents.isBound, open: libraryShow }"
+              title="简历库：切换备份文件夹里的简历"
+            >
+              <IconGlyph name="folder" :size="14" />
+              <span v-if="documents.files.length" class="editor-library-count">
+                {{ documents.files.length }}
+              </span>
+              <IconGlyph name="chevron-down" :size="11" />
+            </button>
+          </template>
+
+          <div class="library-menu">
+            <div class="library-head">
+              <div class="library-head-copy">
+                <span class="library-title">{{ documents.folderName || '简历库' }}</span>
+                <span class="library-sub">{{ librarySubtitle }}</span>
+              </div>
+              <button
+                v-if="documents.status === 'ready'"
+                type="button"
+                class="library-icon-btn"
+                title="刷新列表"
+                @click="onRefreshLibrary"
+              >
+                <IconGlyph name="refresh-cw" :size="13" />
+              </button>
+            </div>
+
+            <!-- 还没选文件夹 -->
+            <div v-if="!documents.isBound" class="library-empty">
+              <span class="library-empty-icon"><IconGlyph name="folder-open" :size="18" /></span>
+              <p class="library-empty-title">把简历存进电脑文件夹</p>
+              <p class="library-empty-text">
+                选择文件夹后，每一份 JSON 就是一份简历，点一下即可切换编辑。
+              </p>
+              <n-button v-if="supportsFolder" size="small" type="primary" @click="onBindFromLibrary">
+                选择文件夹
+              </n-button>
+              <p v-else class="library-empty-text">请使用 Chrome 或 Edge 浏览器。</p>
+            </div>
+
+            <!-- 选过文件夹但权限过期 -->
+            <div v-else-if="documents.status !== 'ready'" class="library-empty">
+              <span class="library-empty-icon"><IconGlyph name="folder" :size="18" /></span>
+              <p class="library-empty-title">
+                {{ documents.status === 'denied' ? '文件夹权限被拒绝' : '需要授权才能读取' }}
+              </p>
+              <p class="library-empty-text">
+                浏览器会在重新打开页面后收回文件夹权限，授权一次即可继续。
+              </p>
+              <n-button size="small" type="primary" @click="onAuthorizeFromLibrary">
+                授权访问
+              </n-button>
+            </div>
+
+            <!-- 文件列表 -->
+            <template v-else>
+              <div class="library-list">
+                <button
+                  v-for="file in documents.files"
+                  :key="file.name"
+                  type="button"
+                  class="library-item"
+                  :class="{ active: isCurrentFile(file.name) }"
+                  @click="onOpenFile(file.name)"
+                >
+                  <span class="library-item-icon">
+                    <IconGlyph :name="isCurrentFile(file.name) ? 'file-text' : 'file-json'" :size="14" />
+                  </span>
+                  <span class="library-item-copy">
+                    <span class="library-item-name">{{ file.title }}</span>
+                    <span class="library-item-meta">{{ formatRelativeTime(file.mtime) }}</span>
+                  </span>
+                  <IconGlyph v-if="isCurrentFile(file.name)" name="check" :size="13" class="library-item-check" />
+                </button>
+
+                <div v-if="!documents.files.length" class="library-empty">
+                  <p class="library-empty-title">文件夹里还没有 JSON</p>
+                  <p class="library-empty-text">新建一份空白简历，或把已有 JSON 复制进这个文件夹。</p>
+                </div>
+              </div>
+
+              <div class="library-foot">
+                <button type="button" class="library-foot-btn" @click="onNewDocument">
+                  <IconGlyph name="plus" :size="13" />
+                  新建空白
+                </button>
+                <button type="button" class="library-foot-btn" @click="openBackupSettings">
+                  <IconGlyph name="sliders-horizontal" :size="13" />
+                  备份设置
+                </button>
+              </div>
+            </template>
+          </div>
+        </n-popover>
       </div>
 
       <span class="editor-toolbar-spacer" />
@@ -225,6 +501,229 @@ const widthMenuShow = ref(false)
   background: var(--panel-bg);
   outline: none;
   box-shadow: 0 0 0 2px rgba(71, 83, 199, 0.12);
+}
+
+/* 简历库入口：文件夹图标 + 文件数，紧跟在名字输入框后面 */
+.editor-library-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex: none;
+  height: 26px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition:
+    background 0.14s var(--ease),
+    border-color 0.14s var(--ease),
+    color 0.14s var(--ease);
+}
+.editor-library-btn:hover,
+.editor-library-btn.open {
+  background: var(--surface-soft);
+  color: var(--text-secondary);
+}
+.editor-library-btn.bound {
+  color: var(--primary);
+}
+.editor-library-count {
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--primary-soft);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  color: var(--primary-hover);
+}
+
+/* ---- 简历库弹层 ---- */
+.library-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.library-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.library-head-copy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.library-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+.library-sub {
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+.library-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition:
+    background 0.14s var(--ease),
+    color 0.14s var(--ease);
+}
+.library-icon-btn:hover {
+  background: var(--surface-soft);
+  color: var(--text);
+}
+.library-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 300px;
+  overflow: auto;
+  margin: 0 -4px;
+  padding: 2px 4px;
+}
+.library-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 7px 8px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.14s var(--ease);
+}
+.library-item:hover {
+  background: var(--surface-soft);
+}
+.library-item.active {
+  background: var(--primary-faint);
+}
+.library-item-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: var(--surface-soft);
+  color: var(--text-tertiary);
+}
+.library-item.active .library-item-icon {
+  background: var(--panel-bg);
+  color: var(--primary);
+}
+.library-item-copy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.library-item-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+.library-item.active .library-item-name {
+  font-weight: 600;
+  color: var(--primary-hover);
+}
+.library-item-meta {
+  font-size: 10.5px;
+  color: var(--text-tertiary);
+}
+.library-item-check {
+  flex: none;
+  color: var(--primary);
+}
+.library-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  padding: 18px 14px;
+  text-align: center;
+}
+.library-empty-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  background: var(--surface-soft);
+  color: var(--text-tertiary);
+}
+.library-empty-title {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.library-empty-text {
+  margin: 0;
+  max-width: 230px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--text-tertiary);
+}
+.library-foot {
+  display: flex;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.library-foot-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  flex: 1;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel-bg);
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    background 0.14s var(--ease),
+    border-color 0.14s var(--ease),
+    color 0.14s var(--ease);
+}
+.library-foot-btn:hover {
+  border-color: var(--primary);
+  background: var(--primary-faint);
+  color: var(--primary);
 }
 
 .editor-toolbar-spacer {

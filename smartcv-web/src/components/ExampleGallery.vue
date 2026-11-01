@@ -14,6 +14,7 @@ import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { dialog, message } from '@/utils/feedback'
 import { clearExampleCache, listExamples, loadExample, toSections, type ExampleItem } from '@/api/examples'
 import { useResumeStore } from '@/stores/resume'
+import { useDocumentsStore } from '@/stores/documents'
 import { PAGE_HEIGHT, PAGE_PADDING, PAGE_WIDTH } from '@/utils/constants'
 import PreviewSection from './PreviewSection.vue'
 import type { Section } from '@/types'
@@ -22,6 +23,7 @@ const props = defineProps<{ show: boolean }>()
 const emit = defineEmits<{ 'update:show': [boolean]; enter: [] }>()
 
 const store = useResumeStore()
+const documents = useDocumentsStore()
 
 /** 缩略图缩放比：卡片内容宽约 238px ÷ 纸宽（随 PAGE_WIDTH 自动算，纸变宽缩略图不变宽） */
 const THUMB_ZOOM = 238 / PAGE_WIDTH
@@ -156,6 +158,22 @@ async function pick(card: Card) {
     return
   }
   if (card.state !== 'ready') return
+
+  // 绑定了备份文件夹：示例会作为一份新简历写进文件夹，不覆盖当前简历
+  if (documents.isBound) {
+    const result = await documents.createDocument(card.sections, `示例-${card.item.title}`, {
+      conflict: 'unique',
+    })
+    if (result === 'invalid') {
+      message.error('导入失败：示例数据不是合法的简历数据')
+      return
+    }
+    if (result !== 'ok') return
+    message.success(`已载入示例「${card.item.title}」`)
+    emit('update:show', false)
+    emit('enter')
+    return
+  }
 
   if (store.resume.length > 0 && !(await confirmReplace(card.item.title))) return
 

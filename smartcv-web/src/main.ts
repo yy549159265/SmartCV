@@ -5,7 +5,7 @@
  *  2. naive-ui     —— UI 组件库（全量注册，模板里直接用 <n-button> 等，无需逐个 import）
  *  3. MotionPlugin —— @vueuse/motion 动画指令（v-motion）
  */
-import { createApp } from 'vue'
+import { createApp, watch } from 'vue'
 import { createPinia } from 'pinia'
 import { MotionPlugin } from '@vueuse/motion'
 import { useDebounceFn } from '@vueuse/core'
@@ -13,6 +13,7 @@ import naive from 'naive-ui'
 
 import App from './App.vue'
 import { useResumeStore } from '@/stores/resume'
+import { useDocumentsStore } from '@/stores/documents'
 import './styles/global.css'
 // highlight.js 代码高亮主题（Markdown 渲染代码块用）
 import 'highlight.js/styles/github.css'
@@ -26,11 +27,25 @@ app.use(MotionPlugin)
 
 app.mount('#app')
 
-// 自动保存：监听简历数据的任何变化，防抖 400ms 后写入浏览器 localStorage。
-// 这样刷新页面 / 关闭浏览器再打开，用户编辑的内容都还在（无需手动点保存）。
+// 自动保存：监听简历数据的任何变化。
+//   1. 防抖 400ms 写入浏览器 localStorage（刷新 / 关浏览器都不丢）；
+//   2. 绑定了备份文件夹时，再由 documents store 防抖 1s 写回文件夹。
 const resumeStore = useResumeStore(pinia)
+const documentsStore = useDocumentsStore(pinia)
 const autoSave = useDebounceFn(() => resumeStore.saveToStorage(), 400)
-resumeStore.$subscribe(() => autoSave())
+// 只盯简历内容本身：选中章节、分页测量、折叠状态这些编辑辅助状态变化
+// 不应该触发保存（尤其不该反复写备份文件夹）。
+watch(
+  () => resumeStore.resume,
+  () => {
+    autoSave()
+    documentsStore.scheduleSave()
+  },
+  { deep: true },
+)
+
+// 恢复上次的备份文件夹（权限 granted 时顺带打开上次编辑的文件）
+void documentsStore.init()
 
 // ===== 撤销 / 重做历史（Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y） =====
 // 在每次改动简历前，把"改动前"的快照压入撤销栈：
@@ -81,7 +96,11 @@ resumeStore.$onAction(({ name, args }) => {
 // 页面关闭/刷新前立刻保存一次：防抖窗口（400ms）内关闭页面会丢最后一次修改，
 // 这里兜底把还没写盘的内容补上。
 if (typeof window !== 'undefined') {
-  window.addEventListener('pagehide', () => resumeStore.saveToStorage())
+  window.addEventListener('pagehide', () => {
+    resumeStore.saveToStorage()
+    // 异步写盘在页面关闭时不一定能完成；localStorage 已经兜底，这里尽力再写一次
+    void documentsStore.saveNow({ silent: true })
+  })
 
   // Ctrl+Z 撤销 / Ctrl+Shift+Z、Ctrl+Y 重做。
   // 只在确有历史时才拦截，避免影响浏览器在其它输入框里的原生撤销。

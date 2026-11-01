@@ -154,11 +154,12 @@ import { previewZoom, ZOOM_LEVELS } from '@/composables/usePreviewZoom'
 import { contentWidth, pageHeight, pageWidth } from '@/composables/usePageSize'
 import { PAGE_PADDING } from '@/utils/constants'
 import { pageRunSpecs, type PageUnit, type RunSpec } from '@/utils/pagination'
-import { exportResumePdf } from '@/api/pdf'
+import { fetchResumePdf } from '@/api/pdf'
 import { resumeFilename } from '@/composables/useResumeName'
 import { polishTexts } from '@/api/polish'
 import type { Section } from '@/types'
-import { downloadJson } from '@/utils/download'
+import { downloadBlob, downloadJson } from '@/utils/download'
+import { useDocumentsStore } from '@/stores/documents'
 import { renderMarkdown } from '@/utils/markdown'
 import { message } from '@/utils/feedback'
 import { getAgentSessionId, resetAgentSessionId } from '@/api/session'
@@ -175,6 +176,7 @@ const emit = defineEmits<{
 const resumeStore = useResumeStore()
 const optimizeStore = useOptimizeStore()
 const statsStore = useStatsStore()
+const documents = useDocumentsStore()
 
 /* ---------- 隐藏测量层：和预览同款，算出与预览一致的分页方案 ---------- */
 const measureFlowEl = ref<HTMLElement | null>(null)
@@ -216,11 +218,39 @@ const exportStyle = computed(() => ({ width: `${pageWidth.value}px` }))
 /** JSON 处理菜单是否展开（导出 JSON / 转换成优秀示例） */
 const jsonMenuShow = ref(false)
 
-/** 导出 JSON：下载当前简历数据文件（以简历名称命名，下载成功后计数 +1） */
-function onExportJson() {
+/** 导出 JSON 到备份文件夹：写回当前文件；没有文件夹 / 没权限时降级为浏览器下载 */
+async function onExportJsonToFolder() {
   jsonMenuShow.value = false
+  if (resumeStore.resume.length === 0) {
+    message.warning('简历还是空的，先去「编辑简历」页添加内容')
+    return
+  }
+  const result = await documents.exportJson()
+  if (result === 'saved') {
+    await statsStore.inc('json')
+    message.success(
+      documents.currentFile
+        ? `已保存到备份文件夹：${documents.currentFile}`
+        : '已保存到备份文件夹',
+    )
+    return
+  }
+  // 用户主动取消（覆盖确认 / 命名）时什么都不做
+  if (result === 'cancelled') return
+  // 没绑定文件夹或没有权限：给一份浏览器下载兜底
   downloadJson(resumeStore.resume, `${resumeFilename()}.json`)
-  statsStore.inc('json')
+  await statsStore.inc('json')
+}
+
+/** 下载 JSON 到电脑（不需要备份文件夹） */
+function onDownloadJson() {
+  jsonMenuShow.value = false
+  if (resumeStore.resume.length === 0) {
+    message.warning('简历还是空的，先去「编辑简历」页添加内容')
+    return
+  }
+  downloadJson(resumeStore.resume, `${resumeFilename()}.json`)
+  void statsStore.inc('json')
 }
 
 /** 转换成优秀示例：带上当前简历 JSON 跳到示例库，上传表单自动填入粘贴框 */
@@ -248,6 +278,8 @@ async function onExportPdf() {
     message.warning('简历还是空的，先去「编辑简历」页添加内容')
     return
   }
+  // 在点击手势里先恢复文件夹权限：生成 PDF 要等网络，之后再申请权限可能已失去用户激活
+  if (documents.isBound) await documents.ensurePermission()
   exporting.value = true
   try {
     // 等导出容器渲染完再序列化
@@ -261,9 +293,15 @@ async function onExportPdf() {
       throw new Error('简历排版还没准备好，请稍后重试')
     }
 
-    await exportResumePdf(exportFlowEl.value, resumeFilename())
+    const blob = await fetchResumePdf(exportFlowEl.value)
+    const filename = resumeFilename()
+    // 绑定了备份文件夹就写进文件夹，否则（或写入失败）走浏览器下载
+    const saved = await documents.savePdf(blob, filename)
+    if (!saved) downloadBlob(blob, `${filename}.pdf`)
     await statsStore.inc('pdf')
-    message.success('PDF 已导出（后端生成，与预览一致）')
+    message.success(
+      saved ? 'PDF 已保存到备份文件夹' : 'PDF 已导出（后端生成，与预览一致）',
+    )
   } catch (err) {
     console.error(err)
     message.error(`导出失败：${err instanceof Error ? err.message : String(err)}`)
@@ -548,13 +586,30 @@ function onApplyDiff() {
             </n-button>
           </template>
           <div class="composer-menu" role="menu" aria-label="JSON 处理">
-            <button type="button" role="menuitem" class="composer-menu-item" @click="onExportJson">
+            <button
+              v-if="documents.isBound"
+              type="button"
+              role="menuitem"
+              class="composer-menu-item"
+              @click="onExportJsonToFolder"
+            >
+              <span class="menu-icon" aria-hidden="true">
+                <IconGlyph name="folder-down" :size="16" />
+              </span>
+              <span class="menu-text">
+                <span class="menu-title">保存到备份文件夹</span>
+                <span class="menu-desc">写回当前简历的 JSON 文件</span>
+              </span>
+            </button>
+            <button type="button" role="menuitem" class="composer-menu-item" @click="onDownloadJson">
               <span class="menu-icon" aria-hidden="true">
                 <IconGlyph name="download" :size="16" />
               </span>
               <span class="menu-text">
-                <span class="menu-title">导出 JSON</span>
-                <span class="menu-desc">下载当前简历数据文件</span>
+                <span class="menu-title">下载到电脑</span>
+                <span class="menu-desc">
+                  {{ documents.isBound ? '另存一份 JSON 到下载目录' : '下载当前简历数据文件' }}
+                </span>
               </span>
             </button>
             <div class="composer-menu-divider" />

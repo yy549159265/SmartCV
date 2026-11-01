@@ -4,17 +4,112 @@
  *
  * 左侧标签页：
  *   1. OpenAI 设置：配置「诊断简历」对话用的模型供应商（localStorage，useStorage 持久化）；
- *   2. 提示词预览：只读展示后端 agent 用的提示词（prompts）与技能（skills）md，
+ *   2. 本地备份：绑定电脑上的文件夹，导出 JSON / PDF 与多份简历切换都落在该文件夹；
+ *   3. 提示词预览：只读展示后端 agent 用的提示词（prompts）与技能（skills）md，
  *      按 Markdown 排版渲染（只读，不可更改）。
  */
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useStorage } from '@vueuse/core'
-import { message } from '@/utils/feedback'
+import { dialog, message } from '@/utils/feedback'
 import { getAgentMd, type AgentMdFile, type AgentMdPayload } from '@/api/agent'
 import { renderMarkdown } from '@/utils/markdown'
+import { useDocumentsStore } from '@/stores/documents'
+import { supportsDirectoryPicker } from '@/utils/fs/directoryHandle'
+import { formatDateTime } from '@/utils/time'
 import IconGlyph from '@/components/IconGlyph.vue'
 
-const tab = ref<'provider' | 'md'>('provider')
+const props = defineProps<{ initialTab?: 'provider' | 'backup' | 'md' }>()
+
+const tab = ref<'provider' | 'backup' | 'md'>(props.initialTab ?? 'provider')
+watch(
+  () => props.initialTab,
+  (value) => {
+    if (value) tab.value = value
+  },
+)
+
+/* ---------- 本地备份文件夹 ---------- */
+const documents = useDocumentsStore()
+/** 浏览器是否支持 File System Access API（Chrome / Edge） */
+const supportsFolder = supportsDirectoryPicker()
+
+const statusText = computed(() => {
+  switch (documents.status) {
+    case 'unsupported':
+      return '当前浏览器不支持'
+    case 'unbound':
+      return '未设置'
+    case 'needs-permission':
+      return '需要授权'
+    case 'denied':
+      return '权限被拒绝'
+    case 'ready':
+      return '已连接'
+    default:
+      return '未设置'
+  }
+})
+
+const statusClass = computed(() => ({
+  'is-ready': documents.status === 'ready',
+  'is-warn': documents.status === 'needs-permission' || documents.status === 'denied',
+}))
+
+/** 换文件夹前确认一句：旧文件夹里的文件不会自动迁移 */
+function confirmSwitchFolder(): Promise<boolean> {
+  return new Promise((resolve) => {
+    let settled = false
+    const finish = (value: boolean) => {
+      if (settled) return
+      settled = true
+      resolve(value)
+    }
+    dialog.warning({
+      title: '更换备份文件夹？',
+      content: '更换后，旧文件夹里的文件不会被删除或移动；当前简历也不会自动复制到新文件夹。',
+      positiveText: '更换',
+      negativeText: '取消',
+      onPositiveClick: () => finish(true),
+      onNegativeClick: () => finish(false),
+      onClose: () => finish(false),
+      onMaskClick: () => finish(false),
+    })
+  })
+}
+
+async function onChooseFolder() {
+  if (documents.isBound && !(await confirmSwitchFolder())) return
+  const ok = await documents.bindFolder()
+  if (ok) message.success(`已连接备份文件夹：${documents.folderName}`)
+}
+
+async function onSync() {
+  const ok = await documents.sync()
+  if (ok) message.success(`已同步，文件夹内共 ${documents.files.length} 份简历`)
+}
+
+async function onAuthorize() {
+  const ok = await documents.ensurePermission()
+  if (ok) {
+    await documents.refreshFiles()
+    message.success('已获得文件夹读写权限')
+  } else {
+    message.warning('未获得文件夹权限，请在浏览器地址栏的站点设置中允许后重试')
+  }
+}
+
+function onDisconnect() {
+  dialog.warning({
+    title: '断开备份文件夹？',
+    content: '只会忘记这个文件夹，里面的 JSON / PDF 文件不会被删除。当前简历仍保留在浏览器里。',
+    positiveText: '断开连接',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      await documents.unbindFolder()
+      message.success('已断开备份文件夹')
+    },
+  })
+}
 
 /** 供应商配置（useStorage 自动记忆到 localStorage） */
 const settings = useStorage('smartcv-provider-settings', {
@@ -84,6 +179,17 @@ async function openMd() {
             <span class="nav-copy">
               <span class="nav-label">OpenAI 设置</span>
               <span class="nav-hint">接口地址与模型</span>
+            </span>
+          </button>
+          <button
+            class="nav-item"
+            :class="{ active: tab === 'backup' }"
+            @click="tab = 'backup'"
+          >
+            <span class="nav-icon"><IconGlyph name="folder" :size="16" /></span>
+            <span class="nav-copy">
+              <span class="nav-label">本地备份</span>
+              <span class="nav-hint">文件夹与导出位置</span>
             </span>
           </button>
           <button class="nav-item" :class="{ active: tab === 'md' }" @click="openMd">
@@ -161,7 +267,101 @@ async function openMd() {
             </footer>
           </template>
 
-          <!-- 标签 2 · 提示词预览（只读，Markdown 渲染） -->
+          <!-- 标签 2 · 本地备份文件夹 -->
+          <template v-else-if="tab === 'backup'">
+            <div class="panel-head">
+              <div class="panel-head-copy">
+                <h2 class="panel-title">本地备份</h2>
+                <p class="panel-desc">
+                  选一个电脑上的文件夹当简历库：每份简历存成一个 JSON 文件，导出的 PDF 也写到这里。
+                  文件只留在本机，不会上传。
+                </p>
+              </div>
+              <span class="panel-badge">
+                <IconGlyph name="folder" :size="13" />
+                仅本地
+              </span>
+            </div>
+
+            <div class="form">
+              <div class="field-row">
+                <div class="field-info">
+                  <span class="field-label">备份文件夹</span>
+                  <span class="field-hint">Chrome / Edge 支持；选择后浏览器会询问读写权限</span>
+                </div>
+                <div class="field-control">
+                  <div class="backup-folder-row">
+                    <div class="backup-folder-value" :class="{ empty: !documents.folderName }">
+                      <IconGlyph name="folder" :size="15" />
+                      <span>{{ documents.folderName || '尚未选择文件夹' }}</span>
+                    </div>
+                    <n-button
+                      size="small"
+                      :disabled="!supportsFolder"
+                      @click="onChooseFolder"
+                    >
+                      {{ documents.folderName ? '更换文件夹' : '选择文件夹' }}
+                    </n-button>
+                  </div>
+                  <div class="backup-status-row">
+                    <span class="backup-status" :class="statusClass">
+                      <span class="backup-status-dot" aria-hidden="true"></span>
+                      {{ statusText }}
+                    </span>
+                    <span class="backup-hint">文件夹内 {{ documents.files.length }} 份简历</span>
+                  </div>
+                  <p v-if="!supportsFolder" class="backup-warn">
+                    当前浏览器不支持选择文件夹，请使用 Chrome 或 Edge。其他功能（包括下载到电脑）不受影响。
+                  </p>
+                </div>
+              </div>
+
+              <div class="field-row">
+                <div class="field-info">
+                  <span class="field-label">同步</span>
+                  <span class="field-hint">扫描文件夹、写入当前简历，并检测文件夹里的外部修改</span>
+                </div>
+                <div class="field-control">
+                  <div class="backup-action-row">
+                    <n-button
+                      size="small"
+                      type="primary"
+                      :loading="documents.busy"
+                      :disabled="!supportsFolder || !documents.isBound"
+                      @click="onSync"
+                    >
+                      立即同步
+                    </n-button>
+                    <n-button
+                      size="small"
+                      quaternary
+                      :disabled="!documents.isBound"
+                      @click="onAuthorize"
+                    >
+                      重新授权
+                    </n-button>
+                    <n-button
+                      size="small"
+                      quaternary
+                      type="error"
+                      :disabled="!documents.isBound"
+                      @click="onDisconnect"
+                    >
+                      断开连接
+                    </n-button>
+                  </div>
+                  <p class="backup-meta">最近同步：{{ formatDateTime(documents.lastSyncAt) }}</p>
+                </div>
+              </div>
+            </div>
+
+            <footer class="panel-foot">
+              <p class="foot-note">断开连接只会忘记这个文件夹，不会删除里面的 JSON / PDF 文件。</p>
+              <span class="backup-foot-note">JSON 与「导出 JSON」格式完全一致</span>
+            </footer>
+          </template>
+
+          <!-- 标签 3 · 提示词预览（只读，Markdown 渲染） -->
           <template v-else>
             <div class="panel-head">
               <div class="panel-head-copy">
@@ -499,6 +699,101 @@ async function openMd() {
   align-items: center;
   gap: 8px;
   flex: none;
+}
+
+/* ---------- 本地备份 ---------- */
+.backup-folder-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.backup-folder-value {
+  flex: 1 1 260px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 560px;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface-soft);
+  font-size: 13px;
+  color: var(--text);
+}
+.backup-folder-value span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.backup-folder-value.empty {
+  color: var(--text-tertiary);
+}
+.backup-folder-value :deep(.icon-glyph) {
+  flex: none;
+  color: var(--text-tertiary);
+}
+.backup-status-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.backup-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+.backup-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+}
+.backup-status.is-ready {
+  color: var(--success);
+}
+.backup-status.is-ready .backup-status-dot {
+  background: var(--success);
+}
+.backup-status.is-warn {
+  color: var(--warning);
+}
+.backup-status.is-warn .backup-status-dot {
+  background: var(--warning);
+}
+.backup-hint {
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+}
+.backup-warn {
+  margin: 10px 0 0;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--warning);
+}
+.backup-action-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.backup-meta {
+  margin: 10px 0 0;
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+}
+.backup-foot-note {
+  flex: none;
+  font-size: 11.5px;
+  color: var(--text-tertiary);
 }
 
 /* ---------- 提示词预览 ---------- */

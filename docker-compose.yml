@@ -1,5 +1,6 @@
 # SmartCV 前后端编排（docker compose up -d）
-#   frontend（nginx:80）→ 浏览器访问 http://localhost:5173，/api 由 nginx 反代到 backend
+#   frontend（nginx:443）→ 浏览器访问 https://localhost:5173，/api 由 nginx 反代到 backend
+#   nginx.conf 和证书已经打进前端镜像；HTTP 80 只保留给容器内健康检查
 #   backend（FastAPI:8600）
 #   searxng（SearXNG:8080）→ 诊断 agent 的 web_search 工具用的自建搜索
 # 镜像为预构建的 v1 版本：本地缺失时 compose 会从阿里云仓库拉取，需先 docker login。
@@ -37,9 +38,12 @@ services:
       backend:
         condition: service_healthy
     ports:
-      - "5173:80"
+      # 对外只暴露 HTTPS；容器内 80 端口仍用于下面的健康检查
+      - "443:443"
+    volumes:
+      - /opt/smartcv/certs/:/etc/nginx/certs:ro
     healthcheck:
-      # nginx 就绪检测：访问首页返回 200（busybox wget）
+      # nginx 就绪检测：访问容器内 HTTP 80 首页返回 200
       test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:80/"]
       interval: 10s
       timeout: 3s

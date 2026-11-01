@@ -68,9 +68,11 @@ docker compose up -d                    # 一键起前后端
 
 | 服务 | 镜像 | 访问                  |
 |---|---|-----------------------|
-| 前端 `frontend` | `registry.cn-hangzhou.aliyuncs.com/smartcv/smartcv-frontend:v1` | http://localhost:5173 |
+| 前端 `frontend` | `registry.cn-hangzhou.aliyuncs.com/smartcv/smartcv-frontend:v1` | https://localhost:5173 |
 | 后端 `backend` | `registry.cn-hangzhou.aliyuncs.com/smartcv/smartcv-backend:v1` | http://localhost:8600 |
 | 搜索 `searxng` | `searxng/searxng:latest`（Docker Hub） | 仅本机 http://127.0.0.1:8080 |
+
+> 前端对外是 HTTPS（自签证书），首次访问需要把 `smartcv-web/certs/smartcv-ca.crt` 安装到「受信任的根证书颁发机构」；证书生成见 `smartcv-web/scripts/gen-self-signed-cert.sh`。`nginx.conf` 和服务器证书已经打进前端镜像，修改后需要重新构建并推送前端镜像；构建机需要先有 `certs/smartcv.crt` 和 `certs/smartcv.key`。本地 `npm run dev` 仍然是 http://localhost:5173，localhost 本身属于安全上下文，不受影响。
 
 `searxng` 是自建搜索，供诊断 agent 的 `web_search` 工具查公开资料，不需要 API Key；配置在 `searxng/settings.yml`（必须保留 `search.formats` 里的 `json`）。国内服务器要禁用连不上的引擎（Google / DuckDuckGo / Brave / Wikipedia 等），否则请求会一直挂到超时；`outgoing.max_request_timeout` 是整次搜索的硬上限。本地直接跑后端时，默认连 `http://127.0.0.1:8080`；容器内通过 `SEARXNG_URL=http://searxng:8080` 连接。
 

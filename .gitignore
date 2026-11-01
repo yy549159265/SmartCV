@@ -27,6 +27,10 @@ npm-debug.log*
 # TypeScript 增量编译缓存（vue-tsc -b 生成，提交到仓库没有意义）
 *.tsbuildinfo
 
+# ============ 本地 HTTPS 证书（含私钥，勿入库） ============
+# 由 smartcv-web/scripts/gen-self-signed-cert.sh 生成
+smartcv-web/certs/
+
 # ============ 运行期数据（后端生成，勿入库） ============
 # Playwright 的临时 artifacts / 浏览器 profile（见 services/html2pdf.py）
 smartcv-api/.runtime/

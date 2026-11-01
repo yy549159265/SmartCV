@@ -31,7 +31,11 @@ from typing_extensions import TypedDict
 
 from agents.optimize import diagnose_agent, optimize_agent, summarize_agent
 from agents.optimize.utils.checkpointer import get_checkpointer
-from agents.optimize.utils.markdown import describe_location, resume_to_markdown
+from agents.optimize.utils.markdown import (
+    describe_location,
+    format_reference_examples,
+    resume_to_markdown,
+)
 from agents.optimize.utils.tools import OptimizeStore
 from agents.utils.choose_llm import choose_llm
 from schemas.provider import ProviderConfig
@@ -54,6 +58,8 @@ class ChatState(TypedDict):
     markdown: str
     # 结构化诊断项：位置 + 原文片段 + 原因 + 依据 + 修改方向
     diagnosis: list[dict]
+    # 诊断 agent 从优秀示例提炼的写作规范（只描述怎么写，不含事实）
+    style_notes: list[str]
     summary: str
     result_json: list[dict]
 
@@ -66,10 +72,15 @@ async def run_chat_stream(
     emit: Callable[[dict], Awaitable[None]],
     session_id: str | None = None,
     llm=None,
+    references: list[dict] | None = None,
+    rewrite_mode: str = "standard",
 ) -> dict:
     """跑完整条流水线；所有事件经 emit 发出去，返回最终 {resume, summary, diagnosis}。
 
     llm 参数仅供测试注入（None 时用 choose_llm(provider) 构造）。
+    references 是用户选中的优秀示例（完整记录），只给诊断 agent 参考；
+    其写作规范由诊断 agent 提炼后，以 style_notes 传给优化 agent。
+    rewrite_mode 是本次对话的改写强度：standard（标准）/ bold（大胆）。
     """
     if not resume_sections:
         await emit({"type": "error", "message": "简历是空的，请先在「编辑简历」页添加内容"})
@@ -78,6 +89,17 @@ async def run_chat_stream(
     llm = llm or choose_llm(provider)
     # 浅拷贝一层：优化 agent 的 patch 工具在这个副本上就地改，不污染上层入参
     store = OptimizeStore([dict(s) for s in resume_sections])
+
+    # 示例正文只在诊断 agent 的输入里出现；前端只收到方向与描述（便于展示参考来源）
+    reference_markdown = format_reference_examples(references or [])
+    reference_items = [
+        {
+            "id": str((r or {}).get("id") or ""),
+            "direction": str((r or {}).get("direction") or ""),
+            "description": str((r or {}).get("description") or ""),
+        }
+        for r in references or []
+    ]
 
     async def convert_node(state: ChatState) -> dict:
         # convert 是纯代码阶段（非 agent），也发 status 事件让前端展示「正在解析 → 完成」
@@ -90,14 +112,30 @@ async def run_chat_stream(
     async def diagnose_node(state: ChatState) -> dict:
         # 上一轮的总结（改了/没改哪些位置）作为本轮诊断的上下文
         history = _last_summary(state.get("messages"))
-        diagnosis = await diagnose_agent.run(
-            llm, state["markdown"], jd, question, session_id, history
+        diagnosis, style_notes = await diagnose_agent.run(
+            llm,
+            state["markdown"],
+            jd,
+            question,
+            session_id,
+            history,
+            references=reference_markdown,
+            reference_items=reference_items,
+            rewrite_mode=rewrite_mode,
         )
-        return {"diagnosis": diagnosis}
+        return {"diagnosis": diagnosis, "style_notes": style_notes}
 
     async def optimize_node(state: ChatState) -> dict:
         await optimize_agent.run(
-            llm, store, state["markdown"], jd, state["diagnosis"], question, session_id
+            llm,
+            store,
+            state["markdown"],
+            jd,
+            state["diagnosis"],
+            question,
+            session_id,
+            style_notes=state.get("style_notes") or [],
+            rewrite_mode=rewrite_mode,
         )
         return {"result_json": store.resume}
 
@@ -127,6 +165,7 @@ async def run_chat_stream(
         "resume_sections": resume_sections,
         "markdown": "",
         "diagnosis": [],
+        "style_notes": [],
         "summary": "",
         "result_json": resume_sections,
     }

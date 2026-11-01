@@ -1,5 +1,5 @@
 /**
- * "优化简历"页面的状态仓库（Pinia）
+ * "诊断简历"页面的状态仓库（Pinia）
  *
  * 存：jd（职位描述）+ messages（对话时间线）。
  *
@@ -22,6 +22,8 @@ import {
   type AskQuestion,
   type ChatAnswer,
   type DiagnosisItem,
+  type ReferenceExampleItem,
+  type RewriteMode,
   type WebSearchItem,
 } from '@/api/chat'
 import { getProviderSettings, missingProviderFields } from '@/api/provider'
@@ -81,6 +83,12 @@ export type ChatItem =
       searches: WebSearchItem[]
       /** 「Web 搜索」是否展开 */
       searchesOpen: boolean
+      /** 本次诊断实际生效的优秀示例（后端 reference_examples 事件） */
+      references: ReferenceExampleItem[]
+      /** 从优秀示例提炼的写作规范（diagnosis 事件带回，原样交给修改 agent） */
+      styleNotes: string[]
+      /** 「优秀示例」是否展开 */
+      examplesOpen: boolean
       status: 'running' | 'done'
     }
 
@@ -126,6 +134,10 @@ export const useOptimizeStore = defineStore('optimize', {
   state: () => ({
     /** 职位描述（JD），可选 */
     jd: '',
+    /** 本次诊断参考的优秀示例 id（最多 3 个，顺序即「示例 N」的编号） */
+    referenceIds: [] as string[],
+    /** 聊天优化强度：标准保留原句式；大胆允许整段重写表达 */
+    rewriteMode: 'standard' as RewriteMode,
     /** 对话时间线 */
     messages: [] as ChatItem[],
     /** 是否正在等待 AI 回复 */
@@ -136,7 +148,13 @@ export const useOptimizeStore = defineStore('optimize', {
      * reverted 放这里而不是弹窗组件里：关掉弹窗再打开（对话栏头有入口），
      * 用户逐处还原的选择不会丢。
      */
-    pendingDiff: null as { before: Section[]; after: Section[]; reverted: string[] } | null,
+    pendingDiff: null as {
+      before: Section[]
+      after: Section[]
+      reverted: string[]
+      /** 来源：聊天修改 / 全文纠错；只影响弹窗标题和提示文案 */
+      source?: 'chat' | 'grammar'
+    } | null,
     /** 对比弹窗是否展开（关掉弹窗 pendingDiff 仍保留，可从对话栏头再打开） */
     diffOpen: false,
   }),
@@ -144,6 +162,22 @@ export const useOptimizeStore = defineStore('optimize', {
   actions: {
     setJd(text: string) {
       this.jd = text
+    },
+
+    /** 更新本次诊断参考的优秀示例（选择器最多给 3 个，这里再兜一层） */
+    setReferenceIds(ids: string[]) {
+      this.referenceIds = ids.slice(0, 3)
+    },
+
+    /** 切换聊天优化强度（影响下一次发送，不影响已产生的会话） */
+    setRewriteMode(mode: RewriteMode) {
+      this.rewriteMode = mode
+    },
+
+    /** 存放一份待确认的修改：聊天结果和全文纠错都走这里，共用对比弹窗 */
+    setPendingDiff(before: Section[], after: Section[], source: 'chat' | 'grammar' = 'chat') {
+      this.pendingDiff = { before, after, reverted: [], source }
+      this.diffOpen = true
     },
 
     /** 发送一条消息：上屏用户气泡 → SSE 流式收各 agent 块 → 收下改好的简历待用户确认 */
@@ -187,7 +221,7 @@ export const useOptimizeStore = defineStore('optimize', {
       }
 
       try {
-        await sendChatMessage(trimmed, this.jd, resumeStore.resume, provider, {
+        await sendChatMessage(trimmed, this.jd, resumeStore.resume, provider, [...this.referenceIds], this.rewriteMode, {
           // convert 阶段（纯代码，非 agent）：显示「正在解析 → 已完成」一条状态
           onStatus: (_stage, text) => {
             const last = this.messages[this.messages.length - 1]
@@ -209,12 +243,17 @@ export const useOptimizeStore = defineStore('optimize', {
               lead = prev.text
               this.messages.pop()
             }
-            this.messages.push({ kind: 'agent', agent, label, text: '', thinking: '', steps: [], thinkingOpen: false, toolsOpen: false, answerOpen: true, diagnosis: [], lead, markdown: '', markdownOpen: false, questions: [], questionsOpen: false, searches: [], searchesOpen: false, status: 'running' })
+            this.messages.push({ kind: 'agent', agent, label, text: '', thinking: '', steps: [], thinkingOpen: false, toolsOpen: false, answerOpen: true, diagnosis: [], lead, markdown: '', markdownOpen: false, questions: [], questionsOpen: false, searches: [], searchesOpen: false, references: [], styleNotes: [], examplesOpen: false, status: 'running' })
           },
           // 诊断 agent 的输入简历（带位置编号），挂在诊断块上供「位置诊断」展开查看
           onResumeMarkdown: (text) => {
             const b = lastAgent()
             if (b) b.markdown = text
+          },
+          // 本次实际生效的优秀示例（挂在诊断块上，可在「优秀示例」里回看）
+          onReferenceExamples: (items) => {
+            const b = lastAgent()
+            if (b) b.references = items
           },
           // 联网搜索结果：单独挂在「Web 搜索」区，工具调用里不再重复
           onWebSearch: (item) => {
@@ -237,10 +276,12 @@ export const useOptimizeStore = defineStore('optimize', {
             const b = lastAgent()
             if (b) b.status = 'done'
           },
-          // 诊断完成：结构化诊断项挂到诊断 agent 块上（只展示文字，坐标不渲染）
-          onDiagnosis: (items) => {
+          // 诊断完成：结构化诊断项 + 提炼的写作规范挂到诊断 agent 块上（只展示文字，坐标不渲染）
+          onDiagnosis: (items, styleNotes) => {
             const b = lastAgent()
-            if (b) b.diagnosis = items.map((it) => ({ ...it, status: 'pending', note: '' }))
+            if (!b) return
+            b.diagnosis = items.map((it) => ({ ...it, status: 'pending', note: '' }))
+            b.styleNotes = styleNotes
           },
           // 优化 agent 逐条审查/执行后，回写对应诊断项的展示状态
           onDiagnosisStatus: ({ index, status, reason }) => {
@@ -277,8 +318,7 @@ export const useOptimizeStore = defineStore('optimize', {
             // 这里直接用后端返回的原始 JSON、不走 normalizeResumeData：
             // 后者会给每个节点重新生成 uid，两边 id 一失配，
             // 比对就会把整份简历判成"全变了"（后端 patch 是就地的，id 原样保留）。
-            this.pendingDiff = { before, after: resume as Section[], reverted: [] }
-            this.diffOpen = true
+            this.setPendingDiff(before, resume as Section[], 'chat')
           },
         })
       } catch (err) {

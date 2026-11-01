@@ -17,6 +17,8 @@
   image / spacer 没有文字，不参与（不占 c / i 编号）
 """
 
+import re
+
 _PATCHABLE_TYPES = {"iconText", "twoColumn", "timeRange", "listText", "tag"}
 
 
@@ -60,18 +62,155 @@ def iter_text_units(content: dict) -> list[tuple[str, int, str]]:
     return []
 
 
+def _numbered_unit_lines(section: dict, s: int) -> list[str]:
+    """一个章节里所有可改文字单元的行（带 [s:r:c:i] 编号）。"""
+    lines: list[str] = []
+    for r, window in enumerate(_leaf_windows(section)):
+        for c, content in enumerate(_text_contents(window)):
+            for i, (_utype, _ui, text) in enumerate(iter_text_units(content)):
+                lines.append(f"[s:{s} r:{r} c:{c} i:{i}] {text}")
+    return lines
+
+
 def resume_to_markdown(resume: list[dict]) -> str:
     """把 Section[] 拍平成带位置编号的标记文本（每行一个可替换文字单元）。"""
     lines: list[str] = []
     for s, section in enumerate(resume):
         title = (section.get("title") or "").strip()
         lines.append(f"# {title}")
-        for r, window in enumerate(_leaf_windows(section)):
-            for c, content in enumerate(_text_contents(window)):
-                for i, (_utype, _ui, text) in enumerate(iter_text_units(content)):
-                    lines.append(f"[s:{s} r:{r} c:{c} i:{i}] {text}")
+        lines.extend(_numbered_unit_lines(section, s))
         lines.append("")
     return "\n".join(lines).rstrip() + "\n"
+
+
+def resume_to_grammar_markdown(resume: list[dict]) -> str:
+    """全文纠错专用：章节标题也带 s 坐标，正文行沿用 [s:r:c:i]。
+
+    普通 resume_to_markdown 的标题是 `# 标题`，没有坐标，模型无法指回某个章节；
+    纠错要能改标题，所以单独给出 `[标题 s:N] 标题文字` 的行格式。
+    """
+    lines: list[str] = []
+    for s, section in enumerate(resume):
+        title = (section.get("title") or "").strip()
+        lines.append(f"[标题 s:{s}] {title}")
+        lines.extend(_numbered_unit_lines(section, s))
+        lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+# ---------- 优秀示例：纯结构 Markdown（不带位置编号） ----------
+
+# 说明：优秀示例是「别人的简历」，不能用 resume_to_markdown —— 那套 [s:r:c:i]
+# 坐标属于用户自己的简历，混进示例会让模型把示例当成可修改的对象。
+# 这里只输出结构文本，供诊断 agent 参考写作方式与结构。
+
+_HTML_TAG = re.compile(r"<[^>]+>")
+
+
+def _plain_text(value) -> str:
+    """去掉内联 SVG / HTML 标签并压平空白：图标可能是品牌 SVG，原样塞进 prompt
+    会占掉大量 token，而且对模型理解结构没有任何帮助。"""
+    text = _HTML_TAG.sub("", str(value or ""))
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _plain_content_lines(content: dict, depth: int) -> list[str]:
+    """一个内容节点 → 若干行普通 Markdown（不参与编号）。"""
+    indent = "  " * depth
+    ctype = content.get("type")
+    data = content.get("content") or {}
+
+    if ctype == "iconText":
+        icon = _plain_text(data.get("icon"))
+        text = _plain_text(data.get("text"))
+        tags = [_plain_text(t) for t in data.get("tags") or [] if _plain_text(t)]
+        if not (icon or text or tags):
+            return []
+        line = f"{indent}- {icon}{text}".rstrip()
+        if tags:
+            line += f"  标签：{' / '.join(tags)}"
+        return [line]
+
+    if ctype == "twoColumn":
+        columns = [_plain_text(c) for c in data.get("columns") or [] if _plain_text(c)]
+        if not columns:
+            return []
+        separator = _plain_text(data.get("separator")) or "|"
+        return [f"{indent}- {f' {separator} '.join(columns)}"]
+
+    if ctype == "timeRange":
+        start = _plain_text(data.get("start"))
+        end = _plain_text(data.get("end"))
+        if start and end:
+            return [f"{indent}- {start} - {end}"]
+        if start or end:
+            return [f"{indent}- {start or end}"]
+        return []
+
+    if ctype == "tag":
+        tags = [_plain_text(t) for t in data.get("tags") or [] if _plain_text(t)]
+        return [f"{indent}- 标签：{' / '.join(tags)}"] if tags else []
+
+    if ctype == "listText":
+        ordered = data.get("listType") == "ordered"
+        lines: list[str] = []
+        for number, item in enumerate(data.get("items") or [], 1):
+            text = _plain_text((item or {}).get("text"))
+            if not text:
+                continue
+            # 列表项自带缩进（0~2）叠加在窗口层级上，保留原文的层级感
+            item_indent = "  " * min(int((item or {}).get("indent") or 0), 2)
+            marker = f"{number}." if ordered else "-"
+            lines.append(f"{indent}{item_indent}{marker} {text}")
+        return lines
+
+    # image / spacer 没有可参考的文字结构，跳过
+    return []
+
+
+def _plain_window_lines(window: dict, depth: int) -> list[str]:
+    """一个布局窗口 → 若干行；容器窗口递归子窗口并多缩进一级。"""
+    if window.get("rows"):
+        lines: list[str] = []
+        for child in window["rows"]:
+            lines.extend(_plain_window_lines(child, depth + 1))
+        return lines
+    lines = []
+    for content in window.get("contents") or []:
+        lines.extend(_plain_content_lines(content, depth))
+    return lines
+
+
+def resume_to_plain_markdown(resume: list[dict]) -> str:
+    """把 Section[] 转成「纯结构 Markdown」（无位置编号），用于优秀示例。"""
+    lines: list[str] = []
+    for section in resume:
+        # 顶部信息块常常没有标题：不硬造标题，直接列内容
+        title = _plain_text(section.get("title"))
+        if title:
+            lines.append(f"## {title}")
+        for window in section.get("rows") or []:
+            lines.extend(_plain_window_lines(window, 0))
+        lines.append("")
+    return "\n".join(lines).strip() + "\n"
+
+
+def format_reference_examples(examples: list[dict]) -> str:
+    """把选中的优秀示例拼成诊断 prompt 里的 `<优秀示例>` 内容。
+
+    每份示例带方向与说明；正文是纯结构 Markdown，不带用户简历的坐标。
+    """
+    parts: list[str] = []
+    for index, example in enumerate(examples, 1):
+        direction = str(example.get("direction") or "").strip()
+        description = str(example.get("description") or "").strip()
+        attrs = f' 方向="{direction}"' if direction else ""
+        body = resume_to_plain_markdown(example.get("resume") or []).strip()
+        note = f"说明：{description}\n" if description else ""
+        parts.append(
+            f"<示例 {index}{attrs}>\n{note}<内容>\n{body}\n</内容>\n</示例 {index}>"
+        )
+    return "\n\n".join(parts)
 
 
 def locate_unit(resume: list[dict], s: int, r: int, c: int, i: int):

@@ -3,7 +3,7 @@
  * 页面 4 · 高级设置
  *
  * 左侧标签页：
- *   1. OpenAI 设置：配置「优化简历」对话用的模型供应商（localStorage，useStorage 持久化）；
+ *   1. OpenAI 设置：配置「诊断简历」对话用的模型供应商（localStorage，useStorage 持久化）；
  *   2. 提示词预览：只读展示后端 agent 用的提示词（prompts）与技能（skills）md，
  *      按 Markdown 排版渲染（只读，不可更改）。
  */
@@ -103,7 +103,7 @@ async function openMd() {
               <div class="panel-head-copy">
                 <h2 class="panel-title">OpenAI 设置</h2>
                 <p class="panel-desc">
-                  支持任何兼容 OpenAI 格式的接口地址与模型名。保存后，优化对话与提示词增强都会使用这里的配置。
+                  支持任何兼容 OpenAI 格式的接口地址与模型名。保存后，诊断对话与提示词增强都会使用这里的配置。
                 </p>
               </div>
               <span class="panel-badge">

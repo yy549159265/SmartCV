@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * AI 修改对比弹窗 —— 「优化简历」页收到后端改好的简历后弹出来给用户过目。
+ * AI 修改对比弹窗 —— 「诊断简历」页收到后端改好的简历后弹出来给用户过目。
  *
  * 交互（类似 IntelliJ 的 Git 冲突解决界面）：
  *  左栏 = 修改前的简历（绿色标记）；右栏 = 当前结果（AI 修改为红色标记）。
@@ -30,15 +30,20 @@ import { previewZoom } from '@/composables/usePreviewZoom'
 import { CONTENT_WIDTH } from '@/utils/constants'
 import type { Section } from '@/types'
 
-const props = defineProps<{
-  show: boolean
-  /** 修改前的简历（发请求前深拷贝的快照） */
-  before: Section[]
-  /** 修改后的简历（后端返回的原始 JSON） */
-  after: Section[]
-  /** 已还原的改动 key 列表（`section:id` / `row:id` / `content:id`） */
-  reverted: string[]
-}>()
+const props = withDefaults(
+  defineProps<{
+    show: boolean
+    /** 修改前的简历（发请求前深拷贝的快照） */
+    before: Section[]
+    /** 修改后的简历（后端返回的原始 JSON） */
+    after: Section[]
+    /** 已还原的改动 key 列表（`section:id` / `row:id` / `content:id`） */
+    reverted: string[]
+    /** 弹窗标题：聊天修改 / 全文纠错共用这个弹窗 */
+    title?: string
+  }>(),
+  { title: 'AI 修改对比' },
+)
 
 const emit = defineEmits<{
   'update:show': [boolean]
@@ -143,7 +148,7 @@ function onClose() {
     display-directive="if"
     :mask-closable="false"
     preset="card"
-    title="AI 修改对比"
+    :title="props.title"
     style="width: 96vw; max-width: 1560px"
     @update:show="emit('update:show', $event)"
   >

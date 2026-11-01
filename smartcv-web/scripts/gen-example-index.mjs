@@ -1,16 +1,14 @@
 /**
  * 生成 example/index.json —— 示例模板的目录清单。
  *
- * 为什么需要它：
- *   前端原来用 api.github.com 列 example/ 目录，未认证只有 60 次/小时/IP，
- *   多开标签页或同出口 IP 的其它工具一多就会耗尽。改成读仓库里的静态清单后，
- *   清单和示例文件都走 raw.githubusercontent.com（CDN 直出），不消耗 API 配额。
+ * 前端示例画廊从后端 /api/examples 读这份清单和示例文件，数据源是
+ * smartcv-api/example/ 本地目录，不再依赖 GitHub。
  *
  * 用法（在 smartcv-web 下）：
  *   npm run examples:index
  *
  * 新增示例的流程：
- *   1. 往仓库 example/ 丢一个 json 文件（建议按 `01-标题.json` 命名）；
+ *   1. 往 smartcv-api/example/ 丢一个 json 文件（建议按 `01-标题.json` 命名）；
  *   2. 跑一次本脚本；
  *   3. 把新 json 和更新后的 index.json 一起提交。
  */
@@ -18,8 +16,8 @@ import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-/** 仓库根目录下的 example/（本脚本在 smartcv-web/scripts/ 下） */
-const EXAMPLE_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '../../example')
+/** smartcv-api 下的 example/（本脚本在 smartcv-web/scripts/ 下） */
+const EXAMPLE_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '../../smartcv-api/example')
 const INDEX_FILE = join(EXAMPLE_DIR, 'index.json')
 
 /**

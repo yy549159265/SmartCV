@@ -38,3 +38,5 @@ smartcv-api/chat_checkpoints.sqlite-*
 smartcv-data/stats.json
 docling-models
 /smartcv-api/data/stats.json
+# 优秀示例库（用户上传，全局共享，运行期数据）
+/smartcv-api/data/reference-examples/

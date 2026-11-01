@@ -24,7 +24,7 @@ const store = useResumeStore()
 const measureFlowEl = ref<HTMLElement | null>(null)
 usePagination(measureFlowEl)
 
-/* ---------- 缩放：与优化页共用 previewZoom，两边字号永远一致 ---------- */
+/* ---------- 缩放：与诊断页共用 previewZoom，两边字号永远一致 ---------- */
 
 /** A4 纸张样式：固定 A4 尺寸 + 页边距 + 缩放 */
 const pageStyle = computed(() => ({

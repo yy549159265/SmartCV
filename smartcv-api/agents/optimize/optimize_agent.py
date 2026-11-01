@@ -22,6 +22,31 @@ logger = logging.getLogger("smartcv")
 
 _SYSTEM_PROMPT = (Path(__file__).resolve().parent / "system_prompt_optimize.md").read_text(encoding="utf-8")
 
+# 改写强度只改变「表达可以改多深」，事实 / 结构 / 坐标边界不变。
+_REWRITE_MODE_RULES = {
+    "standard": (
+        "\n\n# 本次改写强度：标准\n"
+        "对判为 change 的诊断，尽量保留原句式和用词，只做必要改写；"
+        "原文已经通顺时只换几个词不算修改。"
+    ),
+    "bold": (
+        "\n\n# 本次改写强度：大胆\n"
+        "对判为 change 的诊断，可以在该文字单元的完整范围内大幅重写句式、句序和表达，"
+        "不必保留原句。但必须遵守：\n"
+        "1. 事实只来自简历、JD 和用户回答，数字、日期、公司、学校、项目、技术栈、链接、邮箱、"
+        "电话一律保持原样，不能新增任何事实；\n"
+        "2. 仍然只替换文字，不增删章节 / 窗口 / 内容，不调整顺序，不动排版和图片；\n"
+        "3. `text` 仍必须是该坐标的完整新文字，不能丢掉原文后半段或链接。"
+    ),
+}
+
+
+def _system_prompt(rewrite_mode: str) -> str:
+    """把本次改写强度追加到系统提示词末尾。"""
+    return _SYSTEM_PROMPT + _REWRITE_MODE_RULES.get(
+        rewrite_mode, _REWRITE_MODE_RULES["standard"]
+    )
+
 
 def _target_texts(store: OptimizeStore, diagnosis: list[dict]) -> list[str]:
     """按诊断序号取出目标位置的完整原文，给优化 agent 当「原文」看。
@@ -48,10 +73,15 @@ async def run(
     diagnosis: list[dict],
     question: str,
     session_id: str | None = None,
+    style_notes: list[str] | None = None,
+    rewrite_mode: str = "standard",
 ) -> str:
     """跑优化 agent（工具会就地改 store.resume）。
 
     返回 agent 的收尾语（一般为空）；真实结果在 store.resume 里。
+    style_notes 是诊断 agent 从优秀示例提炼的写作规范：只约束怎么写，
+    这里【不接收示例原文】，事实污染的入口被彻底切断。
+    rewrite_mode = standard（保留原句式）/ bold（允许整段重写表达）。
     """
     writer = get_stream_writer()
     writer({"type": "agent_start", "agent": "optimize", "label": "优化 agent"})
@@ -69,11 +99,17 @@ async def run(
     diagnosis_text = format_diagnosis(
         diagnosis, include_coords=True, zero_based=True, full_texts=_target_texts(store, diagnosis)
     )
+    # 写作规范来自优秀示例，只描述表达方式；示例原文不进优化环节
+    style_block = ""
+    if style_notes:
+        rules = "\n".join(f"{i}. {note}" for i, note in enumerate(style_notes, 1))
+        style_block = f"<写作规范>\n{rules}\n</写作规范>\n\n"
     # 输入用 <> 标签分隔，和诊断 agent 的输入格式保持一致，避免模型把几段内容混读
     message = (
         f"<简历>\n{markdown}\n</简历>\n\n"
         f"{jd_block}"
         f"<诊断>\n{diagnosis_text}\n</诊断>\n\n"
+        f"{style_block}"
         f"<修改要求>\n{question}\n</修改要求>\n\n"
         f"请按诊断逐条修改。"
     )
@@ -81,7 +117,7 @@ async def run(
     # 思考过程，custom 模式把工具的 tool_call/tool_result 事件转发出去；
     # 改动都在 patch_content 里完成，跑完直接读 store.resume。
     async for item in agent.astream(
-        {"messages": [{"type": "system", "content": _SYSTEM_PROMPT}, {"type": "human", "content": message}]},
+        {"messages": [{"type": "system", "content": _system_prompt(rewrite_mode)}, {"type": "human", "content": message}]},
         stream_mode=["messages", "custom"],
         config={"recursion_limit": 20, "configurable": {"session_id": session_id}},
     ):

@@ -88,7 +88,7 @@ const canRedo = computed(() => store.redoStack.length > 0)
 
       <span class="editor-toolbar-divider" />
 
-      <!-- 预览缩放（与优化页共用 previewZoom，两边始终一致） -->
+      <!-- 预览缩放（与诊断页共用 previewZoom，两边始终一致） -->
       <div class="editor-zoom">
         <button
           v-for="z in ZOOM_LEVELS"

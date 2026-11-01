@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * 页面 2 · 优化简历（AI 辅助修改）
+ * 页面 2 · 诊断简历（AI 辅助修改）
  *
  * 布局：
  *  - 左侧：当前简历的只读渲染（连续流，与预览同款组件）；
@@ -14,15 +14,18 @@ import type { InputInst } from 'naive-ui'
 import PreviewSection from '@/components/PreviewSection.vue'
 import ResumeDiffDialog from '@/components/ResumeDiffDialog.vue'
 import AskQuestionCard from '@/components/AskQuestionCard.vue'
+import ReferenceExamplePicker from '@/components/ReferenceExamplePicker.vue'
+import IconGlyph from '@/components/IconGlyph.vue'
 import { useResumeStore } from '@/stores/resume'
 import { useOptimizeStore, type ChatItem, type ChatStep } from '@/stores/optimize'
 import { useStatsStore } from '@/stores/stats'
-import type { ChatAnswer, DiagnosisItem } from '@/api/chat'
+import type { ChatAnswer, DiagnosisItem, RewriteMode } from '@/api/chat'
+import { checkResumeGrammar } from '@/api/grammar'
 
 /** 各 agent 生命周期的友好文案：running（进行中）/ done（完成） */
 const AGENT_STATUS: Record<string, { running: string; done: string }> = {
   diagnose: { running: '诊断简历中', done: '诊断完成' },
-  optimize: { running: '优化简历中', done: '优化完成' },
+  optimize: { running: '修改简历中', done: '修改完成' },
   summarize: { running: '总结中', done: '总结完成' },
 }
 
@@ -159,6 +162,9 @@ import { renderMarkdown } from '@/utils/markdown'
 import { message } from '@/utils/feedback'
 import { getAgentSessionId, resetAgentSessionId } from '@/api/session'
 
+/** 示例库是独立页面：选择器为空时给一个「去上传示例」的跳转入口 */
+const emit = defineEmits<{ 'open-library': [] }>()
+
 const resumeStore = useResumeStore()
 const optimizeStore = useOptimizeStore()
 const statsStore = useStatsStore()
@@ -183,7 +189,7 @@ const pages = computed(() =>
 /**
  * 分页 A4 纸样式：和「实时预览」的 A4 纸张保持完全一致 ——
  * 同样的纸宽 / 最小高 / 页边距 / 缩放，这样两边显示的字号、换行、分页完全一样，
- * 不会出现"优化简历页看起来更大/不分页"的问题。
+ * 不会出现"诊断简历页看起来更大/不分页"的问题。
  */
 const pageStyle = computed(() => ({
   width: `${PAGE_WIDTH}px`,
@@ -248,11 +254,19 @@ const draft = ref('')
 const chatInputRef = ref<InputInst | null>(null)
 /** 对话列表容器（用于自动滚到底部） */
 const chatListEl = ref<HTMLElement | null>(null)
+/** 输入区设置菜单（提示词增强 / 全文纠错 / 优化强度） */
+const settingsShow = ref(false)
+/** 全文纠错请求进行中：禁止同时发送聊天，避免两个结果抢同一份 pendingDiff */
+const grammarRunning = ref(false)
 
 async function onSend() {
+  if (!draft.value.trim()) return
+  if (grammarRunning.value) {
+    message.warning('全文纠错进行中，请稍候')
+    return
+  }
   const text = draft.value
   draft.value = ''
-  if (!text.trim()) return
   await optimizeStore.send(text)
   // 新消息上屏后滚到底部
   await nextTick()
@@ -287,6 +301,8 @@ const enhancing = ref(false)
 const enhanceShow = ref(false)
 const enhanceBefore = ref('')
 const enhanceAfter = ref('')
+/** 增强后的文本可直接编辑，弹窗打开后聚焦到这里 */
+const enhanceEditorEl = ref<HTMLTextAreaElement | null>(null)
 
 /**
  * 把输入框里的口语化要求发给后端改写成更明确、可执行的提示词。
@@ -295,11 +311,12 @@ const enhanceAfter = ref('')
  */
 async function onEnhancePrompt() {
   const text = draft.value.trim()
-  if (enhancing.value || optimizeStore.sending) return
+  if (enhancing.value || optimizeStore.sending || grammarRunning.value) return
   if (!text) {
     message.warning('先输入修改要求再增强')
     return
   }
+  settingsShow.value = false
 
   enhancing.value = true
   try {
@@ -309,6 +326,13 @@ async function onEnhancePrompt() {
     enhanceBefore.value = text
     enhanceAfter.value = result
     enhanceShow.value = true
+    // 弹窗打开后直接聚焦增强结果，光标放到末尾，方便用户接着改
+    await nextTick()
+    const editor = enhanceEditorEl.value
+    if (editor) {
+      editor.focus()
+      editor.setSelectionRange(editor.value.length, editor.value.length)
+    }
   } catch (e) {
     message.error(e instanceof Error ? e.message : '提示词增强失败')
   } finally {
@@ -316,11 +340,77 @@ async function onEnhancePrompt() {
   }
 }
 
-/** 确认采用增强结果：写回输入框，光标移到末尾 */
+/** 确认采用（可能被用户改过的）增强结果：写回输入框，光标移到末尾 */
 function onApplyEnhance() {
-  draft.value = enhanceAfter.value
+  const result = enhanceAfter.value.trim()
+  if (!result) {
+    message.warning('增强结果不能为空')
+    return
+  }
+  draft.value = result
   enhanceShow.value = false
   nextTick(() => chatInputRef.value?.focus())
+}
+
+/* ---------- 全文纠错 ---------- */
+
+/** 切换优化强度后收起菜单，下一次发送生效 */
+function onSetRewriteMode(mode: RewriteMode) {
+  optimizeStore.setRewriteMode(mode)
+  settingsShow.value = false
+}
+
+/**
+ * 全文纠错：把整份简历发给后端，模型返回坐标 + 完整改后文字，后端校验后
+ * 返回改好的简历。这里不直接写回，而是塞进 pendingDiff，复用「修改对比」弹窗
+ * 让用户逐处确认；点「确定应用」才走 importResume（一步 Ctrl+Z 可撤销）。
+ */
+async function onGrammarCheck() {
+  settingsShow.value = false
+  if (grammarRunning.value || optimizeStore.sending) return
+  if (optimizeStore.pendingDiff) {
+    message.warning('先处理当前待确认的修改，再检查全文')
+    return
+  }
+  if (!resumeStore.resume.length) {
+    message.warning('简历还是空的，先去「编辑简历」页添加内容')
+    return
+  }
+
+  // 改前快照：和聊天修改一样深拷贝，避免请求期间简历变化导致 diff 失真
+  const before = JSON.parse(JSON.stringify(resumeStore.resume)) as Section[]
+  grammarRunning.value = true
+  try {
+    const result = await checkResumeGrammar(before)
+
+    // 请求期间简历被改过（撤销 / 其它入口）时放弃本次结果，防止用旧快照覆盖新内容
+    if (JSON.stringify(resumeStore.resume) !== JSON.stringify(before)) {
+      message.warning('检查期间简历发生了变化，请重新检查')
+      return
+    }
+
+    if (!result.stats.fixed) {
+      message.info(
+        result.stats.skipped
+          ? `未发现可应用的错误，${result.stats.skipped} 处建议未通过校验`
+          : '未发现语法或拼写问题',
+      )
+      return
+    }
+
+    optimizeStore.setPendingDiff(before, result.resume, 'grammar')
+    if (result.stats.skipped) {
+      message.info(
+        `已修正 ${result.stats.fixed} 处；另有 ${result.stats.skipped} 处建议未通过校验`,
+      )
+    } else {
+      message.success(`已修正 ${result.stats.fixed} 处，请确认后应用`)
+    }
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '全文纠错失败')
+  } finally {
+    grammarRunning.value = false
+  }
 }
 
 /** 当前会话 id（展示用；「新建会话」重置后同步更新） */
@@ -336,6 +426,11 @@ function onNewConversation() {
 
 /* ---------- AI 修改对比 ---------- */
 
+/** 对比弹窗标题：全文纠错和聊天修改共用同一个弹窗 */
+const diffTitle = computed(() =>
+  optimizeStore.pendingDiff?.source === 'grammar' ? '全文纠错对比' : 'AI 修改对比',
+)
+
 /**
  * 应用对比弹窗里的修改：这时候才真正把（逐处筛选过的）结果写回 store。
  * importResume 会重生成 id 并整体替换，同时被 main.ts 的 $onAction 记一次撤销快照，
@@ -343,9 +438,17 @@ function onNewConversation() {
  * 全部还原时 store 不会写回，提示也换成"简历未改动"。
  */
 function onApplyDiff() {
+  const source = optimizeStore.pendingDiff?.source
   const applied = optimizeStore.applyPendingDiff()
-  if (applied) message.success('已应用 AI 修改，可用 Ctrl+Z 撤销')
-  else message.info('所有改动都已还原，简历保持不变')
+  if (applied) {
+    message.success(
+      source === 'grammar'
+        ? '已应用纠错修改，可用 Ctrl+Z 撤销'
+        : '已应用 AI 修改，可用 Ctrl+Z 撤销',
+    )
+  } else {
+    message.info('所有改动都已还原，简历保持不变')
+  }
 }
 </script>
 
@@ -460,6 +563,13 @@ function onApplyDiff() {
         </div>
       </div>
 
+      <!-- 优秀示例选择器：诊断时参考他人简历的写作方式与结构，最多 3 份 -->
+      <ReferenceExamplePicker
+        :selected="optimizeStore.referenceIds"
+        @update:selected="optimizeStore.setReferenceIds"
+        @open-library="emit('open-library')"
+      />
+
       <!-- 对话栏 -->
       <div class="chat-header">
         <span class="chat-heading">
@@ -469,6 +579,15 @@ function onApplyDiff() {
         <span class="panel-spacer" />
         <!-- 右侧操作整组对齐；窄面板放不下时整组换行并靠右，不会被裁掉 -->
         <div class="chat-actions">
+          <!-- 大胆模式常显一个轻量标签；点它重新打开设置菜单 -->
+          <button
+            v-if="optimizeStore.rewriteMode === 'bold'"
+            class="rewrite-mode-chip"
+            title="当前为大胆优化，点此切换"
+            @click="settingsShow = true"
+          >
+            大胆优化
+          </button>
           <!-- 对比弹窗关掉后简历仍是旧的，这里留个入口，想好了再点开应用 -->
           <n-button
             v-if="optimizeStore.pendingDiff"
@@ -603,6 +722,37 @@ function onApplyDiff() {
                   <pre v-if="m.markdownOpen" class="agent-markdown">{{ m.markdown }}</pre>
                 </div>
 
+                <!-- 📚 优秀示例：本次诊断实际参考的示例 + 提炼出的写作规范 -->
+                <div v-if="m.references.length" class="agent-block">
+                  <button class="agent-sub-toggle" @click="m.examplesOpen = !m.examplesOpen">
+                    <span class="chevron" :class="{ open: m.examplesOpen }" aria-hidden="true"></span>
+                    <span>优秀示例</span>
+                    <span class="field-tip">
+                      <span class="field-hint">
+                        {{ m.references.length }} 份{{ m.styleNotes.length ? ` · ${m.styleNotes.length} 条规范` : '' }}
+                      </span>
+                      <span class="tip-bubble">
+                        诊断时参考的他人简历：只借写作方式与结构，事实仍来自你的简历；提炼出的写作规范会交给修改 agent 执行
+                      </span>
+                    </span>
+                  </button>
+                  <div v-if="m.examplesOpen" class="ref-notes">
+                    <div v-for="(r, ri) in m.references" :key="r.id" class="ref-note-item">
+                      <div class="ref-note-head">
+                        <span class="ref-note-index">示例 {{ ri + 1 }}</span>
+                        <span class="ref-note-direction">{{ r.direction }}</span>
+                      </div>
+                      <p class="ref-note-desc">{{ r.description }}</p>
+                    </div>
+                    <div v-if="m.styleNotes.length" class="style-notes">
+                      <div class="style-notes-title">提炼的写作规范</div>
+                      <ol class="style-notes-list">
+                        <li v-for="(note, ni) in m.styleNotes" :key="ni">{{ note }}</li>
+                      </ol>
+                    </div>
+                  </div>
+                </div>
+
                 <!-- 💭 思考过程：模型 reasoning_content 字段，折叠；模型没返回思考则给提示 -->
                 <div class="agent-block">
                   <button class="agent-sub-toggle" @click="m.thinkingOpen = !m.thinkingOpen">
@@ -710,10 +860,14 @@ function onApplyDiff() {
         </div>
       </div>
 
-      <!-- 增强中：在输入区上方就地提示，不走全局 toast（否则会飘到页面顶部） -->
+      <!-- 工具进行中：在输入区上方就地提示，不走全局 toast（否则会飘到页面顶部） -->
       <div v-if="enhancing" class="enhance-loading">
         <n-spin :size="12" />
         <span>正在增强提示词…</span>
+      </div>
+      <div v-if="grammarRunning" class="enhance-loading">
+        <n-spin :size="12" />
+        <span>正在检查全文语法与拼写…</span>
       </div>
 
       <!-- 输入区 -->
@@ -726,30 +880,122 @@ function onApplyDiff() {
           placeholder="输入修改要求，Enter 发送，Shift+Enter 换行"
           @keydown.enter.exact.prevent="onSend"
         />
-        <!-- 提示词增强：把口语化要求改写成更明确的提示词（悬停显示说明） -->
-        <n-tooltip trigger="hover">
+        <!-- 设置菜单：简历工具 / 输入工具 / 优化强度 -->
+        <n-popover
+          v-model:show="settingsShow"
+          trigger="click"
+          placement="top-start"
+          :width="304"
+        >
           <template #trigger>
             <n-button
-              class="enhance-btn"
+              class="settings-btn"
               quaternary
               size="small"
-              :disabled="optimizeStore.sending || enhancing"
-              :loading="enhancing"
-              aria-label="提示词增强"
-              @click="onEnhancePrompt"
+              aria-label="简历工具与设置"
+              :aria-expanded="settingsShow"
             >
-              <svg v-if="!enhancing" class="enhance-icon" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M12 2.5l1.7 4.8L18.5 9l-4.8 1.7L12 15.5l-1.7-4.8L5.5 9l4.8-1.7L12 2.5z" fill="currentColor" />
-                <path d="M19 14l.9 2.1 2.1.9-2.1.9L19 20l-.9-2.1L16 17l2.1-.9L19 14z" fill="currentColor" />
-              </svg>
+              <IconGlyph name="sliders-horizontal" :size="17" />
             </n-button>
           </template>
-          提示词增强
-        </n-tooltip>
+
+          <div class="composer-menu" role="menu" aria-label="简历工具与设置">
+            <div class="composer-menu-group">
+              <div class="composer-menu-label">简历工具</div>
+              <button
+                type="button"
+                role="menuitem"
+                class="composer-menu-item"
+                :disabled="optimizeStore.sending || grammarRunning || !!optimizeStore.pendingDiff"
+                @click="onGrammarCheck"
+              >
+                <span class="menu-icon" aria-hidden="true">
+                  <IconGlyph name="scan-line" :size="16" />
+                </span>
+                <span class="menu-text">
+                  <span class="menu-title">
+                    全文纠错
+                    <n-spin v-if="grammarRunning" :size="11" />
+                  </span>
+                  <span class="menu-desc">检查错别字、标点与语病，逐处对比后应用</span>
+                </span>
+              </button>
+            </div>
+
+            <div class="composer-menu-divider" />
+
+            <div class="composer-menu-group">
+              <div class="composer-menu-label">输入工具</div>
+              <button
+                type="button"
+                role="menuitem"
+                class="composer-menu-item"
+                :disabled="optimizeStore.sending || enhancing || grammarRunning"
+                @click="onEnhancePrompt"
+              >
+                <span class="menu-icon" aria-hidden="true">
+                  <IconGlyph name="sparkles" :size="16" />
+                </span>
+                <span class="menu-text">
+                  <span class="menu-title">提示词增强</span>
+                  <span class="menu-desc">把口语化要求改写成更明确的提示词</span>
+                </span>
+              </button>
+            </div>
+
+            <div class="composer-menu-divider" />
+
+            <div class="composer-menu-group">
+              <div class="composer-menu-label">优化强度</div>
+              <div class="mode-options" role="radiogroup" aria-label="优化强度">
+                <button
+                  type="button"
+                  role="menuitemradio"
+                  class="mode-option"
+                  :class="{ active: optimizeStore.rewriteMode === 'standard' }"
+                  :aria-checked="optimizeStore.rewriteMode === 'standard'"
+                  @click="onSetRewriteMode('standard')"
+                >
+                  <span class="mode-radio" aria-hidden="true" />
+                  <span class="mode-copy">
+                    <span class="mode-name">标准</span>
+                    <span class="mode-desc">保留原句式，只做必要改写</span>
+                  </span>
+                  <IconGlyph
+                    v-if="optimizeStore.rewriteMode === 'standard'"
+                    class="mode-check"
+                    name="check"
+                    :size="14"
+                  />
+                </button>
+                <button
+                  type="button"
+                  role="menuitemradio"
+                  class="mode-option"
+                  :class="{ active: optimizeStore.rewriteMode === 'bold' }"
+                  :aria-checked="optimizeStore.rewriteMode === 'bold'"
+                  @click="onSetRewriteMode('bold')"
+                >
+                  <span class="mode-radio" aria-hidden="true" />
+                  <span class="mode-copy">
+                    <span class="mode-name">大胆</span>
+                    <span class="mode-desc">可大幅重写表达，不新增事实、不改结构</span>
+                  </span>
+                  <IconGlyph
+                    v-if="optimizeStore.rewriteMode === 'bold'"
+                    class="mode-check"
+                    name="check"
+                    :size="14"
+                  />
+                </button>
+              </div>
+            </div>
+          </div>
+        </n-popover>
         <n-button
           type="primary"
           size="small"
-          :disabled="optimizeStore.sending"
+          :disabled="optimizeStore.sending || grammarRunning"
           @click="onSend"
         >
           发送
@@ -806,6 +1052,10 @@ function onApplyDiff() {
           <span class="diag-value">{{ d.suggestion }}</span>
           <span class="diag-label">依据</span>
           <span class="diag-value">{{ d.evidence }}</span>
+          <template v-if="d.reference">
+            <span class="diag-label">示例</span>
+            <span class="diag-value">{{ d.reference }}</span>
+          </template>
           <template v-if="d.note">
             <span class="diag-label">{{ d.status === 'failed' ? '失败原因' : '判定理由' }}</span>
             <span class="diag-value">{{ d.note }}</span>
@@ -826,6 +1076,7 @@ function onApplyDiff() {
        每处可单独 ← 还原 / → 恢复，点「确定应用」才把结果写回简历 -->
   <ResumeDiffDialog
     :show="optimizeStore.diffOpen && !!optimizeStore.pendingDiff"
+    :title="diffTitle"
     :before="optimizeStore.pendingDiff?.before ?? []"
     :after="optimizeStore.pendingDiff?.after ?? []"
     :reverted="optimizeStore.pendingDiff?.reverted ?? []"
@@ -869,8 +1120,15 @@ function onApplyDiff() {
         <div class="enhance-col-head">
           <span class="enhance-col-icon" aria-hidden="true">✦</span>
           <span>增强后</span>
+          <span class="enhance-editable">可编辑</span>
         </div>
-        <div class="enhance-text">{{ enhanceAfter }}</div>
+        <textarea
+          ref="enhanceEditorEl"
+          v-model="enhanceAfter"
+          class="enhance-text enhance-editor"
+          aria-label="增强后的提示词，可直接编辑"
+          spellcheck="false"
+        ></textarea>
       </div>
     </div>
     <template #footer>
@@ -1459,8 +1717,67 @@ function onApplyDiff() {
 .searches,
 .question-archive,
 .agent-answer,
-.diag-pending {
+.diag-pending,
+.ref-notes {
   animation: block-reveal 0.22s var(--ease) both;
+}
+/* 优秀示例：本次参考的示例（方向 + 描述）+ 从示例提炼出的写作规范 */
+.ref-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  border-top: 1px solid var(--border);
+  padding-top: 6px;
+}
+.ref-note-item {
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel-bg);
+}
+.ref-note-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 7px;
+}
+.ref-note-index {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--primary);
+}
+.ref-note-direction {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+.ref-note-desc {
+  margin: 3px 0 0;
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+.style-notes {
+  padding: 8px 10px;
+  border: 1px solid var(--primary-soft);
+  border-radius: 7px;
+  background: var(--primary-faint);
+}
+.style-notes-title {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--primary-hover);
+}
+.style-notes-list {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  font-size: 11.5px;
+  line-height: 1.65;
+  color: var(--text-secondary);
+}
+.style-notes-list li + li {
+  margin-top: 2px;
 }
 /* 诊断思考正文：正常字体，与步骤区分 */
 .agent-think {
@@ -2118,21 +2435,172 @@ function onApplyDiff() {
 .enhance-loading + .chat-input {
   border-top: none;
 }
-.enhance-btn {
-  align-self: flex-end;
+
+/* ---- 输入区设置菜单 ---- */
+.settings-btn {
   color: var(--text-tertiary);
-  transition: color 0.16s var(--ease);
+  transition: color 0.16s var(--ease), background-color 0.16s var(--ease);
 }
-.enhance-btn:not(:disabled):hover {
+.settings-btn:not(:disabled):hover {
   color: var(--primary);
 }
-.enhance-icon {
-  width: 18px;
-  height: 18px;
-  transition: transform 0.3s var(--ease);
+.composer-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: -2px -4px;
 }
-.enhance-btn:not(:disabled):hover .enhance-icon {
-  transform: rotate(14deg) scale(1.08);
+.composer-menu-group {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.composer-menu-label {
+  padding: 5px 10px 3px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+}
+.composer-menu-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.15s var(--ease);
+}
+.composer-menu-item:not(:disabled):hover {
+  background: var(--surface-soft);
+}
+.composer-menu-item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.menu-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--primary-faint);
+  color: var(--primary);
+}
+.menu-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.menu-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.menu-desc {
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--text-tertiary);
+}
+.composer-menu-divider {
+  height: 1px;
+  margin: 5px 9px;
+  background: var(--border);
+}
+.mode-options {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.mode-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.15s var(--ease);
+}
+.mode-option:hover {
+  background: var(--surface-soft);
+}
+.mode-radio {
+  position: relative;
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin-top: 2px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 50%;
+  transition: border-color 0.15s var(--ease);
+}
+.mode-option.active .mode-radio {
+  border-color: var(--primary);
+}
+.mode-option.active .mode-radio::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: var(--primary);
+}
+.mode-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.mode-name {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--text);
+}
+.mode-option.active .mode-name {
+  color: var(--primary);
+}
+.mode-desc {
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--text-tertiary);
+}
+.mode-check {
+  margin-left: auto;
+  margin-top: 3px;
+  color: var(--primary);
+}
+.rewrite-mode-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--primary-soft);
+  border-radius: 999px;
+  background: var(--primary-faint);
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.15s var(--ease), border-color 0.15s var(--ease);
+}
+.rewrite-mode-chip:hover {
+  border-color: var(--primary);
+  background: var(--primary-soft);
 }
 
 /* 增强前后对比：左 = 原文（安静），右 = 增强结果（靛蓝强调），中间一支箭头 */
@@ -2203,6 +2671,17 @@ function onApplyDiff() {
   font-size: 10px;
   line-height: 1;
 }
+/* 「可编辑」小标签：明确告诉用户这里不是只读结果 */
+.enhance-editable {
+  margin-left: auto;
+  padding: 1px 7px;
+  border: 1px solid var(--primary-soft);
+  border-radius: 999px;
+  background: var(--panel-bg);
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--primary-hover);
+}
 .enhance-text {
   max-height: 46vh;
   overflow: auto;
@@ -2215,6 +2694,24 @@ function onApplyDiff() {
 }
 .enhance-col.after .enhance-text {
   color: var(--text);
+}
+/* 增强结果直接在原位置编辑：去掉 textarea 自带边框，沿用列卡片的边框 */
+.enhance-editor {
+  display: block;
+  width: 100%;
+  min-height: 220px;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-family: inherit;
+  resize: none;
+}
+.enhance-editor:focus-visible {
+  outline: none;
+}
+.enhance-col.after:focus-within {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(71, 83, 199, 0.1);
 }
 .enhance-arrow {
   display: flex;
@@ -2243,6 +2740,9 @@ function onApplyDiff() {
   }
   .enhance-text {
     max-height: 32vh;
+  }
+  .enhance-editor {
+    min-height: 140px;
   }
 }
 

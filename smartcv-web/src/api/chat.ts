@@ -1,20 +1,23 @@
 /**
- * "优化简历"对话接口（SSE 流式）
+ * "诊断简历"对话接口（SSE 流式）
  *
  * 后端：POST /api/chat（见 smartcv-api/routers/agent.py）
- *   入参：{ resume: Section[], message: string, jd?: string, provider: {...} }
+ *   入参：{ resume: Section[], message: string, jd?, provider, referenceIds?: string[], rewriteMode? }
+ *         referenceIds = 本次诊断参考的优秀示例 id（最多 3 个，后端按顺序编号）
+ *         rewriteMode = 优化强度：standard（标准）/ bold（大胆）
  *   出参：SSE 事件流（text/event-stream），每条事件 = { type, ... }：
  *     - { type: "status",      stage, text }         阶段开始（convert）
  *     - { type: "agent_start", agent, label }        进入 agent（诊断/优化/摘要）
  *     - { type: "agent_end",   agent, label }        结束 agent
  *     - { type: "resume_markdown", text }           诊断 agent 的输入：带位置编号的简历文本
+ *     - { type: "reference_examples", items }        本次实际生效的优秀示例（id/方向/描述）
  *     - { type: "tool_call",   tool, args }          优化 agent 调用工具（patch_content 等）
  *     - { type: "tool_result", tool, result }        工具返回
  *     - { type: "web_search",  query, results, error }  诊断 agent 联网搜索的结果
  *     - { type: "delta",       stage, text }         阶段内逐 token 流式（打字机）
  *     - { type: "ask_question", questionId, title, questions }  诊断 agent 反问，等用户回答
  *     - { type: "ask_question_closed", questionId, reason }     问题被关闭（超时）
- *     - { type: "diagnosis",   count, items }        诊断完成后的结构化诊断项
+ *     - { type: "diagnosis",   count, items, styleNotes }  诊断项 + 从示例提炼的写作规范
  *     - { type: "diagnosis_status", index, status, reason }  优化 agent 审查/执行单条诊断的状态
  *     - { type: "resume",      resume, summary, diagnosis }  最终改好的简历 JSON
  *     - { type: "done" }                             流水线完成
@@ -26,6 +29,9 @@
 import { apiErrorMessage } from '@/api/error'
 import { apiFetch } from '@/api/http'
 import type { ProviderSettings } from '@/api/provider'
+
+/** 优化强度：标准 = 保留原句式；大胆 = 允许整段重写表达（不新增事实、不改结构） */
+export type RewriteMode = 'standard' | 'bold'
 
 /** 诊断项的审查/执行状态（由优化 agent 的 diagnosis_status 事件更新） */
 export type DiagnosisStatus = 'pending' | 'change' | 'skip' | 'done' | 'failed'
@@ -50,10 +56,21 @@ export interface DiagnosisItem {
   evidence: string
   /** 修改方向 */
   suggestion: string
+  /** 若参考了优秀示例：示例序号 + 可迁移的写法特征（只写写法，不含示例事实） */
+  reference?: string
   /** 前端状态：默认待分析；优化 agent 审查/执行后更新 */
   status?: DiagnosisStatus
   /** 判定理由（change/skip）或失败原因（failed） */
   note?: string
+}
+
+/** 本次诊断实际生效的一份优秀示例（后端只下发展示需要的字段） */
+export interface ReferenceExampleItem {
+  id: string
+  /** 适用职业方向 */
+  direction: string
+  /** 优秀简历描述 */
+  description: string
 }
 
 /** 一条联网搜索结果（诊断 agent 的 web_search 工具返回） */
@@ -120,6 +137,8 @@ export interface ChatHandlers {
   onAgentStart?: (agent: string, label: string) => void
   /** 诊断 agent 的输入：带位置编号的简历 Markdown */
   onResumeMarkdown?: (text: string) => void
+  /** 本次实际生效的优秀示例（后端解析失败 / 缺失的 id 不会出现在这里） */
+  onReferenceExamples?: (items: ReferenceExampleItem[]) => void
   /** 诊断 agent 联网搜索：query + 结果（前端在「Web 搜索」区单独展示） */
   onWebSearch?: (item: WebSearchItem) => void
   /** 优化 agent 调用工具（patch_content 等） */
@@ -132,8 +151,8 @@ export interface ChatHandlers {
   onAskQuestion?: (payload: AskQuestionPayload) => void
   /** 问题已关闭（等待超时等），前端把卡片置为失效 */
   onAskQuestionClosed?: (questionId: string, reason: string) => void
-  /** 诊断完成：结构化诊断项（前端只展示文字，不展示坐标） */
-  onDiagnosis?: (items: DiagnosisItem[]) => void
+  /** 诊断完成：结构化诊断项 + 从优秀示例提炼的写作规范（前端只展示文字，不展示坐标） */
+  onDiagnosis?: (items: DiagnosisItem[], styleNotes: string[]) => void
   /** 优化 agent 审查/执行诊断后，更新对应诊断项的状态 */
   onDiagnosisStatus?: (payload: {
     index: number
@@ -155,12 +174,14 @@ export async function sendChatMessage(
   jd: string,
   resume: unknown,
   provider: ProviderSettings,
+  referenceIds: string[] = [],
+  rewriteMode: RewriteMode = 'standard',
   handlers?: ChatHandlers,
 ): Promise<string> {
   const res = await apiFetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ resume, message, jd, provider }),
+    body: JSON.stringify({ resume, message, jd, provider, referenceIds, rewriteMode }),
   })
   if (!res.ok || !res.body) {
     throw new Error(await apiErrorMessage(res, '对话失败'))
@@ -194,6 +215,11 @@ export async function sendChatMessage(
         break
       case 'resume_markdown':
         handlers?.onResumeMarkdown?.(String(ev.text ?? ''))
+        break
+      case 'reference_examples':
+        handlers?.onReferenceExamples?.(
+          Array.isArray(ev.items) ? (ev.items as ReferenceExampleItem[]) : [],
+        )
         break
       case 'web_search':
         handlers?.onWebSearch?.({
@@ -239,6 +265,9 @@ export async function sendChatMessage(
       case 'diagnosis':
         handlers?.onDiagnosis?.(
           Array.isArray(ev.items) ? (ev.items as DiagnosisItem[]) : [],
+          Array.isArray(ev.styleNotes)
+            ? ev.styleNotes.filter((note): note is string => typeof note === 'string')
+            : [],
         )
         break
       case 'diagnosis_status':

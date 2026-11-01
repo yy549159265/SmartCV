@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
+from agents.grammar.agent import run_grammar_agent
 from agents.md2json.schemas.resume import Section
 from agents.optimize.graph import run_chat_stream
 from agents.optimize.schemas.task import create_chat_task, get_chat_task
@@ -16,6 +17,7 @@ from agents.polish.agent import run_polish_agent
 from routers.deps import get_agent_session
 from schemas.provider import ProviderConfig
 from schemas.response import error, ok
+from services.reference_examples import resolve_examples
 
 logger = logging.getLogger("smartcv")
 
@@ -49,6 +51,18 @@ class ChatRequest(BaseModel):
     resume: list[Section]
     message: str
     jd: str = ""
+    # 可选：本次诊断参考的优秀示例 id（最多 3 个，前端同样限制）
+    referenceIds: list[str] = Field(default_factory=list, max_length=3)
+    # 改写强度：standard = 标准（保留原句式，稳妥改写）；bold = 大胆
+    # （允许整段重写表达，但仍不得新增事实、不得改结构）。老前端不带该字段时
+    # 行为与加模式之前一致。
+    rewriteMode: Literal["standard", "bold"] = "standard"
+    provider: ProviderConfig
+
+
+class GrammarRequest(BaseModel):
+    # 待纠错的整份简历；后端按坐标就地改文字，不重排结构
+    resume: list[Section]
     provider: ProviderConfig
 
 
@@ -84,6 +98,29 @@ async def polish(
     except NotImplementedError:
         return JSONResponse(status_code=501, content=error(501, "润色 agent 尚未实现"))
     return ok({"items": items})
+
+
+@router.post("/grammar")
+async def grammar(
+    req: GrammarRequest,
+    session_id: str | None = Depends(get_agent_session),
+):
+    """全文纠错：一次结构化 LLM 调用 + 代码校验，返回改好的简历与改动清单。
+
+    与 /api/chat 不同，这里不是对话：不写会话历史、不跑诊断/优化 agent，
+    前端拿到 { resume, changes, skipped, stats } 后复用修改对比弹窗让用户确认。
+    """
+    try:
+        result = await asyncio.to_thread(
+            run_grammar_agent,
+            req.provider,
+            [s.model_dump(exclude_none=True) for s in req.resume],
+            session_id,
+        )
+    except Exception as e:
+        logger.exception("全文纠错失败")
+        return JSONResponse(status_code=500, content=error(500, f"全文纠错失败：{e}"))
+    return ok(result)
 
 
 # ---------- /api/agent/md：展示后端 agent 的提示词与技能（只读，供「Agent 设置 → md预览」） ----------
@@ -142,10 +179,21 @@ def _last_event_id(request: Request) -> int | None:
     return int(raw) if raw.isdigit() else None
 
 
-async def _run_chat_task(task, provider, resume_sections, jd, question, session_id):
+async def _run_chat_task(
+    task, provider, resume_sections, jd, question, session_id, references, rewrite_mode
+):
     """后台生产任务：跑优化流水线 → 写 task 状态；结束放 None 哨兵（消费端据此收尾）。"""
     try:
-        result = await run_chat_stream(provider, resume_sections, jd, question, task.emit, session_id=session_id)
+        result = await run_chat_stream(
+            provider,
+            resume_sections,
+            jd,
+            question,
+            task.emit,
+            session_id=session_id,
+            references=references,
+            rewrite_mode=rewrite_mode,
+        )
         task.finish(result["resume"], result["summary"], result["diagnosis"])
     except asyncio.CancelledError:
         task.cancel()
@@ -176,11 +224,22 @@ async def chat(
     流水线，把改好的简历 JSON 发成 resume 事件，前端据此重绘，格式不被打乱。
     """
     resume_sections = [s.model_dump(exclude_none=True) for s in req.resume]
+    # 选中的优秀示例：不存在的 id 跳过（示例库只增不删，正常不会出现，兜底容错）
+    references = resolve_examples(req.referenceIds)
     task = create_chat_task(session_id)
     # 生产任务与消费（SSE 响应）通过 task 的 queue 解耦：queue 满时生产端 await put
     # 阻塞 = 背压，反过来压住 LLM 流式；deque 缓存事件 id 供断线重放。
     producer = asyncio.create_task(
-        _run_chat_task(task, req.provider, resume_sections, req.jd, req.message, session_id)
+        _run_chat_task(
+            task,
+            req.provider,
+            resume_sections,
+            req.jd,
+            req.message,
+            session_id,
+            references,
+            req.rewriteMode,
+        )
     )
 
     async def event_stream():

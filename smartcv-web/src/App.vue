@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * 应用入口：顶部工具条 + 页面
- *   主页（默认）/ 编辑简历 / 优化简历 / 高级设置
+ *   主页（默认）/ 编辑简历 / 诊断简历 / 优秀示例 / 高级设置
  *
  * 简历的"从哪来"统一走主页（导入 PDF / 导入 JSON / 新建），编辑页不再提供导入入口。
  * 所有页面读写同一个 Pinia store（stores/resume.ts）—— 单一数据源。
@@ -11,6 +11,7 @@ import { siGithub } from 'simple-icons'
 import HomePage from '@/pages/HomePage.vue'
 import EditorPage from '@/pages/EditorPage.vue'
 import OptimizePage from '@/pages/OptimizePage.vue'
+import ReferenceExamplesPage from '@/pages/ReferenceExamplesPage.vue'
 import ProviderSettingsPage from '@/pages/ProviderSettingsPage.vue'
 import { brandSvg } from '@/data/icons'
 import { themeOverrides } from '@/styles/naive-theme'
@@ -20,14 +21,15 @@ const githubSvg = brandSvg(siGithub)
 
 /* ---------- 顶部页面栏 ---------- */
 
-type PageKey = 'home' | 'editor' | 'optimize' | 'provider'
+type PageKey = 'home' | 'editor' | 'optimize' | 'references' | 'provider'
 
 const currentPage = ref<PageKey>('home')
 
 const PAGES: { key: PageKey; label: string }[] = [
   { key: 'home', label: '主页' },
   { key: 'editor', label: '编辑简历' },
-  { key: 'optimize', label: '优化简历' },
+  { key: 'optimize', label: '诊断简历' },
+  { key: 'references', label: '优秀示例' },
   { key: 'provider', label: '高级设置' },
 ]
 </script>
@@ -70,7 +72,11 @@ const PAGES: { key: PageKey; label: string }[] = [
     <!-- 页面主体 -->
     <HomePage v-if="currentPage === 'home'" @enter="currentPage = 'editor'" />
     <EditorPage v-else-if="currentPage === 'editor'" />
-    <OptimizePage v-else-if="currentPage === 'optimize'" />
+    <OptimizePage
+      v-else-if="currentPage === 'optimize'"
+      @open-library="currentPage = 'references'"
+    />
+    <ReferenceExamplesPage v-else-if="currentPage === 'references'" />
     <ProviderSettingsPage v-else />
     </div>
   </n-config-provider>

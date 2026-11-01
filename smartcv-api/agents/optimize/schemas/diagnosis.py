@@ -39,6 +39,13 @@ class DiagnosisItem(BaseModel):
     reason: str = Field(..., description="为什么这个位置的内容需要改动：缺什么、问题是什么")
     evidence: str = Field(..., description="事实依据：简历原文、JD 要求或用户回答中的具体内容")
     suggestion: str = Field(..., description="修改方向：往哪个方向改；只给方向，不写最终成品")
+    reference: str = Field(
+        "",
+        description=(
+            "若本条诊断参考了优秀示例，写「示例 N：可迁移的写法特征」（只写写法，不写示例事实）；"
+            "没有参考时留空"
+        ),
+    )
 
     @field_validator("quote")
     @classmethod
@@ -51,3 +58,10 @@ class DiagnosisResult(BaseModel):
     """诊断 agent 的完整输出。"""
 
     items: list[DiagnosisItem] = Field(..., description="诊断项列表，按重要性排序")
+    style_notes: list[str] = Field(
+        default_factory=list,
+        description=(
+            "从优秀示例提炼的可迁移写作规范（3~6 条）：只描述怎么写，"
+            "不包含公司、数字、技术栈、成果等任何事实；未选择示例时为空"
+        ),
+    )

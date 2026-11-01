@@ -265,7 +265,7 @@ const polishInputRef = ref<{ focus: () => void } | null>(null)
  *  - free   自由：像直接问 AI，由模型自主判断怎么写最好，并优先遵循用户思路
  * 选择刻意不随「取消」重置——用户下次打开通常还是想用上次那个模式。
  */
-/** 卡片润色只提供这两档；enhance 是「优化简历」输入框的提示词增强，不在这里选 */
+/** 卡片润色只提供这两档；enhance 是「诊断简历」输入框的提示词增强，不在这里选 */
 type ContentPolishMode = 'strict' | 'free'
 const polishMode = ref<ContentPolishMode>('strict')
 /** 每个模式的一句话说明，直接展示给用户，避免只看到名字猜不出差别 */

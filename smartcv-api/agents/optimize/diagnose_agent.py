@@ -29,6 +29,31 @@ logger = logging.getLogger("smartcv")
 
 _SYSTEM_PROMPT = (Path(__file__).resolve().parent / "system_prompt_diagnose.md").read_text(encoding="utf-8")
 
+# 改写强度只影响后续「允许改多深」，不改变事实与结构边界。
+# standard = 保留原句式，只做必要改写；bold = 允许整段重写表达，但仍不新增事实。
+_REWRITE_MODE_RULES = {
+    "standard": (
+        "\n\n# 本次改写强度：标准\n"
+        "诊断按现有规则进行；`suggestion` 以「保留原句式、只做必要改写」为准，"
+        "不要要求整段推倒重写。"
+    ),
+    "bold": (
+        "\n\n# 本次改写强度：大胆\n"
+        "可以在诊断中指出「表达平淡、句式与目标岗位差距大、信息组织松散」等问题，"
+        "`suggestion` 可以要求大幅重写句式、句序和段落内表达，不必保留原句。"
+        "但边界不变：不得建议新增或编造事实、数字、经历、技术栈，"
+        "不得建议增删章节 / 调整顺序 / 改动排版，`kind=structure` 仍只用于结构问题。"
+    ),
+}
+
+
+def _system_prompt(rewrite_mode: str) -> str:
+    """把本次改写强度追加到系统提示词末尾。"""
+    return _SYSTEM_PROMPT + _REWRITE_MODE_RULES.get(
+        rewrite_mode, _REWRITE_MODE_RULES["standard"]
+    )
+
+
 # 等用户回答的最长时间：超时按「未作答」继续诊断，不让整条 SSE 流永远挂着。
 # 必须小于 ChatTask 的 10 分钟 TTL，否则任务会先过期、答案接口先失效。
 _ASK_TIMEOUT_SECONDS = 300
@@ -104,6 +129,18 @@ def _diagnosis_items(structured) -> list[dict]:
     return result
 
 
+def _style_notes(structured) -> list[str]:
+    """取诊断 agent 从优秀示例里提炼的写作规范（旧结果 / 没选示例时为空）。"""
+    if structured is None:
+        return []
+    notes = (
+        structured.get("style_notes")
+        if isinstance(structured, dict)
+        else getattr(structured, "style_notes", None)
+    )
+    return [str(note).strip() for note in (notes or []) if str(note).strip()]
+
+
 async def run(
     llm,
     markdown: str,
@@ -111,14 +148,22 @@ async def run(
     question: str,
     session_id: str | None = None,
     history: str = "",
-) -> list[dict]:
+    references: str = "",
+    reference_items: list[dict] | None = None,
+    rewrite_mode: str = "standard",
+) -> tuple[list[dict], list[str]]:
     """跑诊断 agent：发 agent_start → 思考流式 delta → diagnosis 事件 → agent_end。
 
-    返回结构化诊断项列表；每项含位置、原文片段、原因、依据和修改方向。
+    返回 (结构化诊断项列表, 写作规范列表)。
     history 是上一轮的修改总结（可能为空），用于「重新生成 / 刚才那处」这类追问。
+    references 是选中的优秀示例（纯结构 Markdown，不带位置编号）；reference_items
+    只用来给前端展示「本次参考了哪几份」，不含正文。
     """
     writer = get_stream_writer()
     writer({"type": "agent_start", "agent": "diagnose", "label": "诊断 agent"})
+    if reference_items:
+        # 紧跟 agent_start 下发，前端把它挂在诊断卡上（只展示方向与描述，不回传正文）
+        writer({"type": "reference_examples", "items": reference_items})
     # 把带位置编号的简历文本原样下发：前端「位置诊断」折叠行展开即可看到 agent 的输入
     writer({"type": "resume_markdown", "text": markdown})
     agent = build_agent(llm)
@@ -126,10 +171,14 @@ async def run(
     # 输入按类型分块，每块用 <> 标签包裹（system_prompt_diagnose.md 有对应说明）
     jd_block = f"<JD>\n{jd}\n</JD>\n\n" if (jd or "").strip() else ""
     history_block = f"<上一轮>\n{history.strip()}\n</上一轮>\n\n" if (history or "").strip() else ""
+    reference_block = (
+        f"<优秀示例>\n{references.strip()}\n</优秀示例>\n\n" if (references or "").strip() else ""
+    )
     message = (
         f"{history_block}"
         f"<简历>\n{markdown}\n</简历>\n\n"
         f"{jd_block}"
+        f"{reference_block}"
         f"<修改要求>\n{question}\n</修改要求>"
     )
 
@@ -143,7 +192,7 @@ async def run(
     }
     payload = {
         "messages": [
-            {"type": "system", "content": _SYSTEM_PROMPT},
+            {"type": "system", "content": _system_prompt(rewrite_mode)},
             {"type": "human", "content": message},
         ]
     }
@@ -205,9 +254,10 @@ async def run(
         structured = (snapshot.values or {}).get("structured_response")
 
     items = _diagnosis_items(structured)
+    style_notes = _style_notes(structured)
     if not items:
         logger.warning("diagnose-agent 没有返回结构化诊断结果")
-    writer({"type": "diagnosis", "count": len(items), "items": items})
+    writer({"type": "diagnosis", "count": len(items), "items": items, "styleNotes": style_notes})
     writer({"type": "agent_end", "agent": "diagnose", "label": "诊断 agent"})
-    logger.info("diagnose-agent 输出 %d 条诊断", len(items))
-    return items
+    logger.info("diagnose-agent 输出 %d 条诊断、%d 条写作规范", len(items), len(style_notes))
+    return items, style_notes

@@ -11,6 +11,7 @@
  *  - 章节列表的拖拽分组名 = smartcv-group（SortableJS 的 group 选项），只能接收"章节"类的拖入；
  *  - 布局/内容分别在各自的拖拽分组（smartcv-row / smartcv-content），互不串。
  */
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { onKeyStroke } from '@vueuse/core'
 import { VueDraggable } from 'vue-draggable-plus'
 import SectionCard from './SectionCard.vue'
@@ -21,6 +22,97 @@ import { createSectionFromPreset } from '@/data/presets'
 import { message } from '@/utils/feedback'
 
 const store = useResumeStore()
+
+/* ============================================================
+ * 拖拽自动滚动（画布上 / 下边缘）
+ * ============================================================
+ * 画布唯一会滚动的容器是 .canvas-scroll。SortableJS 自带的 auto-scroll
+ * 触发区很小（scrollSensitivity 默认 30px），拖到顶部边缘时经常够不着，
+ * 表现像"不会滚"。这里自己实现一套：拖拽期间监听指针，指针进入画布上下
+ * 边缘区域就用 requestAnimationFrame 匀速滚动画布，松手即停。
+ *
+ * 通过 document 上 SortableJS 的 start / end 事件（会冒泡）判断拖拽
+ * 是否在进行——无论拖章节、拖布局、还是从组件库拖入，都能覆盖到。
+ * ============================================================ */
+
+const scrollEl = ref<HTMLElement | null>(null)
+
+/** 边缘触发区：指针距离画布上/下边缘多少像素内开始滚动 */
+const EDGE_ZONE = 80
+/** 贴着边缘时的最大滚动速度（px/帧，约 60fps → 840px/s） */
+const MAX_SCROLL_SPEED = 14
+
+let dragActive = false
+let pointerX = 0
+let pointerY = 0
+let rafId = 0
+
+function onPointerMove(e: PointerEvent) {
+  pointerX = e.clientX
+  pointerY = e.clientY
+}
+
+function tick() {
+  rafId = 0
+  if (!dragActive) return
+  const el = scrollEl.value
+  if (el) {
+    const rect = el.getBoundingClientRect()
+    // 指针水平位置落在画布列内才滚，避免在预览列 / 组件库列上方误触发
+    if (pointerX >= rect.left && pointerX <= rect.right) {
+      const fromTop = pointerY - rect.top
+      const fromBottom = rect.bottom - pointerY
+      let speed = 0
+      if (fromTop >= 0 && fromTop < EDGE_ZONE && el.scrollTop > 0) {
+        // 越贴顶越快，向上滚
+        speed = -MAX_SCROLL_SPEED * (1 - fromTop / EDGE_ZONE)
+      } else if (
+        fromBottom >= 0 &&
+        fromBottom < EDGE_ZONE &&
+        el.scrollTop < el.scrollHeight - el.clientHeight
+      ) {
+        // 越贴底越快，向下滚
+        speed = MAX_SCROLL_SPEED * (1 - fromBottom / EDGE_ZONE)
+      }
+      if (speed !== 0) el.scrollTop += speed
+    }
+  }
+  rafId = requestAnimationFrame(tick)
+}
+
+function onDragStart(e: Event) {
+  const oe = (e as { originalEvent?: { clientX?: number; clientY?: number } }).originalEvent
+  if (oe && typeof oe.clientX === 'number' && typeof oe.clientY === 'number') {
+    pointerX = oe.clientX
+    pointerY = oe.clientY
+  }
+  dragActive = true
+  if (!rafId) rafId = requestAnimationFrame(tick)
+}
+
+function onDragEnd() {
+  dragActive = false
+  if (rafId) {
+    cancelAnimationFrame(rafId)
+    rafId = 0
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('start', onDragStart)
+  document.addEventListener('end', onDragEnd)
+  window.addEventListener('pointermove', onPointerMove, { passive: true })
+  // 拖拽中窗口失焦（切走 / 极小概率没触发 end）兜底停掉
+  window.addEventListener('blur', onDragEnd)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('start', onDragStart)
+  document.removeEventListener('end', onDragEnd)
+  window.removeEventListener('pointermove', onPointerMove)
+  window.removeEventListener('blur', onDragEnd)
+  onDragEnd()
+})
 
 /* ============================================================
  * 章节拖拽（vue-draggable-plus）
@@ -93,7 +185,7 @@ onKeyStroke('Delete', () => {
       <span class="canvas-hint">从上方组件库点击添加，或拖到指定位置；拖动 ⋮⋮ 手柄排序</span>
     </div>
 
-    <div class="canvas-scroll">
+    <div ref="scrollEl" class="canvas-scroll">
       <!-- 画布纸面：白色区域，宽度填满画布列（随列宽拉伸） -->
       <div class="canvas-sheet" @click.self="store.select(null)">
         <div class="section-list">

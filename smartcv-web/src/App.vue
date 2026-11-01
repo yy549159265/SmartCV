@@ -25,6 +25,14 @@ type PageKey = 'home' | 'editor' | 'optimize' | 'references' | 'provider'
 
 const currentPage = ref<PageKey>('home')
 
+/** 「诊断简历 → 转换成优秀示例」带过来的简历 JSON：交给示例库页，消费后清空 */
+const examplePrefillJson = ref('')
+
+function onConvertToExample(json: string) {
+  examplePrefillJson.value = json
+  currentPage.value = 'references'
+}
+
 const PAGES: { key: PageKey; label: string }[] = [
   { key: 'home', label: '主页' },
   { key: 'editor', label: '编辑简历' },
@@ -75,8 +83,13 @@ const PAGES: { key: PageKey; label: string }[] = [
     <OptimizePage
       v-else-if="currentPage === 'optimize'"
       @open-library="currentPage = 'references'"
+      @convert-to-example="onConvertToExample"
     />
-    <ReferenceExamplesPage v-else-if="currentPage === 'references'" />
+    <ReferenceExamplesPage
+      v-else-if="currentPage === 'references'"
+      :prefill-json="examplePrefillJson"
+      @prefill-consumed="examplePrefillJson = ''"
+    />
     <ProviderSettingsPage v-else />
     </div>
   </n-config-provider>

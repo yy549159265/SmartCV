@@ -23,6 +23,10 @@ import {
 import { PAGE_HEIGHT, PAGE_PADDING, PAGE_WIDTH } from '@/utils/constants'
 import type { Section } from '@/types'
 
+/** 「诊断简历 → 转换成优秀示例」带过来的简历 JSON：挂载时自动填入上传表单 */
+const props = withDefaults(defineProps<{ prefillJson?: string }>(), { prefillJson: '' })
+const emit = defineEmits<{ 'prefill-consumed': [] }>()
+
 /** 缩略图缩放比：卡片内容宽约 250px ÷ A4 宽 794px ≈ 0.3 */
 const THUMB_ZOOM = 0.3
 
@@ -110,7 +114,16 @@ async function refresh() {
   }
 }
 
-onMounted(refresh)
+onMounted(() => {
+  void refresh()
+  // 「转换成优秀示例」跳转：打开上传弹窗，当前简历 JSON 直接填入粘贴框
+  if (props.prefillJson) {
+    form.jsonText = props.prefillJson
+    validateJson()
+    uploadShow.value = true
+    emit('prefill-consumed')
+  }
+})
 onBeforeUnmount(() => observer?.disconnect())
 
 /** 上传时间只展示日期（后端是 UTC ISO，转成本地日期） */

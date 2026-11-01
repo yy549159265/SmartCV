@@ -162,8 +162,14 @@ import { renderMarkdown } from '@/utils/markdown'
 import { message } from '@/utils/feedback'
 import { getAgentSessionId, resetAgentSessionId } from '@/api/session'
 
-/** 示例库是独立页面：选择器为空时给一个「去上传示例」的跳转入口 */
-const emit = defineEmits<{ 'open-library': [] }>()
+/**
+ * 示例库是独立页面：选择器为空时给一个「去上传示例」的跳转入口；
+ * convert-to-example 把当前简历 JSON 一起带过去，直接填进示例库的上传表单。
+ */
+const emit = defineEmits<{
+  'open-library': []
+  'convert-to-example': [json: string]
+}>()
 
 const resumeStore = useResumeStore()
 const optimizeStore = useOptimizeStore()
@@ -200,10 +206,24 @@ const pageStyle = computed(() => ({
 
 /* ---------- 导出 ---------- */
 
+/** JSON 处理菜单是否展开（导出 JSON / 转换成优秀示例） */
+const jsonMenuShow = ref(false)
+
 /** 导出 JSON：下载当前简历数据文件（以简历名称命名，下载成功后计数 +1） */
 function onExportJson() {
+  jsonMenuShow.value = false
   downloadJson(resumeStore.resume, `${resumeFilename()}.json`)
   statsStore.inc('json')
+}
+
+/** 转换成优秀示例：带上当前简历 JSON 跳到示例库，上传表单自动填入粘贴框 */
+function onConvertToExample() {
+  jsonMenuShow.value = false
+  if (resumeStore.resume.length === 0) {
+    message.warning('简历还是空的，先去「编辑简历」页添加内容')
+    return
+  }
+  emit('convert-to-example', JSON.stringify(resumeStore.resume, null, 2))
 }
 
 /** 是否正在导出 PDF（按钮转圈，防止重复点击） */
@@ -512,8 +532,36 @@ function onApplyDiff() {
             {{ Math.round(z * 100) }}%
           </n-button>
         </n-button-group>
-        <!-- 导出：JSON 文件 / PDF（文字版，浏览器打印 → 另存为 PDF） -->
-        <n-button size="small" quaternary @click="onExportJson">导出 JSON</n-button>
+        <!-- JSON 处理：导出 JSON 文件 / 转换成优秀示例；PDF（文字版，浏览器打印 → 另存为 PDF） -->
+        <n-popover v-model:show="jsonMenuShow" trigger="click" placement="bottom-end" :width="256">
+          <template #trigger>
+            <n-button size="small" quaternary class="json-menu-btn" :aria-expanded="jsonMenuShow">
+              JSON 处理
+              <IconGlyph name="chevron-down" :size="12" />
+            </n-button>
+          </template>
+          <div class="composer-menu" role="menu" aria-label="JSON 处理">
+            <button type="button" role="menuitem" class="composer-menu-item" @click="onExportJson">
+              <span class="menu-icon" aria-hidden="true">
+                <IconGlyph name="download" :size="16" />
+              </span>
+              <span class="menu-text">
+                <span class="menu-title">导出 JSON</span>
+                <span class="menu-desc">下载当前简历数据文件</span>
+              </span>
+            </button>
+            <div class="composer-menu-divider" />
+            <button type="button" role="menuitem" class="composer-menu-item" @click="onConvertToExample">
+              <span class="menu-icon" aria-hidden="true">
+                <IconGlyph name="file-up" :size="16" />
+              </span>
+              <span class="menu-text">
+                <span class="menu-title">转换成优秀示例</span>
+                <span class="menu-desc">跳到示例库上传，当前简历 JSON 自动填入</span>
+              </span>
+            </button>
+          </div>
+        </n-popover>
         <n-button size="small" type="primary" ghost :loading="exporting" @click="onExportPdf">
           {{ exporting ? '导出中…' : '导出 PDF' }}
         </n-button>
@@ -2449,6 +2497,10 @@ function onApplyDiff() {
   flex-direction: column;
   gap: 2px;
   margin: -2px -4px;
+}
+/* JSON 处理触发按钮：文字与下箭头之间留一点间距 */
+.json-menu-btn :deep(.n-button__content) {
+  gap: 5px;
 }
 .composer-menu-group {
   display: flex;

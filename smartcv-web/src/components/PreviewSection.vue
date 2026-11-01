@@ -74,10 +74,10 @@ const sectionStyle = computed(() => ({
   marginTop: `${props.spaceBefore !== undefined ? props.spaceBefore : eff.value.spaceBefore}px`,
 }))
 
-/** 章节留白：顶部 4px / 底部 16px（与 measurement 里的 padding 常量保持一致） */
+/** 章节留白：顶部 2px / 底部 10px（与 measurement 里的 padding 常量保持一致；紧凑取向） */
 const padStyle = computed(() => ({
-  paddingTop: props.topPad === false ? '0px' : '4px',
-  paddingBottom: props.bottomPad === false ? '0px' : '16px',
+  paddingTop: props.topPad === false ? '0px' : '2px',
+  paddingBottom: props.bottomPad === false ? '0px' : '10px',
 }))
 
 /** 章节自身（标题/样式）的切换操作 */
@@ -126,7 +126,7 @@ const sectionAttr = computed(() =>
 }
 
 .preview-section-title {
-  margin: 0 0 8px;
+  margin: 0 0 6px;
   font-weight: 600;
 }
 /* 标题 + 可选图标：整行用 flex 垂直居中，图标（emoji / 品牌 SVG）和标题文字对齐到同一光学中心。
@@ -159,7 +159,7 @@ const sectionAttr = computed(() =>
 /* 标题下横线：直接画成 title 底边框（border 会被浏览器按物理像素摊平，粗细在各缩放档位都一致，
    不像 2px 背景块在 zoom 下会被压成 1~2px 之间跳变）。横线宽度=完整内容宽（恒为满行），颜色=标题颜色。 */
 .preview-section-title.has-underline {
-  padding-bottom: 4px;
+  padding-bottom: 2px;
   border-bottom: 2px solid currentColor;
 }
 

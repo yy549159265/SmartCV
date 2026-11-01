@@ -14,18 +14,15 @@
  *    不会为了塞下一个大章节而白白空出上一页 —— 页数才真实、不虚高。
  *
  * 前端"实时预览"、"导出 PDF"用的是同一份分页方案 + 同一份单元数据：
- *  - 预览：每个 A4 纸块 = 一页单元；
+ *  - 预览：每个纸块 = 一页单元；
  *  - 导出：每页一个块 + break-after:page，页数 = 预览页数。
  * 每页内容都被严格控制在 ≤ 一页可用高度（CONTENT_HEIGHT），
  * 无头 Chromium 打 PDF 时绝不会再把它硬拆成两页 → 导出的页数真正和预览一致。
  */
 
-/** 一页的可用内容高度 = 纸高 - 上下留白（与 constants.CONTENT_HEIGHT 一致） */
-export const CONTENT_HEIGHT = 1123 - 48 * 2
-
-/** 与 PreviewSection.vue 的 padding 保持一致（顶部 4px，底部 16px） */
-export const SECTION_TOP_PAD = 4
-export const SECTION_BOTTOM_PAD = 16
+/** 与 PreviewSection.vue 的 padding 保持一致（顶部 2px，底部 10px） */
+export const SECTION_TOP_PAD = 2
+export const SECTION_BOTTOM_PAD = 10
 
 /**
  * 一个"可裁切单元"：某个章节的标题，或它的某个顶层行。

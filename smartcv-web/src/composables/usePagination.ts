@@ -14,7 +14,7 @@
 import { nextTick, onBeforeUnmount, watch, type Ref } from 'vue'
 import { useDebounceFn, useEventListener } from '@vueuse/core'
 import { computePages, type PageUnit } from '@/utils/pagination'
-import { CONTENT_HEIGHT } from '@/utils/constants'
+import { contentHeight } from '@/composables/usePageSize'
 import { useResumeStore } from '@/stores/resume'
 
 export function usePagination(flowEl: Ref<HTMLElement | null>) {
@@ -76,7 +76,7 @@ export function usePagination(flowEl: Ref<HTMLElement | null>) {
     }
 
     // 单元粒度分页：长章节也能在"上一页剩下的空隙"里继续排，页数真实不虚高
-    const plan = computePages(units, CONTENT_HEIGHT)
+    const plan = computePages(units, contentHeight.value)
     store.setPagination(plan, units)
   }
 

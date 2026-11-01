@@ -309,7 +309,7 @@ const showGallery = ref(false)
               <span class="step-num">02</span>
             </div>
             <h3 class="step-title">自由排版</h3>
-            <p class="step-desc">拖拽调整章节与布局，字号、行距、分页精细控制，A4 实时预览。</p>
+            <p class="step-desc">拖拽调整章节与布局，字号、行距、分页精细控制，实时预览。</p>
           </div>
           <div class="step-col">
             <div class="step-top">

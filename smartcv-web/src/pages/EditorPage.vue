@@ -4,12 +4,12 @@
  *   左：组件库（ComponentLibrary，横向面板）+ 编辑画布（EditCanvas）
  *   右：实时预览（ResumePreview）
  *
- * 顶部工具栏：简历名称、自动保存状态、撤销/重做、预览缩放。
+ * 顶部工具栏：简历名字、撤销/重做、预览缩放、纸面宽度。
  * 列宽：两栏之间有一条分隔条（ColumnDivider），按住左右拖动改变列宽；
  * 双击恢复默认，宽度用 VueUse 的 useStorage 记忆在浏览器本地。
  * 两栏读写的是同一个 Pinia store（stores/resume.ts）—— 单一数据源。
  */
-import { computed, watchEffect } from 'vue'
+import { computed, ref, watchEffect } from 'vue'
 import { useStorage, useWindowSize } from '@vueuse/core'
 import ComponentLibrary from '@/components/ComponentLibrary.vue'
 import EditCanvas from '@/components/EditCanvas.vue'
@@ -17,6 +17,13 @@ import ResumePreview from '@/components/ResumePreview.vue'
 import ColumnDivider from '@/components/ColumnDivider.vue'
 import IconGlyph from '@/components/IconGlyph.vue'
 import { previewZoom, ZOOM_LEVELS } from '@/composables/usePreviewZoom'
+import {
+  PAGE_WIDTH_MAX,
+  PAGE_WIDTH_MIN,
+  PAGE_WIDTH_PRESETS,
+  pageHeight,
+  pageWidth,
+} from '@/composables/usePageSize'
 import { resumeName } from '@/composables/useResumeName'
 import { useResumeStore } from '@/stores/resume'
 
@@ -63,17 +70,19 @@ const mainStyle = computed(() => ({
 /** 撤销/重做是否可用（看两个历史栈） */
 const canUndo = computed(() => store.undoStack.length > 0)
 const canRedo = computed(() => store.redoStack.length > 0)
+
+/** 纸面宽度弹层是否展开 */
+const widthMenuShow = ref(false)
 </script>
 
 <template>
   <main class="editor-page">
-    <!-- 顶部工具栏：简历名称 + 保存状态 + 撤销/重做 + 预览缩放 -->
+    <!-- 顶部工具栏：简历名字 + 撤销/重做 + 预览缩放 + 纸面宽度 -->
     <header class="editor-toolbar">
-      <input v-model="resumeName" class="editor-name" placeholder="简历名称（导出文件名）" title="简历名称：导出的 PDF / JSON 文件会以这个名字命名" />
-      <span class="editor-saved" title="改动会自动保存到浏览器本地（刷新/关闭后仍在）">
-        <IconGlyph name="check" :size="11" />
-        已自动保存
-      </span>
+      <div class="editor-name-box">
+        <span class="editor-name-label">简历名字：</span>
+        <input v-model="resumeName" class="editor-name" placeholder="给简历起个名字" title="简历名字：导出的 PDF / JSON 文件会以这个名字命名" />
+      </div>
 
       <span class="editor-toolbar-spacer" />
 
@@ -100,6 +109,52 @@ const canRedo = computed(() => store.redoStack.length > 0)
           {{ Math.round(z * 100) }}%
         </button>
       </div>
+
+      <span class="editor-toolbar-divider" />
+
+      <!-- 纸面宽度：简历成品的页面宽度（快捷档 + 滑块），预览与导出 PDF 同步生效 -->
+      <n-popover v-model:show="widthMenuShow" trigger="click" placement="bottom-end" :width="272">
+        <template #trigger>
+          <button
+            type="button"
+            class="editor-width-btn"
+            :class="{ open: widthMenuShow }"
+            :aria-expanded="widthMenuShow"
+            title="纸面宽度：预览与导出 PDF 的页面宽度"
+          >
+            <IconGlyph name="scan-line" :size="13" />
+            <span class="editor-width-text">纸面 {{ pageWidth }}×{{ pageHeight }}</span>
+            <IconGlyph name="chevron-down" :size="12" />
+          </button>
+        </template>
+        <div class="width-menu">
+          <div class="width-menu-label">纸面宽度：预览与导出 PDF 同步生效</div>
+          <div class="width-presets">
+            <button
+              v-for="p in PAGE_WIDTH_PRESETS"
+              :key="p.value"
+              type="button"
+              class="width-preset"
+              :class="{ active: pageWidth === p.value }"
+              @click="pageWidth = p.value"
+            >
+              <span class="width-preset-name">{{ p.label }}</span>
+              <span class="width-preset-value">{{ p.size }}</span>
+            </button>
+          </div>
+          <div class="width-slider-row">
+            <n-slider
+              v-model:value="pageWidth"
+              class="width-slider"
+              :min="PAGE_WIDTH_MIN"
+              :max="PAGE_WIDTH_MAX"
+              :step="10"
+              :tooltip="false"
+            />
+            <span class="width-slider-value">{{ pageWidth }}×{{ pageHeight }}</span>
+          </div>
+        </div>
+      </n-popover>
     </header>
 
     <!-- 两栏：左（组件库 + 画布）｜ 分隔条 ｜ 右（实时预览） -->
@@ -136,8 +191,21 @@ const canRedo = computed(() => store.redoStack.length > 0)
   border-bottom: 1px solid var(--border);
 }
 
+/* 简历名字：固定标签 + 输入框，空的时候也不会显得"空白一块" */
+.editor-name-box {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+.editor-name-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
 .editor-name {
-  width: 190px;
+  width: 170px;
   border: 1px solid transparent;
   border-radius: 7px;
   background: transparent;
@@ -157,18 +225,6 @@ const canRedo = computed(() => store.redoStack.length > 0)
   background: var(--panel-bg);
   outline: none;
   box-shadow: 0 0 0 2px rgba(71, 83, 199, 0.12);
-}
-
-.editor-saved {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  flex: none;
-  font-size: 11.5px;
-  color: var(--text-tertiary);
-}
-.editor-saved .icon-glyph {
-  color: #3f8f5a;
 }
 
 .editor-toolbar-spacer {
@@ -246,6 +302,108 @@ const canRedo = computed(() => store.redoStack.length > 0)
   box-shadow: 0 1px 2px rgba(28, 33, 48, 0.08);
 }
 
+/* ---- 纸面宽度：触发按钮 ---- */
+.editor-width-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  height: 24px;
+  padding: 0 9px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  font-size: 11.5px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    background 0.14s var(--ease),
+    color 0.14s var(--ease);
+}
+.editor-width-btn:hover,
+.editor-width-btn.open {
+  background: var(--surface-soft);
+  color: var(--text);
+}
+.editor-width-btn :deep(.icon-glyph) {
+  color: var(--text-tertiary);
+}
+.editor-width-btn:hover :deep(.icon-glyph),
+.editor-width-btn.open :deep(.icon-glyph) {
+  color: var(--text-secondary);
+}
+
+/* ---- 纸面宽度：弹层 ---- */
+.width-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.width-menu-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+}
+.width-presets {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.width-preset {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 7px 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-bg);
+  cursor: pointer;
+  transition:
+    border-color 0.14s var(--ease),
+    background 0.14s var(--ease);
+}
+.width-preset:hover {
+  border-color: var(--primary);
+}
+.width-preset.active {
+  border-color: var(--primary);
+  background: var(--primary-faint);
+}
+.width-preset-name {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+.width-preset-value {
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-tertiary);
+}
+.width-preset.active .width-preset-name,
+.width-preset.active .width-preset-value {
+  color: var(--primary);
+}
+.width-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.width-slider {
+  flex: 1;
+  min-width: 0;
+}
+.width-slider-value {
+  flex: none;
+  width: 76px;
+  text-align: right;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+
 /* ============================================================
  * 两栏布局
  * ============================================================ */
@@ -274,9 +432,6 @@ const canRedo = computed(() => store.redoStack.length > 0)
 @media (max-width: 760px) {
   .editor-name {
     width: 100px;
-  }
-  .editor-saved {
-    display: none;
   }
 }
 </style>

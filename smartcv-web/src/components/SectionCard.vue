@@ -14,6 +14,7 @@ import { computed, nextTick, ref } from 'vue'
 import { VueDraggable } from 'vue-draggable-plus'
 import LayoutWindowItem from './LayoutWindowItem.vue'
 import StylePopover from './StylePopover.vue'
+import IconGlyph from './IconGlyph.vue'
 import { useResumeStore } from '@/stores/resume'
 import { useClickPopover } from '@/composables/useClickPopover'
 import { DEFAULT_CHAPTER_GAP, DEFAULT_TITLE_SIZE } from '@/utils/constants'
@@ -231,29 +232,46 @@ function onRemove() {
       <div class="section-toolbar" @click.stop>
         <n-tooltip trigger="hover">
           <template #trigger>
-            <n-button
-              size="tiny"
-              quaternary
-              :type="section.pageBreakBefore ? 'warning' : 'default'"
+            <button
+              type="button"
+              class="section-tool-btn"
+              :class="{ 'is-on': section.pageBreakBefore }"
+              :aria-pressed="section.pageBreakBefore"
               @click="togglePageBreak"
             >
-              ⤒ 分页
-            </n-button>
+              <IconGlyph name="arrow-down-to-line" :size="13" />
+            </button>
           </template>
-          开启后，该章节强制从下一页开头开始
+          {{ section.pageBreakBefore ? '已开启强制分页：该章节从下一页开头开始（点击关闭）' : '强制分页：开启后该章节从下一页开头开始' }}
         </n-tooltip>
-        <n-popover v-model:show="styleShow" trigger="click" placement="bottom-start" :width="288">
+        <n-popover v-model:show="styleShow" trigger="click" placement="bottom-start" :width="292">
           <template #trigger>
             <span ref="styleTriggerRef" class="trigger-wrap">
-              <n-button size="tiny" quaternary>样式</n-button>
+              <button type="button" class="section-tool-btn" :class="{ 'is-open': styleShow }" title="样式设置">
+                <IconGlyph name="sliders-horizontal" :size="13" />
+              </button>
             </span>
           </template>
           <template #default>
             <StylePopover mode="section" :section-id="section.id" />
           </template>
         </n-popover>
-        <n-button size="tiny" quaternary @click="onDuplicate">复制</n-button>
-        <n-button size="tiny" quaternary type="error" @click="onRemove">删除</n-button>
+        <n-tooltip trigger="hover">
+          <template #trigger>
+            <button type="button" class="section-tool-btn" title="复制章节" @click="onDuplicate">
+              <IconGlyph name="copy" :size="13" />
+            </button>
+          </template>
+          复制章节
+        </n-tooltip>
+        <n-tooltip trigger="hover">
+          <template #trigger>
+            <button type="button" class="section-tool-btn danger" title="删除章节" @click="onRemove">
+              <IconGlyph name="trash-2" :size="13" />
+            </button>
+          </template>
+          删除章节
+        </n-tooltip>
       </div>
     </div>
 
@@ -489,6 +507,42 @@ function onRemove() {
 /* 触发器包装：给 ref 一个原生元素（n-button 的实例没有 contains） */
 .trigger-wrap {
   display: inline-flex;
+}
+/* 工具栏图标按钮：悬浮/选中章节时出现，悬停提示说明用途 */
+.section-tool-btn {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition:
+    background 0.12s var(--ease),
+    color 0.12s var(--ease);
+}
+.section-tool-btn:hover {
+  background: var(--surface-soft);
+  color: var(--text);
+}
+/* 强制分页已开启：常亮提醒色 */
+.section-tool-btn.is-on {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+/* 样式弹层展开：点亮主色 */
+.section-tool-btn.is-open {
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+.section-tool-btn.danger:hover {
+  background: var(--danger-soft);
+  color: var(--danger);
 }
 .section-card:hover .section-toolbar,
 .section-card.selected .section-toolbar {

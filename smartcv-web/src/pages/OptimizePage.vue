@@ -151,7 +151,8 @@ function toolRows(steps: ChatStep[]): DisplayStep[] {
 }
 import { usePagination } from '@/composables/usePagination'
 import { previewZoom, ZOOM_LEVELS } from '@/composables/usePreviewZoom'
-import { CONTENT_WIDTH, PAGE_HEIGHT, PAGE_PADDING, PAGE_WIDTH } from '@/utils/constants'
+import { contentWidth, pageHeight, pageWidth } from '@/composables/usePageSize'
+import { PAGE_PADDING } from '@/utils/constants'
 import { pageRunSpecs, type PageUnit, type RunSpec } from '@/utils/pagination'
 import { exportResumePdf } from '@/api/pdf'
 import { resumeFilename } from '@/composables/useResumeName'
@@ -193,16 +194,22 @@ const pages = computed(() =>
 )
 
 /**
- * 分页 A4 纸样式：和「实时预览」的 A4 纸张保持完全一致 ——
+ * 分页纸张样式：和「实时预览」的纸张保持完全一致 ——
  * 同样的纸宽 / 最小高 / 页边距 / 缩放，这样两边显示的字号、换行、分页完全一样，
  * 不会出现"诊断简历页看起来更大/不分页"的问题。
  */
 const pageStyle = computed(() => ({
-  width: `${PAGE_WIDTH}px`,
-  minHeight: `${PAGE_HEIGHT}px`,
+  width: `${pageWidth.value}px`,
+  minHeight: `${pageHeight.value}px`,
   padding: `${PAGE_PADDING}px`,
   zoom: previewZoom.value,
 }))
+
+/** 隐藏测量层宽度：与纸面内容区等宽（随纸面宽度一起变） */
+const measureStyle = computed(() => ({ width: `${contentWidth.value}px` }))
+
+/** 导出流宽度：与纸面同宽（PDF 的 @page size 也读同一个值，导出页与预览页一致） */
+const exportStyle = computed(() => ({ width: `${pageWidth.value}px` }))
 
 /* ---------- 导出 ---------- */
 
@@ -474,7 +481,7 @@ function onApplyDiff() {
 
 <template>
   <!-- 隐藏测量层：始终挂载，连续渲染全部章节用于算分页（与预览同宽，页数才能一致） -->
-  <div ref="measureFlowEl" class="measure-flow" :style="{ width: `${CONTENT_WIDTH}px` }">
+  <div ref="measureFlowEl" class="measure-flow" :style="measureStyle">
     <PreviewSection
       v-for="g in resumeStore.resume"
       :key="g.id"
@@ -487,13 +494,13 @@ function onApplyDiff() {
   <!-- 隐藏导出流：导出 PDF 时按预览的分页方案渲染成"每页一块"，
        每块用 break-after 强制独占一页，导出的页数 = 预览页数 -->
   <div v-if="exporting" class="export-pages">
-    <div ref="exportFlowEl" class="export-flow" :style="{ width: `${PAGE_WIDTH}px` }">
+    <div ref="exportFlowEl" class="export-flow" :style="exportStyle">
       <div
         v-for="(page, i) in pages"
         :key="i"
         class="export-page"
         :style="{
-          height: `${PAGE_HEIGHT}px`,
+          height: `${pageHeight}px`,
           padding: `${PAGE_PADDING}px`,
           breakAfter: i === pages.length - 1 ? 'auto' : 'page',
         }"
@@ -1227,11 +1234,11 @@ function onApplyDiff() {
   box-sizing: border-box;
   background: #fff;
 }
-/* 每一页是一个 A4 纸块：纸宽、四周留白由 inline style 提供，
+/* 每一页是一个纸块：纸宽、四周留白由 inline style 提供，
    固定高度 + overflow hidden + break-inside avoid + break-after 独占一页，
    确保 Chromium 打 PDF 时把"一页的块"当成一整页，绝不硬拆成两页；
    块比物理页多出来的零点几像素（取整测量误差）被裁掉，而不是多出一页。
-   高度由 inline style 固定为 PAGE_HEIGHT，配合 @page size 与纸面一致 */
+   高度由 inline style 固定为 pageHeight，配合 @page size 与纸面一致 */
 .export-page {
   box-sizing: border-box;
   width: 100%;

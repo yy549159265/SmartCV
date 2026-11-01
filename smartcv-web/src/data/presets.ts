@@ -73,7 +73,7 @@ export const GENERIC_CONTENT_PRESETS: ContentPreset[] = [
     desc: '展示一排标签',
     icon: '🏷️',
     type: 'tag',
-    content: { tags: ['新标签'] },
+    content: { tags: ['Vue 3', 'TypeScript', 'Vite'] },
   },
   {
     id: 'generic-content-list',
@@ -148,14 +148,6 @@ export const CONTENT_PRESETS: ContentPreset[] = [
     content: { columns: ['**XX 项目**', '2023.03 - 2023.09'], separator: '|' },
   },
   {
-    id: 'preset-content-job-time',
-    name: '工作时间段',
-    desc: '展示工作起止时间',
-    icon: '📅',
-    type: 'timeRange',
-    content: { start: '2022.07', end: '至今' },
-  },
-  {
     id: 'preset-content-duty',
     name: '工作职责',
     desc: '圆点列表，支持一键润色',
@@ -170,14 +162,6 @@ export const CONTENT_PRESETS: ContentPreset[] = [
     },
   },
   {
-    id: 'preset-content-skills',
-    name: '技能标签',
-    desc: '展示一排技能标签',
-    icon: '🏷️',
-    type: 'tag',
-    content: { tags: ['Vue 3', 'TypeScript', 'Vite'] },
-  },
-  {
     id: 'preset-content-award',
     name: '荣誉奖项',
     desc: '数字列表展示荣誉奖项',
@@ -187,14 +171,6 @@ export const CONTENT_PRESETS: ContentPreset[] = [
       listType: 'ordered',
       items: [{ text: '2023 年公司年度**最佳新人**' }, { text: '校级优秀毕业生' }],
     },
-  },
-  {
-    id: 'preset-content-avatar',
-    name: '头像',
-    desc: '上传照片，常放在简历顶部',
-    icon: '🧑',
-    type: 'image',
-    content: { image: '', imageSize: 96, imageShape: 'rounded' },
   },
 ]
 
@@ -384,6 +360,28 @@ function educationRow(suffix: string): LayoutWindowPreset {
 }
 
 /**
+ * 工作经历的一段时间段 + 职责列表。
+ * 「工作时间段」预设已从组件库移除（与通用「时间段」重复），
+ * 好的默认值（2022.07 ～ 至今）直接内联在这里，拖入工作经历章节即可用。
+ */
+function workEntry(): LayoutWindowPreset {
+  return {
+    layout: 'vertical',
+    contents: [
+      {
+        id: 'preset-content-work-time',
+        name: '工作时间段',
+        desc: '展示工作起止时间',
+        icon: '📅',
+        type: 'timeRange',
+        content: { start: '2022.07', end: '至今' },
+      },
+      contentById('preset-content-duty'),
+    ],
+  }
+}
+
+/**
  * 一组专业技能：居中标题 + 有序列表。
  * 工程技能 / LLM 技能共用同一结构，只有标题与条目不同。
  */
@@ -472,14 +470,8 @@ export const SECTION_PRESETS: SectionPreset[] = [
           },
         ],
       },
-      {
-        layout: 'vertical',
-        contents: [contentById('preset-content-job-time'), contentById('preset-content-duty')],
-      },
-      {
-        layout: 'vertical',
-        contents: [contentById('preset-content-job-time'), contentById('preset-content-duty')],
-      },
+      workEntry(),
+      workEntry(),
     ],
   },
   {
@@ -519,7 +511,7 @@ export const SECTION_PRESETS: SectionPreset[] = [
     rows: [
       {
         layout: 'vertical',
-        contents: [contentById('preset-content-award'), contentById('preset-content-award')],
+        contents: [contentById('preset-content-award')],
       },
     ],
   },

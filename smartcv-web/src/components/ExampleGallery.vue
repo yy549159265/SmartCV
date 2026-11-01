@@ -23,8 +23,8 @@ const emit = defineEmits<{ 'update:show': [boolean]; enter: [] }>()
 
 const store = useResumeStore()
 
-/** 缩略图缩放比：卡片内容宽约 238px ÷ A4 宽 794px ≈ 0.3 */
-const THUMB_ZOOM = 0.3
+/** 缩略图缩放比：卡片内容宽约 238px ÷ 纸宽（随 PAGE_WIDTH 自动算，纸变宽缩略图不变宽） */
+const THUMB_ZOOM = 238 / PAGE_WIDTH
 
 /** 画廊卡片：一份示例 + 它的加载状态 */
 interface Card {

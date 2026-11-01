@@ -12,7 +12,8 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { usePagination } from '@/composables/usePagination'
 import { previewZoom } from '@/composables/usePreviewZoom'
-import { CONTENT_WIDTH, PAGE_HEIGHT, PAGE_PADDING, PAGE_WIDTH } from '@/utils/constants'
+import { contentWidth, pageHeight, pageWidth } from '@/composables/usePageSize'
+import { PAGE_PADDING } from '@/utils/constants'
 import { pageRunSpecs, type PageUnit, type RunSpec } from '@/utils/pagination'
 import PreviewSection from './PreviewSection.vue'
 import { useResumeStore } from '@/stores/resume'
@@ -26,13 +27,16 @@ usePagination(measureFlowEl)
 
 /* ---------- 缩放：与诊断页共用 previewZoom，两边字号永远一致 ---------- */
 
-/** A4 纸张样式：固定 A4 尺寸 + 页边距 + 缩放 */
+/** 纸张样式：固定纸面尺寸 + 页边距 + 缩放（宽高都随用户设置的纸面走，恒为 A4 纵向比例） */
 const pageStyle = computed(() => ({
-  width: `${PAGE_WIDTH}px`,
-  minHeight: `${PAGE_HEIGHT}px`,
+  width: `${pageWidth.value}px`,
+  minHeight: `${pageHeight.value}px`,
   padding: `${PAGE_PADDING}px`,
   zoom: previewZoom.value,
 }))
+
+/** 隐藏测量层宽度：与纸面内容区等宽（纸面宽度变化时自动跟着变并重新分页） */
+const measureStyle = computed(() => ({ width: `${contentWidth.value}px` }))
 
 /* ---------- 分页渲染：把每页的单元 id 还原成若干"连续同章节片段"(RunSpec) ---------- */
 const pages = computed(() =>
@@ -88,7 +92,7 @@ watch(
 
     <div class="preview-scroll">
       <!-- 隐藏测量层：position 绝对定位移出可视区，visibility 隐藏但仍占布局 -->
-      <div ref="measureFlowEl" class="measure-flow" :style="{ width: `${CONTENT_WIDTH}px` }">
+      <div ref="measureFlowEl" class="measure-flow" :style="measureStyle">
         <PreviewSection
           v-for="g in store.resume"
           :key="g.id"

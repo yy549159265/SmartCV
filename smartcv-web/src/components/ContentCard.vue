@@ -20,6 +20,7 @@ import { useClickPopover } from '@/composables/useClickPopover'
 import { CONTENT_TYPE_NAMES } from '@/utils/constants'
 import type { Content, ContentData, Section, LayoutWindow, ContentType } from '@/types'
 import StylePopover from './StylePopover.vue'
+import IconGlyph from './IconGlyph.vue'
 import TagInput from './TagInput.vue'
 import { onMarkdownKeydown } from '@/utils/textShortcuts'
 
@@ -432,8 +433,14 @@ function onRemove() {
                 <span class="more-option-value">{{ content.content.imageSize ?? 96 }}px</span>
               </div>
             </div>
-            <n-button size="small" quaternary block @click="onDuplicate">⧉ 复制</n-button>
-            <n-button size="small" quaternary type="error" block @click="onRemove">删除</n-button>
+            <button type="button" class="more-action-btn" @click="onDuplicate">
+              <IconGlyph name="copy" :size="13" />
+              <span>复制内容</span>
+            </button>
+            <button type="button" class="more-action-btn danger" @click="onRemove">
+              <IconGlyph name="trash-2" :size="13" />
+              <span>删除内容</span>
+            </button>
           </div>
         </template>
       </n-popover>
@@ -1188,6 +1195,37 @@ function onRemove() {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+/* 复制 / 删除：图标 + 文字的菜单项，与「⋯ 菜单」整体风格一致 */
+.more-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    background 0.14s var(--ease),
+    color 0.14s var(--ease);
+}
+.more-action-btn .icon-glyph {
+  color: var(--text-tertiary);
+}
+.more-action-btn:hover {
+  background: var(--surface-soft);
+  color: var(--text);
+}
+.more-action-btn.danger:hover {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.more-action-btn.danger:hover .icon-glyph {
+  color: var(--danger);
 }
 
 /* 图片型：⋯ 菜单里的形状/尺寸设置 */

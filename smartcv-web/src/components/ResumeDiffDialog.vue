@@ -27,7 +27,7 @@ import {
 } from '@/utils/resumeDiff'
 import { useSyncScroll } from '@/composables/useSyncScroll'
 import { previewZoom } from '@/composables/usePreviewZoom'
-import { CONTENT_WIDTH } from '@/utils/constants'
+import { contentWidth } from '@/composables/usePageSize'
 import type { Section } from '@/types'
 
 const props = withDefaults(
@@ -132,7 +132,7 @@ useSyncScroll(leftEl, rightEl, () => props.show)
 
 /** 栏内纸张：与页面预览同宽同缩放，两边看到的排版、换行都一致 */
 const paperStyle = computed(() => ({
-  width: `${CONTENT_WIDTH}px`,
+  width: `${contentWidth.value}px`,
   zoom: previewZoom.value,
 }))
 

@@ -131,7 +131,7 @@ const unitViews = (id: string) => props.controls?.units[id]
 }
 .children-v {
   flex-direction: column;
-  gap: 10px;
+  gap: 6px;
 }
 /* 横向容器：网格均分全局列数（与画布一致），保持文档式间距、不画边框 */
 .children-h {

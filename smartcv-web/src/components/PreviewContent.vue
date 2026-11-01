@@ -330,11 +330,11 @@ const imageStyle = computed<CSSProperties>(() => {
 }
 .pb-tag {
   display: inline-content;
-  padding: 1px 10px;
+  padding: 0 9px;
   border-radius: 999px;
   background: #eef1f6;
   font-size: 0.92em;
-  line-height: 1.7;
+  line-height: 1.5;
   white-space: nowrap;
 }
 
@@ -365,7 +365,7 @@ const imageStyle = computed<CSSProperties>(() => {
   display: flex;
   align-items: baseline;
   gap: 6px;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 .pb-list-item:last-child {
   margin-bottom: 0;

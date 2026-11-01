@@ -4,8 +4,11 @@
  *
  * 注意：本组件只负责渲染"面板内容"，不含弹层外壳 ——
  * 谁用它，谁决定把它放进什么弹层里：
- *  - SectionCard：放在章节工具栏的「🎨 样式」n-popover 里；
+ *  - SectionCard：放在章节工具栏的「样式」n-popover 里；
  *  - ContentCard：放在 ⋯ 菜单的 n-popover 里。
+ *
+ * 面板形态：Word 功能区式的「属性选项卡」（文字 / 标题 / 间距），
+ * 每项属性 = 图标胶囊 + 名称 + 控件（Notion 属性那种逐行排布）。
  *
  * - 章节（mode="section"）：标题字号独立设置；正文字号/颜色/行距/块间距
  *   会"继承"给内部所有内容；
@@ -13,8 +16,9 @@
  *
  * 写入统一走 store.updateSection / store.updateContent（单一数据源）。
  */
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useResumeStore } from '@/stores/resume'
+import IconGlyph from './IconGlyph.vue'
 import {
   DEFAULT_CHAPTER_GAP,
   DEFAULT_COLOR,
@@ -65,6 +69,25 @@ const sectionStyle = computed<SectionStyle | undefined>(() => section.value?.sty
 
 /** 占位组件：高度由 字号 × 行距 决定，它没有文字，所以不提供「文字颜色」 */
 const isSpacer = computed(() => content.value?.type === 'spacer')
+
+/* ---------- 属性选项卡 ---------- */
+
+/** 选项卡：文字 / 标题 / 间距（标题是章节专属，内容模式不显示） */
+type TabKey = 'text' | 'title' | 'spacing'
+const tab = ref<TabKey>('text')
+
+const tabs = computed<{ key: TabKey; label: string }[]>(() =>
+  props.mode === 'section'
+    ? [
+        { key: 'text', label: '文字' },
+        { key: 'title', label: '标题' },
+        { key: 'spacing', label: '间距' },
+      ]
+    : [
+        { key: 'text', label: '文字' },
+        { key: 'spacing', label: '间距' },
+      ],
+)
 
 /* ---------- 通用：把样式字段写回 store ---------- */
 
@@ -120,125 +143,87 @@ const colorPresets = [
 
 <template>
   <div class="style-panel">
-    <!-- 标题字号：只有章节有（独立设置，不继承） -->
-    <div v-if="mode === 'section'" class="style-row">
-          <span class="style-label">标题字号</span>
-          <div class="style-control">
-            <n-slider
-              :value="sectionStyle?.titleSize ?? DEFAULT_TITLE_SIZE"
-              :min="12"
-              :max="100"
-              :step="1"
-              :tooltip="false"
-              @update:value="(v: number) => setStyle('titleSize', v)"
-            />
-            <span class="style-value">{{ sectionStyle?.titleSize ?? DEFAULT_TITLE_SIZE }}px</span>
-          </div>
-        </div>
+    <!-- 属性选项卡：分段式，Word 功能区 / Notion 属性面板那种 -->
+    <div class="style-tabs" role="tablist">
+      <button
+        v-for="t in tabs"
+        :key="t.key"
+        type="button"
+        role="tab"
+        class="style-tab"
+        :class="{ active: tab === t.key }"
+        :aria-selected="tab === t.key"
+        @click="tab = t.key"
+      >
+        {{ t.label }}
+      </button>
+    </div>
 
-        <!-- 标题横线：默认开启；横线恒为满行长度 -->
-        <div v-if="mode === 'section'" class="style-row">
-          <span class="style-label">标题横线</span>
-          <div class="style-control">
-            <n-switch
-              :value="sectionStyle?.titleUnderline ?? DEFAULT_TITLE_UNDERLINE"
-              @update:value="(v: boolean) => setStyle('titleUnderline', v)"
-            >
-              <template #checked>开</template>
-              <template #unchecked>关</template>
-            </n-switch>
-          </div>
+    <!-- ── 文字 ── -->
+    <div v-show="tab === 'text'" class="style-pane">
+      <!-- 正文字号 -->
+      <div class="prop-row">
+        <span class="prop-chip"><IconGlyph name="type" :size="13" /></span>
+        <span class="prop-label">正文字号</span>
+        <div class="prop-control" :class="{ disabled: mode === 'content' && followMap.fontSize }">
+          <n-slider
+            :value="style?.fontSize ?? DEFAULT_FONT_SIZE"
+            :min="10"
+            :max="100"
+            :step="1"
+            :disabled="mode === 'content' && followMap.fontSize"
+            :tooltip="false"
+            @update:value="(v: number) => setStyle('fontSize', v)"
+          />
         </div>
+        <span class="prop-value">{{ style?.fontSize ?? DEFAULT_FONT_SIZE }}px</span>
+        <button
+          v-if="mode === 'content'"
+          type="button"
+          class="follow-pill"
+          :class="{ on: followMap.fontSize }"
+          :title="followMap.fontSize ? '当前跟随章节，点击改为自定义' : '当前自定义，点击恢复跟随章节'"
+          @click="setFollow('fontSize', !followMap.fontSize)"
+        >
+          {{ followMap.fontSize ? '跟随' : '自定义' }}
+        </button>
+      </div>
 
-        <!-- 章节间距：本章节与上一个章节之间的距离（只有章节有） -->
-        <div v-if="mode === 'section'" class="style-row">
-          <span class="style-label">章节间距</span>
-          <div class="style-control">
-            <n-slider
-              :value="sectionStyle?.spaceBefore ?? DEFAULT_CHAPTER_GAP"
-              :min="0"
-              :max="60"
-              :step="2"
-              :tooltip="false"
-              @update:value="(v: number) => setStyle('spaceBefore', v)"
-            />
-            <span class="style-value">{{ sectionStyle?.spaceBefore ?? DEFAULT_CHAPTER_GAP }}px</span>
-          </div>
+      <!-- 文字颜色（占位组件没有文字，不显示这一行） -->
+      <div v-if="!isSpacer" class="prop-row">
+        <span class="prop-chip"><IconGlyph name="droplet" :size="13" /></span>
+        <span class="prop-label">文字颜色</span>
+        <div class="prop-control prop-control-right" :class="{ disabled: mode === 'content' && followMap.color }">
+          <n-color-picker
+            size="small"
+            :value="style?.color ?? DEFAULT_COLOR"
+            :show-alpha="false"
+            :swatches="colorPresets"
+            :disabled="mode === 'content' && followMap.color"
+            @update:value="(v: string) => setStyle('color', v)"
+          />
         </div>
+        <button
+          v-if="mode === 'content'"
+          type="button"
+          class="follow-pill"
+          :class="{ on: followMap.color }"
+          :title="followMap.color ? '当前跟随章节，点击改为自定义' : '当前自定义，点击恢复跟随章节'"
+          @click="setFollow('color', !followMap.color)"
+        >
+          {{ followMap.color ? '跟随' : '自定义' }}
+        </button>
+      </div>
 
-        <!-- 正文字号 -->
-        <div class="style-row">
-          <span class="style-label">
-            正文字号
-            <n-switch
-              v-if="mode === 'content'"
-              class="follow-switch"
-              size="small"
-              :value="followMap.fontSize"
-              @update:value="(v: boolean) => setFollow('fontSize', v)"
-            >
-              <template #checked>跟随</template>
-              <template #unchecked>自定义</template>
-            </n-switch>
-          </span>
-          <div class="style-control">
-            <n-slider
-              :value="style?.fontSize ?? DEFAULT_FONT_SIZE"
-              :min="10"
-              :max="100"
-              :step="1"
-              :disabled="mode === 'content' && followMap.fontSize"
-              :tooltip="false"
-              @update:value="(v: number) => setStyle('fontSize', v)"
-            />
-            <span class="style-value">{{ style?.fontSize ?? DEFAULT_FONT_SIZE }}px</span>
-          </div>
-        </div>
-
-        <!-- 文字颜色（占位组件没有文字，不显示这一行） -->
-        <div v-if="!isSpacer" class="style-row">
-          <span class="style-label">
-            文字颜色
-            <n-switch
-              v-if="mode === 'content'"
-              class="follow-switch"
-              size="small"
-              :value="followMap.color"
-              @update:value="(v: boolean) => setFollow('color', v)"
-            >
-              <template #checked>跟随</template>
-              <template #unchecked>自定义</template>
-            </n-switch>
-          </span>
-          <div class="style-control">
-            <n-color-picker
-              size="small"
-              :value="style?.color ?? DEFAULT_COLOR"
-              :show-alpha="false"
-              :swatches="colorPresets"
-              @update:value="(v: string) => setStyle('color', v)"
-            />
-          </div>
-        </div>
-
-        <!-- 文字位置：左 / 中 / 右（占位组件没有文字，不显示） -->
-        <div v-if="!isSpacer" class="style-row">
-          <span class="style-label">
-            文字位置
-            <n-switch
-              v-if="mode === 'content'"
-              class="follow-switch"
-              size="small"
-              :value="followMap.textAlign"
-              @update:value="(v: boolean) => setFollow('textAlign', v)"
-            >
-              <template #checked>跟随</template>
-              <template #unchecked>自定义</template>
-            </n-switch>
-          </span>
+      <!-- 文字位置：左 / 中 / 右（占位组件没有文字，不显示） -->
+      <div v-if="!isSpacer" class="prop-row">
+        <span class="prop-chip"><IconGlyph name="align-left" :size="13" /></span>
+        <span class="prop-label">文字位置</span>
+        <div class="prop-control prop-control-right" :class="{ disabled: mode === 'content' && followMap.textAlign }">
           <n-radio-group
             :value="style?.textAlign ?? DEFAULT_TEXT_ALIGN"
             size="small"
+            :disabled="mode === 'content' && followMap.textAlign"
             @update:value="(v: TextAlign) => setStyle('textAlign', v)"
           >
             <n-radio-button value="left">左</n-radio-button>
@@ -246,71 +231,130 @@ const colorPresets = [
             <n-radio-button value="right">右</n-radio-button>
           </n-radio-group>
         </div>
+        <button
+          v-if="mode === 'content'"
+          type="button"
+          class="follow-pill"
+          :class="{ on: followMap.textAlign }"
+          :title="followMap.textAlign ? '当前跟随章节，点击改为自定义' : '当前自定义，点击恢复跟随章节'"
+          @click="setFollow('textAlign', !followMap.textAlign)"
+        >
+          {{ followMap.textAlign ? '跟随' : '自定义' }}
+        </button>
+      </div>
 
-        <!-- 行距 -->
-        <div class="style-row">
-          <span class="style-label">
-            行距
-            <n-switch
-              v-if="mode === 'content'"
-              class="follow-switch"
-              size="small"
-              :value="followMap.lineHeight"
-              @update:value="(v: boolean) => setFollow('lineHeight', v)"
-            >
-              <template #checked>跟随</template>
-              <template #unchecked>自定义</template>
-            </n-switch>
-          </span>
-          <div class="style-control">
-            <n-slider
-              :value="style?.lineHeight ?? DEFAULT_LINE_HEIGHT"
-              :min="1"
-              :max="2.4"
-              :step="0.1"
-              :disabled="mode === 'content' && followMap.lineHeight"
-              :tooltip="false"
-              @update:value="(v: number) => setStyle('lineHeight', v)"
-            />
-            <span class="style-value">{{ (style?.lineHeight ?? DEFAULT_LINE_HEIGHT).toFixed(1) }}</span>
-          </div>
+      <!-- 行距 -->
+      <div class="prop-row">
+        <span class="prop-chip"><IconGlyph name="stretch-vertical" :size="13" /></span>
+        <span class="prop-label">行距</span>
+        <div class="prop-control" :class="{ disabled: mode === 'content' && followMap.lineHeight }">
+          <n-slider
+            :value="style?.lineHeight ?? DEFAULT_LINE_HEIGHT"
+            :min="1"
+            :max="2.4"
+            :step="0.1"
+            :disabled="mode === 'content' && followMap.lineHeight"
+            :tooltip="false"
+            @update:value="(v: number) => setStyle('lineHeight', v)"
+          />
         </div>
+        <span class="prop-value">{{ (style?.lineHeight ?? DEFAULT_LINE_HEIGHT).toFixed(1) }}</span>
+        <button
+          v-if="mode === 'content'"
+          type="button"
+          class="follow-pill"
+          :class="{ on: followMap.lineHeight }"
+          :title="followMap.lineHeight ? '当前跟随章节，点击改为自定义' : '当前自定义，点击恢复跟随章节'"
+          @click="setFollow('lineHeight', !followMap.lineHeight)"
+        >
+          {{ followMap.lineHeight ? '跟随' : '自定义' }}
+        </button>
+      </div>
+    </div>
 
-        <!-- 块间距（竖向/横向间距） -->
-        <div class="style-row">
-          <span class="style-label">
-            块间距
-            <n-switch
-              v-if="mode === 'content'"
-              class="follow-switch"
-              size="small"
-              :value="followMap.gap"
-              @update:value="(v: boolean) => setFollow('gap', v)"
-            >
-              <template #checked>跟随</template>
-              <template #unchecked>自定义</template>
-            </n-switch>
-          </span>
-          <div class="style-control">
-            <n-slider
-              :value="style?.gap ?? DEFAULT_GAP"
-              :min="0"
-              :max="36"
-              :step="2"
-              :disabled="mode === 'content' && followMap.gap"
-              :tooltip="false"
-              @update:value="(v: number) => setStyle('gap', v)"
-            />
-            <span class="style-value">{{ style?.gap ?? DEFAULT_GAP }}px</span>
-          </div>
+    <!-- ── 标题（仅章节）── -->
+    <div v-if="mode === 'section'" v-show="tab === 'title'" class="style-pane">
+      <!-- 标题字号：独立设置，不继承 -->
+      <div class="prop-row">
+        <span class="prop-chip"><IconGlyph name="heading" :size="13" /></span>
+        <span class="prop-label">标题字号</span>
+        <div class="prop-control">
+          <n-slider
+            :value="sectionStyle?.titleSize ?? DEFAULT_TITLE_SIZE"
+            :min="12"
+            :max="100"
+            :step="1"
+            :tooltip="false"
+            @update:value="(v: number) => setStyle('titleSize', v)"
+          />
         </div>
+        <span class="prop-value">{{ sectionStyle?.titleSize ?? DEFAULT_TITLE_SIZE }}px</span>
+      </div>
 
-        <p v-if="mode === 'section'" class="style-hint">
-          正文字号 / 颜色 / 行距 / 块间距会继承给章节内所有内容
-        </p>
-        <p v-else class="style-hint">
-          开启「自定义」后该字段独立生效；「跟随」= 使用章节的继承值
-        </p>
+      <!-- 标题横线：默认开启；横线恒为满行长度 -->
+      <div class="prop-row">
+        <span class="prop-chip"><IconGlyph name="underline" :size="13" /></span>
+        <span class="prop-label">标题横线</span>
+        <div class="prop-control prop-control-right">
+          <n-switch
+            :value="sectionStyle?.titleUnderline ?? DEFAULT_TITLE_UNDERLINE"
+            @update:value="(v: boolean) => setStyle('titleUnderline', v)"
+          >
+            <template #checked>开</template>
+            <template #unchecked>关</template>
+          </n-switch>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── 间距 ── -->
+    <div v-show="tab === 'spacing'" class="style-pane">
+      <!-- 块间距（竖向/横向间距） -->
+      <div class="prop-row">
+        <span class="prop-chip"><IconGlyph name="arrow-up-down" :size="13" /></span>
+        <span class="prop-label">块间距</span>
+        <div class="prop-control" :class="{ disabled: mode === 'content' && followMap.gap }">
+          <n-slider
+            :value="style?.gap ?? DEFAULT_GAP"
+            :min="0"
+            :max="36"
+            :step="2"
+            :disabled="mode === 'content' && followMap.gap"
+            :tooltip="false"
+            @update:value="(v: number) => setStyle('gap', v)"
+          />
+        </div>
+        <span class="prop-value">{{ style?.gap ?? DEFAULT_GAP }}px</span>
+        <button
+          v-if="mode === 'content'"
+          type="button"
+          class="follow-pill"
+          :class="{ on: followMap.gap }"
+          :title="followMap.gap ? '当前跟随章节，点击改为自定义' : '当前自定义，点击恢复跟随章节'"
+          @click="setFollow('gap', !followMap.gap)"
+        >
+          {{ followMap.gap ? '跟随' : '自定义' }}
+        </button>
+      </div>
+
+      <!-- 章节间距：本章节与上一个章节之间的距离（只有章节有） -->
+      <div v-if="mode === 'section'" class="prop-row">
+        <span class="prop-chip"><IconGlyph name="arrow-up-down" :size="13" /></span>
+        <span class="prop-label">章节间距</span>
+        <div class="prop-control">
+          <n-slider
+            :value="sectionStyle?.spaceBefore ?? DEFAULT_CHAPTER_GAP"
+            :min="0"
+            :max="60"
+            :step="2"
+            :tooltip="false"
+            @update:value="(v: number) => setStyle('spaceBefore', v)"
+          />
+        </div>
+        <span class="prop-value">{{ sectionStyle?.spaceBefore ?? DEFAULT_CHAPTER_GAP }}px</span>
+      </div>
+    </div>
+
   </div>
 </template>
 
@@ -318,49 +362,119 @@ const colorPresets = [
 .style-panel {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 4px 2px;
+  gap: 8px;
+  padding: 2px;
 }
 
-.style-row {
+/* ---- 属性选项卡（分段式） ---- */
+.style-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+.style-tab {
+  flex: 1;
+  height: 24px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    background 0.14s var(--ease),
+    color 0.14s var(--ease);
+}
+.style-tab:hover {
+  color: var(--text);
+}
+.style-tab.active {
+  background: var(--panel-bg);
+  color: var(--primary);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(28, 33, 48, 0.08);
+}
+
+/* ---- 属性行：图标胶囊 + 名称 + 控件 ---- */
+.style-pane {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
-
-.style-label {
+.prop-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 4px;
+}
+.prop-chip {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+.prop-label {
+  flex: none;
+  width: 52px;
   font-size: 12px;
   color: var(--text-secondary);
+}
+.prop-control {
+  flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
-  justify-content: space-between;
 }
-
-.follow-switch {
-  --n-rail-height: 16px;
+.prop-control-right {
+  justify-content: flex-end;
 }
-
-.style-control {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+.prop-control.disabled {
+  opacity: 0.45;
 }
-.style-control :deep(.n-slider) {
+.prop-control :deep(.n-slider) {
   flex: 1;
 }
-
-.style-value {
-  width: 42px;
+.prop-value {
+  flex: none;
+  width: 34px;
   text-align: right;
-  font-size: 12px;
-  color: var(--text);
+  font-size: 11.5px;
   font-variant-numeric: tabular-nums;
+  color: var(--text);
 }
 
-.style-hint {
-  margin: 0;
-  font-size: 12px;
+/* ---- 跟随药丸：内容模式下"跟随/自定义"的切换 ---- */
+.follow-pill {
+  flex: none;
+  height: 20px;
+  padding: 0 7px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel-bg);
+  font-size: 10.5px;
   color: var(--text-tertiary);
-  line-height: 1.5;
+  cursor: pointer;
+  transition:
+    border-color 0.14s var(--ease),
+    background 0.14s var(--ease),
+    color 0.14s var(--ease);
+}
+.follow-pill:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.follow-pill.on {
+  border-color: var(--primary);
+  background: var(--primary-faint);
+  color: var(--primary);
+  font-weight: 600;
 }
 </style>

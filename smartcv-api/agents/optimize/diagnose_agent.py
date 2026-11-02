@@ -33,12 +33,10 @@ _SYSTEM_PROMPT = (Path(__file__).resolve().parent / "system_prompt_diagnose.md")
 # standard = 保留原句式，只做必要改写；bold = 允许整段重写表达，但仍不新增事实。
 _REWRITE_MODE_RULES = {
     "standard": (
-        "\n\n# 本次改写强度：标准\n"
         "诊断按现有规则进行；`suggestion` 以「保留原句式、只做必要改写」为准，"
         "不要要求整段推倒重写。"
     ),
     "bold": (
-        "\n\n# 本次改写强度：大胆\n"
         "可以在诊断中指出「表达平淡、句式与目标岗位差距大、信息组织松散」等问题，"
         "`suggestion` 可以要求大幅重写句式、句序和段落内表达，不必保留原句。"
         "但边界不变：不得建议新增或编造事实、数字、经历、技术栈，"
@@ -48,10 +46,12 @@ _REWRITE_MODE_RULES = {
 
 
 def _system_prompt(rewrite_mode: str) -> str:
-    """把本次改写强度追加到系统提示词末尾。"""
-    return _SYSTEM_PROMPT + _REWRITE_MODE_RULES.get(
+    """把本次改写强度替换进系统提示词中间的 {rewrite_rules} 占位符。"""
+    rewrite_rules = _REWRITE_MODE_RULES.get(
         rewrite_mode, _REWRITE_MODE_RULES["standard"]
     )
+
+    return _SYSTEM_PROMPT.replace("{rewrite_rules}", rewrite_rules)
 
 
 # 等用户回答的最长时间：超时按「未作答」继续诊断，不让整条 SSE 流永远挂着。

@@ -18,7 +18,7 @@ class PolishedItems(BaseModel):
 _PROMPT_DIR = Path(__file__).resolve().parent
 
 # 基础提示词只有一份（system_prompt_polish.md，只写"执行框架"：
-# 输入结构、行为准则、输出格式、示例），模式规则在代码里追加 ——
+# 输入结构、行为准则、输出格式、示例），模式规则经 md 里的 {mode_rules} 占位符替换进去 ——
 # 与 optimize 的 diagnose/optimize agent 同一套做法。
 #
 # 润色方向、润色方式、是否补充量化数据**完全由前端传入**（<要求> 区块），
@@ -33,12 +33,10 @@ _ENHANCE_PROMPT = (_PROMPT_DIR / "system_prompt_polish_enhance.md").read_text(en
 
 _MODE_RULES = {
     "strict": (
-        "\n\n# 本次润色模式：严谨\n"
         "保留原句式，只做必要重构；事实性数据（数字、规模、奖项等）只能来自原文，"
         "不得补充或编造任何量化数据；输出长度与原文接近，不做大幅扩写。"
     ),
     "free": (
-        "\n\n# 本次润色模式：自由（大幅改写）\n"
         "这是「改写」而非「轻微润色」：禁止只做同义替换、或在原文上小修小补。\n"
         "1. <要求> 是第一优先级：其中给出的方向（更专业 / 更量化 / 更有故事性 / 面向某岗位等）"
         "必须落实到每条输出，必要时调整侧重点、重新组织内容、补充细节。\n"
@@ -56,7 +54,12 @@ def _system_prompt(mode: str) -> str:
     """基础提示词 + 模式规则；enhance 是独立任务，用单独一份提示词。"""
     if mode == "enhance":
         return _ENHANCE_PROMPT
-    return _SYSTEM_PROMPT + _MODE_RULES.get(mode, _MODE_RULES[_DEFAULT_MODE])
+    mode_rules = _MODE_RULES.get(
+        mode,
+        _MODE_RULES[_DEFAULT_MODE]
+    )
+
+    return _SYSTEM_PROMPT.replace("{mode_rules}", mode_rules)
 
 # 系统提示词明确要求不要代码围栏，但个别模型仍会加上，解析前先剥掉
 _FENCE = re.compile(r"```(?:json)?\s*(.*?)```", re.S)

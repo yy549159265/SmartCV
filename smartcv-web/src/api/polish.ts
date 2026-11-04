@@ -15,7 +15,9 @@ import { unwrap } from '@/api/error'
 import { apiFetch } from '@/api/http'
 
 /**
- * 润色模式（后端基础提示词只有一份 system_prompt_polish.md，模式规则在代码里追加）：
+ * 润色模式（后端提示词是「模板 + 片段」：system_prompt_base.md 固定分好
+ * # 角色 / # 输入格式 / # 可以做 / # 不能做 / # 其他内容 / # 输出格式 / # 示例 七段，
+ * 各模式片段 md 只写这七段的内容，后端按模式替换；strict/free 的差别只在「模式规则」）：
  *  - strict  严谨：只重构表达，保留原句式，不新增任何数据
  *  - free    自由：可大幅重写、扩写、补充术语；不主动补量化数据（除非 description 明确要求）
  *  - enhance 提示词增强：把口语化的修改要求改写成明确、可执行的提示词（可参考 JD）

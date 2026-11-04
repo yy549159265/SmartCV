@@ -392,6 +392,16 @@ export const useOptimizeStore = defineStore('optimize', {
     },
 
     /**
+     * 放弃这份待确认的修改：简历保持原样，之后可以重新发起纠错 / 对话。
+     * 没有它的话，用户只能「确定应用」或「新建会话」才能解开，
+     * 表现为「全文纠错用了一次就再也点不动，只能刷新浏览器」。
+     */
+    discardPendingDiff() {
+      this.pendingDiff = null
+      this.diffOpen = false
+    },
+
+    /**
      * 应用（已逐处筛选过的）AI 修改：这时候才真正写回简历。
      *
      * 不是原样导入 after，而是按用户的还原选择 merge 之后的结果：

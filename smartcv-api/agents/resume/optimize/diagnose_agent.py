@@ -18,11 +18,11 @@ from langchain.agents import create_agent
 from langgraph.config import get_stream_writer
 from langgraph.types import Command
 
-from agents.optimize.schemas.diagnosis import DiagnosisResult
-from agents.optimize.schemas.task import get_chat_task
-from agents.optimize.utils.checkpointer import get_checkpointer
-from agents.optimize.utils.tools import make_ask_tool
-from agents.optimize.utils.web_search import make_web_search_tool
+from agents.resume.optimize.schemas.diagnosis import DiagnosisResult
+from agents.resume.optimize.schemas.task import get_chat_task
+from agents.resume.optimize.utils.checkpointer import get_checkpointer
+from agents.resume.optimize.utils.tools import make_ask_tool
+from agents.resume.optimize.utils.web_search import make_web_search_tool
 from agents.utils.skillmiddleware import SkillMiddleware
 
 logger = logging.getLogger("smartcv")
@@ -125,7 +125,49 @@ def _diagnosis_items(structured) -> list[dict]:
     items = structured.get("items") if isinstance(structured, dict) else getattr(structured, "items", None)
     result: list[dict] = []
     for item in items or []:
-        result.append(item if isinstance(item, dict) else item.model_dump())
+        # 统一复制成普通 dict：下面按坐标合并会就地改写字段，
+        # 不能改到 checkpoint / 结构化结果里的原对象。
+        result.append(dict(item) if isinstance(item, dict) else item.model_dump())
+    return _merge_same_coordinate(result)
+
+
+def _merge_same_coordinate(items: list[dict]) -> list[dict]:
+    """把指向同一个坐标的多条诊断合并成一条。
+
+    一段文字只能被 patch_content 替换一次：两条诊断落在同一个 [s,r,c,i] 上时，
+    第一条改完原文就变了，第二条核对原文必定失败，表现为「重复位置的那条诊断
+    直接不执行」。这里按坐标合并，保留第一条的位置与原文片段（quote 必须与当前
+    正文一致，不能换），把后面几条的原因 / 依据 / 方向补进同一条，避免丢诊断。
+
+    structure 类诊断和坐标不全的诊断没有可比的位置，原样保留。
+    """
+    merged: dict[tuple, dict] = {}
+    result: list[dict] = []
+
+    for item in items:
+        coords = tuple(item.get(key) for key in ("s", "r", "c", "i"))
+        if item.get("kind") == "structure" or any(value is None for value in coords):
+            result.append(item)
+            continue
+
+        base = merged.get(coords)
+        if base is None:
+            merged[coords] = item
+            result.append(item)
+            continue
+
+        logger.warning(
+            "诊断项坐标重复 %s，已合并：%s", coords, str(item.get("suggestion") or "")[:40]
+        )
+        for field in ("reason", "evidence", "suggestion", "reference"):
+            extra = str(item.get(field) or "").strip()
+            if not extra:
+                continue
+            current = str(base.get(field) or "").strip()
+            if extra in current:
+                continue
+            base[field] = f"{current}；{extra}" if current else extra
+
     return result
 
 

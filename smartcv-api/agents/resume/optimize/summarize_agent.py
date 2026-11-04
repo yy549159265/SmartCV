@@ -10,7 +10,7 @@ from pathlib import Path
 from langchain.agents import create_agent
 from langgraph.config import get_stream_writer
 
-from agents.optimize.utils.diagnosis import format_diagnosis
+from agents.resume.optimize.utils.diagnosis import format_diagnosis
 
 logger = logging.getLogger("smartcv")
 

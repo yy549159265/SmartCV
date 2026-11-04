@@ -14,6 +14,7 @@ import IconGlyph from '@/components/IconGlyph.vue'
 import PreviewSection from '@/components/PreviewSection.vue'
 import { message } from '@/utils/feedback'
 import { toSections } from '@/api/examples'
+import { analyzeResume } from '@/api/analyze'
 import {
   createReferenceExample,
   getReferenceExample,
@@ -176,6 +177,40 @@ const form = reactive({ direction: '', description: '', jsonText: '' })
 const parsedSections = ref<Section[] | null>(null)
 const parseError = ref('')
 
+/* ---------- AI 分析：职业名称 + 可借鉴的写法 ---------- */
+
+const analyzing = ref(false)
+
+/** JSON 解析成功后才能分析：按钮置灰，避免把空内容发给模型 */
+const canAnalyze = computed(() => !!parsedSections.value && !analyzing.value)
+
+/**
+ * 分析上传的 JSON：后端把它转成不带坐标的简历交给模型，
+ * 返回固定 2 条 —— 第 1 条回填「职业名称」，第 2 条回填「可借鉴的写法」。
+ * 用户点按钮是明确动作，所以两条都按结果覆盖，之后仍可手动修改。
+ */
+async function runAnalyze() {
+  if (!canAnalyze.value) {
+    message.warning(parsedSections.value ? '正在分析，请稍候' : '请先上传有效的简历 JSON')
+    return
+  }
+
+  analyzing.value = true
+  try {
+    const result = await analyzeResume(parsedSections.value!)
+    if (!result.direction && !result.highlights) {
+      throw new Error('分析结果为空，请稍后重试')
+    }
+    form.direction = result.direction
+    form.description = result.highlights
+    message.success('分析完成，已填入职业名称与可借鉴写法')
+  } catch (err) {
+    message.error(err instanceof Error ? err.message : '简历分析失败')
+  } finally {
+    analyzing.value = false
+  }
+}
+
 function resetForm() {
   form.direction = ''
   form.description = ''
@@ -245,11 +280,11 @@ const submitting = ref(false)
 
 function goPreview() {
   if (!form.direction.trim()) {
-    message.warning('请填写职业方向')
+    message.warning('请填写职业名称')
     return
   }
   if (!form.description.trim()) {
-    message.warning('请填写示例描述')
+    message.warning('请填写可借鉴的写法')
     return
   }
   if (!validateJson() || !parsedSections.value) return
@@ -435,34 +470,34 @@ async function confirmUpload() {
       <div class="ref-form">
         <div class="ref-field">
           <span class="ref-field-label">
-            职业方向
+            职业名称
             <n-tooltip trigger="hover">
               <template #trigger>
                 <span class="ref-field-info" tabindex="0">
                   <IconGlyph name="info" :size="13" />
                 </span>
               </template>
-              最多 60 字，例如「后端开发」「数据分析」
+              最多 60 字，填招聘网站上能搜到的岗位名，如「后端开发工程师」
             </n-tooltip>
           </span>
           <n-input
             v-model:value="form.direction"
             maxlength="60"
             show-count
-            placeholder="如 后端开发"
+            placeholder="如 后端开发工程师"
           />
         </div>
 
         <div class="ref-field">
           <span class="ref-field-label">
-            示例描述
+            可借鉴的写法
             <n-tooltip trigger="hover">
               <template #trigger>
                 <span class="ref-field-info" tabindex="0">
                   <IconGlyph name="info" :size="13" />
                 </span>
               </template>
-              这份示例好在哪里、适合参考什么（最多 2000 字）
+              这份示例的可迁移写作规范（最多 2000 字）；诊断时会作为示例说明交给 AI
             </n-tooltip>
           </span>
           <n-input
@@ -471,7 +506,7 @@ async function confirmUpload() {
             maxlength="2000"
             show-count
             :autosize="{ minRows: 3, maxRows: 7 }"
-            placeholder="简述可借鉴之处"
+            placeholder="如：1. 先给项目定位…&#10;2. 用版本号讲架构演进…"
           />
         </div>
 
@@ -492,6 +527,17 @@ async function confirmUpload() {
               <IconGlyph name="file-json" :size="14" />
               选择文件
             </n-button>
+            <n-button
+              size="small"
+              type="primary"
+              secondary
+              :disabled="!parsedSections || analyzing"
+              :loading="analyzing"
+              @click="runAnalyze"
+            >
+              <IconGlyph v-if="!analyzing" name="sparkles" :size="14" />
+              AI 分析
+            </n-button>
             <span v-if="parsedSections" class="ref-json-ok">
               ✓ 已识别 {{ parsedSections.length }} 个章节
             </span>
@@ -505,6 +551,9 @@ async function confirmUpload() {
             @update:value="onJsonTextInput"
           />
           <p v-if="parseError" class="ref-json-error">{{ parseError }}</p>
+          <p v-else-if="!parsedSections" class="ref-json-hint">
+            先上传或粘贴简历 JSON，才能使用 AI 分析
+          </p>
         </div>
       </div>
 
@@ -969,6 +1018,12 @@ async function confirmUpload() {
   line-height: 1.6;
   color: var(--danger);
   overflow-wrap: anywhere;
+}
+.ref-json-hint {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--text-tertiary);
 }
 
 /* ---------- 预览确认 ---------- */

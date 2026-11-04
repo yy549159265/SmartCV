@@ -45,7 +45,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from agents.optimize.utils.checkpointer import clear_checkpoints, close_checkpointer, open_checkpointer
+from agents.resume.optimize.utils.checkpointer import clear_checkpoints, close_checkpointer, open_checkpointer
 from routers import agent as agent_router
 from routers import business as business_router
 from schemas.response import error

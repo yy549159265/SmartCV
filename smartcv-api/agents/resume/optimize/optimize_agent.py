@@ -13,10 +13,10 @@ from pathlib import Path
 from langchain.agents import create_agent
 from langgraph.config import get_stream_writer
 
+from agents.resume.optimize.utils.diagnosis import format_diagnosis
+from agents.resume.optimize.utils.tools import OptimizeStore, make_patch_tools
+from agents.utils.resume import locate_unit
 from agents.utils.skillmiddleware import SkillMiddleware
-from agents.optimize.utils.diagnosis import format_diagnosis
-from agents.optimize.utils.markdown import locate_unit
-from agents.optimize.utils.tools import OptimizeStore, make_patch_tools
 
 logger = logging.getLogger("smartcv")
 

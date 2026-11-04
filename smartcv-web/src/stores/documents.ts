@@ -424,6 +424,56 @@ export const useDocumentsStore = defineStore('documents', {
       })
     },
 
+    /**
+     * 删除文件夹里的一份简历（不可恢复，调用方负责二次确认）。
+     * 删除的是当前正在编辑的那份时：只解除文件指针，内容仍留在浏览器里，
+     * 之后对这份内容的修改不会再自动写回文件夹（避免把刚删的文件又建出来）。
+     */
+    deleteFile(name: string): Promise<boolean> {
+      return exclusive(async () => {
+        if (!this.isBound || !name) return false
+        if (!(await this.ensurePermission()) || !dir) {
+          message.warning('没有文件夹访问权限，请重新授权')
+          return false
+        }
+
+        const deletingCurrent = this.currentFile?.toLowerCase() === name.toLowerCase()
+
+        // 先停掉防抖中的自动保存，并等排队中的写盘结束，
+        // 否则删除完成后，之前排队的写入会把文件重新创建出来。
+        if (saveTimer) {
+          clearTimeout(saveTimer)
+          saveTimer = null
+        }
+        // switching 一直保持到「当前文件指针已解除」为止：否则删除成功、
+        // 指针还没清的这段时间里，一次自动保存就能把文件又写回来。
+        this.switching = true
+        try {
+          await writeChain.catch(() => undefined)
+          await removeFolderFile(dir, name)
+          if (deletingCurrent) {
+            this.clearCurrentFile()
+            this.externalChanged = false
+            externalWarnShown = false
+            localStorage.removeItem(LS_PENDING)
+          }
+        } catch (err) {
+          if (err instanceof DOMException && err.name === 'NotFoundError') {
+            message.warning(`「${name}」已经不在文件夹里了`)
+            await this.refreshFiles()
+            return false
+          }
+          message.error(`删除失败：${errorText(err)}`)
+          return false
+        } finally {
+          this.switching = false
+        }
+
+        await this.refreshFiles()
+        return true
+      })
+    },
+
     /** 新建空白简历；绑定文件夹时立即写一个 新简历.json */
     createBlank(): Promise<CreateDocumentResult> {
       return exclusive<CreateDocumentResult>(async () => {

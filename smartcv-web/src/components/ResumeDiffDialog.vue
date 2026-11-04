@@ -48,6 +48,8 @@ const props = withDefaults(
 const emit = defineEmits<{
   'update:show': [boolean]
   apply: []
+  /** 放弃本次修改：简历保持原样，并清掉待确认状态 */
+  discard: []
   /** 切换某一处：接受 ↔ 还原 */
   toggle: [key: string]
   'revert-all': []
@@ -240,6 +242,8 @@ function onClose() {
           <n-button size="small" @click="onClose">
             {{ hasChanges ? '取消' : '关闭' }}
           </n-button>
+          <!-- 明确放弃：清掉待确认状态，否则它会一直挡着下一次纠错 / 对话 -->
+          <n-button size="small" type="error" ghost @click="emit('discard')">放弃修改</n-button>
           <n-button v-if="hasChanges" size="small" type="primary" @click="emit('apply')">
             确定应用
           </n-button>

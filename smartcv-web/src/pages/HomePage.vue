@@ -17,7 +17,7 @@ import { useResumeStore } from '@/stores/resume'
 import { useStatsStore } from '@/stores/stats'
 import { useDocumentsStore } from '@/stores/documents'
 import { parseResumeFile, type ParseProgress, type ParseStep } from '@/api/document'
-import { message } from '@/utils/feedback'
+import { message, dialog } from '@/utils/feedback'
 import { PAGE_HEIGHT, PAGE_PADDING, PAGE_WIDTH } from '@/utils/constants'
 import { supportsDirectoryPicker } from '@/utils/fs/directoryHandle'
 import { formatRelativeTime } from '@/utils/time'
@@ -251,6 +251,35 @@ async function onOpenLibraryFile(name: string) {
     showLibrary.value = false
     emit('enter')
   }
+}
+
+/** 删除确认框：明确告诉用户文件会从文件夹里永久删掉 */
+function confirmDeleteLibraryFile(name: string, title: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    let settled = false
+    const finish = (value: boolean) => {
+      if (settled) return
+      settled = true
+      resolve(value)
+    }
+    dialog.error({
+      title: '删除这份简历？',
+      content: `「${title}」将从备份文件夹中永久删除（${name}），无法撤销。`,
+      positiveText: '删除',
+      negativeText: '取消',
+      onPositiveClick: () => finish(true),
+      onNegativeClick: () => finish(false),
+      onClose: () => finish(false),
+      onMaskClick: () => finish(false),
+    })
+  })
+}
+
+async function onDeleteLibraryFile(file: { name: string; title: string }) {
+  if (!(await confirmDeleteLibraryFile(file.name, file.title))) return
+  const ok = await documents.deleteFile(file.name)
+  if (!ok) return
+  message.success(`已删除「${file.title}」`)
 }
 
 /* ---------- 新建 ---------- */
@@ -610,27 +639,36 @@ const showGallery = ref(false)
         </div>
 
         <div v-else class="library-dialog-list">
-          <button
+          <div
             v-for="file in documents.files"
             :key="file.name"
-            type="button"
             class="library-dialog-item"
             :class="{ active: documents.currentFile?.toLowerCase() === file.name.toLowerCase() }"
-            @click="onOpenLibraryFile(file.name)"
           >
-            <span class="library-dialog-item-icon"><IconGlyph name="file-json" :size="15" /></span>
-            <span class="library-dialog-item-copy">
-              <span class="library-dialog-item-name">{{ file.title }}</span>
-              <span class="library-dialog-item-meta">{{ formatRelativeTime(file.mtime) }}</span>
-            </span>
-            <IconGlyph
-              v-if="documents.currentFile?.toLowerCase() === file.name.toLowerCase()"
-              name="check"
-              :size="14"
-              class="library-dialog-item-check"
-            />
-            <IconGlyph v-else name="arrow-right" :size="14" class="library-dialog-item-arrow" />
-          </button>
+            <button type="button" class="library-dialog-item-open" @click="onOpenLibraryFile(file.name)">
+              <span class="library-dialog-item-icon"><IconGlyph name="file-json" :size="15" /></span>
+              <span class="library-dialog-item-copy">
+                <span class="library-dialog-item-name">{{ file.title }}</span>
+                <span class="library-dialog-item-meta">{{ formatRelativeTime(file.mtime) }}</span>
+              </span>
+              <IconGlyph
+                v-if="documents.currentFile?.toLowerCase() === file.name.toLowerCase()"
+                name="check"
+                :size="14"
+                class="library-dialog-item-check"
+              />
+              <IconGlyph v-else name="arrow-right" :size="14" class="library-dialog-item-arrow" />
+            </button>
+            <button
+              type="button"
+              class="library-dialog-item-delete"
+              :title="`删除「${file.title}」`"
+              aria-label="删除简历"
+              @click="onDeleteLibraryFile(file)"
+            >
+              <IconGlyph name="trash-2" :size="14" />
+            </button>
+          </div>
 
           <div v-if="!documents.files.length" class="library-dialog-empty">
             <p class="library-dialog-empty-title">文件夹里还没有 JSON</p>
@@ -1006,14 +1044,9 @@ const showGallery = ref(false)
 .library-dialog-item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 2px;
   width: 100%;
-  padding: 8px;
-  border: none;
   border-radius: 8px;
-  background: transparent;
-  text-align: left;
-  cursor: pointer;
   transition: background 0.14s var(--ease);
 }
 .library-dialog-item:hover {
@@ -1021,6 +1054,48 @@ const showGallery = ref(false)
 }
 .library-dialog-item.active {
   background: var(--primary-faint);
+}
+/* 打开这份简历：占满整行，删除按钮独立在外，避免按钮嵌套 */
+.library-dialog-item-open {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  padding: 8px 4px 8px 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+/* 删除按钮：常驻可见（用户反馈「找不到删除入口」），悬停整行时加深 */
+.library-dialog-item-delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  margin-right: 6px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  opacity: 0.55;
+  transition:
+    opacity 0.14s var(--ease),
+    background 0.14s var(--ease),
+    color 0.14s var(--ease);
+}
+.library-dialog-item:hover .library-dialog-item-delete,
+.library-dialog-item-delete:focus-visible {
+  opacity: 1;
+}
+.library-dialog-item-delete:hover {
+  background: var(--danger-soft);
+  color: var(--danger);
 }
 .library-dialog-item-icon {
   display: inline-flex;

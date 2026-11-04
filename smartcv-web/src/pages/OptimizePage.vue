@@ -161,7 +161,7 @@ import type { Section } from '@/types'
 import { downloadBlob, downloadJson } from '@/utils/download'
 import { useDocumentsStore } from '@/stores/documents'
 import { renderMarkdown } from '@/utils/markdown'
-import { message } from '@/utils/feedback'
+import { dialog, message } from '@/utils/feedback'
 import { getAgentSessionId, resetAgentSessionId } from '@/api/session'
 
 /**
@@ -419,6 +419,31 @@ function onApplyEnhance() {
 
 /* ---------- 全文纠错 ---------- */
 
+/** 已有待确认修改时，问用户是否放弃它再继续；取消则什么都不做 */
+function confirmDiscardPendingDiff(): Promise<boolean> {
+  return new Promise((resolve) => {
+    let settled = false
+    const finish = (value: boolean) => {
+      if (settled) return
+      settled = true
+      resolve(value)
+    }
+    dialog.warning({
+      title: '还有一份修改没有确认',
+      content: '重新检查会放弃上一次的修改结果（简历本身不会变）。要继续吗？',
+      positiveText: '放弃并继续',
+      negativeText: '先处理这份修改',
+      onPositiveClick: () => {
+        optimizeStore.discardPendingDiff()
+        finish(true)
+      },
+      onNegativeClick: () => finish(false),
+      onClose: () => finish(false),
+      onMaskClick: () => finish(false),
+    })
+  })
+}
+
 /** 切换优化强度后收起菜单，下一次发送生效 */
 function onSetRewriteMode(mode: RewriteMode) {
   optimizeStore.setRewriteMode(mode)
@@ -429,17 +454,19 @@ function onSetRewriteMode(mode: RewriteMode) {
  * 全文纠错：把整份简历发给后端，模型返回坐标 + 完整改后文字，后端校验后
  * 返回改好的简历。这里不直接写回，而是塞进 pendingDiff，复用「修改对比」弹窗
  * 让用户逐处确认；点「确定应用」才走 importResume（一步 Ctrl+Z 可撤销）。
+ *
+ * 已有一份待确认的修改时不再直接拦下，而是先问要不要放弃它再重新检查：
+ * 之前的实现直接 return，用户又没有别的出口，按钮会一直卡在禁用状态。
  */
 async function onGrammarCheck() {
   settingsShow.value = false
   if (grammarRunning.value || optimizeStore.sending) return
-  if (optimizeStore.pendingDiff) {
-    message.warning('先处理当前待确认的修改，再检查全文')
-    return
-  }
   if (!resumeStore.resume.length) {
     message.warning('简历还是空的，先去「编辑简历」页添加内容')
     return
+  }
+  if (optimizeStore.pendingDiff) {
+    if (!(await confirmDiscardPendingDiff())) return
   }
 
   // 改前快照：和聊天修改一样深拷贝，避免请求期间简历变化导致 diff 失真
@@ -514,6 +541,12 @@ function onApplyDiff() {
   } else {
     message.info('所有改动都已还原，简历保持不变')
   }
+}
+
+/** 放弃本次修改：简历不动，清掉待确认状态，之后可以重新纠错 / 对话 */
+function onDiscardDiff() {
+  optimizeStore.discardPendingDiff()
+  message.info('已放弃本次修改，简历保持不变')
 }
 </script>
 
@@ -1016,7 +1049,7 @@ function onApplyDiff() {
                 type="button"
                 role="menuitem"
                 class="composer-menu-item"
-                :disabled="optimizeStore.sending || grammarRunning || !!optimizeStore.pendingDiff"
+                :disabled="optimizeStore.sending || grammarRunning"
                 @click="onGrammarCheck"
               >
                 <span class="menu-icon" aria-hidden="true">
@@ -1027,7 +1060,13 @@ function onApplyDiff() {
                     全文纠错
                     <n-spin v-if="grammarRunning" :size="11" />
                   </span>
-                  <span class="menu-desc">检查错别字、标点与语病，逐处对比后应用</span>
+                  <span class="menu-desc">
+                    {{
+                      optimizeStore.pendingDiff
+                        ? '还有一份修改待确认，重新检查会先请你确认放弃'
+                        : '检查错别字、标点与语病，逐处对比后应用'
+                    }}
+                  </span>
                 </span>
               </button>
             </div>
@@ -1195,6 +1234,7 @@ function onApplyDiff() {
     @revert-all="optimizeStore.revertAllDiff()"
     @accept-all="optimizeStore.acceptAllDiff()"
     @apply="onApplyDiff"
+    @discard="onDiscardDiff"
   />
 
   <!-- 提示词增强对比：确认后才写回输入框，取消则保持原样 -->

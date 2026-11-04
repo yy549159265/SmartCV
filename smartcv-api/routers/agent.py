@@ -9,11 +9,11 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
-from agents.grammar.agent import run_grammar_agent
 from agents.md2json.schemas.resume import Section
-from agents.optimize.graph import run_chat_stream
-from agents.optimize.schemas.task import create_chat_task, get_chat_task
-from agents.polish.agent import run_polish_agent
+from agents.resume.grammar.agent import run_grammar_agent
+from agents.resume.optimize.graph import run_chat_stream
+from agents.resume.optimize.schemas.task import create_chat_task, get_chat_task
+from agents.single.agent import run_analyze_agent, run_polish_agent
 from routers.deps import get_agent_session
 from schemas.provider import ProviderConfig
 from schemas.response import error, ok
@@ -100,6 +100,37 @@ async def polish(
     return ok({"items": items})
 
 
+class AnalyzeRequest(BaseModel):
+    # 要分析的简历（优秀示例库上传的那份 JSON）；为空时前端已拦截，后端再兜底 422
+    resume: list[Section] = Field(min_length=1)
+    provider: ProviderConfig
+
+
+@router.post("/analyze")
+async def analyze(
+    req: AnalyzeRequest,
+    session_id: str | None = Depends(get_agent_session),
+):
+    """分析一份简历：返回 [职业名称, 可借鉴的写法]。
+
+    用于优秀示例库上传示例前，帮用户判断这份简历适合投什么方向、好在哪。
+    只读：不写会话历史、不改简历，分析完即丢弃。
+    """
+    try:
+        items = await asyncio.to_thread(
+            run_analyze_agent,
+            req.provider,
+            [s.model_dump(exclude_none=True) for s in req.resume],
+            session_id,
+        )
+    except ValueError as e:
+        return JSONResponse(status_code=400, content=error(400, str(e)))
+    except Exception as e:
+        logger.exception("简历分析失败")
+        return JSONResponse(status_code=500, content=error(500, f"简历分析失败：{e}"))
+    return ok({"items": items})
+
+
 @router.post("/grammar")
 async def grammar(
     req: GrammarRequest,
@@ -127,7 +158,11 @@ async def grammar(
 
 
 def _agent_md_payload() -> dict:
-    """扫描 agents/ 目录：提示词（system_prompt*.md）+ 技能（skill/**/*.md）。"""
+    """扫描 agents/ 目录：提示词（system_prompt*.md + *_prompt.md）+ 技能（skill/**/*.md）。
+
+    `*_prompt.md` 是 single agent 的片段提示词（polish_prompt.md /
+    enhance_prompt.md），配合 system_prompt_base.md 模板一起展示。
+    """
 
     def read(f: Path) -> str:
         try:
@@ -135,13 +170,18 @@ def _agent_md_payload() -> dict:
         except Exception:
             return ""
 
+    files: list[Path] = []
+    for pattern in ("system_prompt*.md", "*_prompt.md"):
+        files.extend(_AGENTS_DIR.rglob(pattern))
+    seen: set[Path] = set()
     prompts: list[dict] = []
     skills: list[dict] = []
-    for f in sorted(_AGENTS_DIR.rglob("system_prompt*.md")):
-        if "skill" in f.parts:
+    for f in sorted(files):
+        if f in seen or "skill" in f.parts:
             continue
+        seen.add(f)
         rel = f.relative_to(_AGENTS_DIR)
-        label = f.stem.replace("system_prompt_", "")
+        label = f.stem.replace("system_prompt_", "").replace("_prompt", "")
         if rel.parent.name and rel.parent.name != ".":
             label = f"{rel.parent.name}/{label}"
         prompts.append({"name": label, "path": rel.as_posix(), "content": read(f)})

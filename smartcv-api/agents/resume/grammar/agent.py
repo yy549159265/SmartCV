@@ -19,14 +19,15 @@ from pathlib import Path
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from agents.grammar.schemas import GrammarResult
-from agents.optimize.utils.markdown import (
+from agents.resume.grammar.schemas import GrammarResult
+from agents.utils.choose_llm import choose_llm
+from agents.utils.resume import (
     describe_location,
     locate_unit,
-    resume_to_grammar_markdown,
+    norm_text,
+    resume_to_marked_text,
     write_text_unit,
 )
-from agents.utils.choose_llm import choose_llm
 from schemas.provider import ProviderConfig
 
 logger = logging.getLogger("smartcv")
@@ -40,16 +41,8 @@ _MARKDOWN_MARKS = re.compile(r"[*`~]")
 # 纯日期 / 时间范围行（listText 里的时间不算 range 单元，需要按文本兜底识别）
 _DATE_RANGE_CHARS = re.compile(r"[0-9./年月日\-–—~至至今现在()（）]+")
 _DATE_SEPARATOR = re.compile(r"[-–—~至]")
-# 只在纠错时使用：原文和改后都去掉空白/强调符号，用于核对 quote 是否来自原文
+# 只去掉空白，用于识别日期 / 时间范围（核对 quote 统一走 utils/resume.py 的 norm_text）
 _WHITESPACE = re.compile(r"\s+")
-
-
-def _match_text(text: str) -> str:
-    """核对用文本：去掉空白和 Markdown 装饰，保留标点与正文。"""
-    value = _WHITESPACE.sub("", text or "")
-    value = _MARKDOWN_MARKS.sub("", value)
-    value = re.sub(r"_{1,2}([^_\s]+?)_{1,2}", r"\1", value)
-    return re.sub(r"^[-+•·]+", "", value)
 
 
 def _is_int(value: object) -> bool:
@@ -100,8 +93,8 @@ def _guard_change(old: str, corrected: str, *, title: bool = False) -> str:
     if "@" in corrected and "@" not in old:
         return "纠错不能新增邮箱"
 
-    compact_old = _match_text(old)
-    compact_new = _match_text(corrected)
+    compact_old = norm_text(old)
+    compact_new = norm_text(corrected)
     if compact_old == compact_new:
         # 只改了空白（例如中英文之间补空格），这是允许的
         return ""
@@ -213,7 +206,7 @@ def _apply_fix(
             reason="缺少原文片段，无法核对",
         )
         return
-    if not _match_text(old).startswith(_match_text(quote)):
+    if not norm_text(old).startswith(norm_text(quote)):
         _skip(
             skipped,
             level="text",
@@ -294,7 +287,7 @@ def _apply_title_fix(
         return
 
     original = (fix.original or "").strip()
-    if not original or not _match_text(old).startswith(_match_text(original)):
+    if not original or not norm_text(old).startswith(norm_text(original)):
         _skip(
             skipped,
             level="title",
@@ -347,7 +340,7 @@ def apply_grammar_result(resume: list[dict], result: GrammarResult) -> dict:
     for fix in result.title_fixes:
         _apply_title_fix(out, fix, changes, skipped, seen_titles)
 
-    markdown = resume_to_grammar_markdown(resume)
+    markdown = resume_to_marked_text(resume, title_with_coord=True)
     checked_units = sum(1 for line in markdown.splitlines() if line.startswith("[s:"))
     title_fixed = sum(1 for change in changes if change["level"] == "title")
     return {
@@ -405,7 +398,7 @@ def run_grammar_agent(
     if not resume:
         return apply_grammar_result(resume, GrammarResult())
 
-    markdown = resume_to_grammar_markdown(resume)
+    markdown = resume_to_marked_text(resume, title_with_coord=True)
     llm = choose_llm(provider)
     structured_llm = llm.with_structured_output(
         GrammarResult,

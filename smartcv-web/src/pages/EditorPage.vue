@@ -216,6 +216,44 @@ async function onRefreshLibrary() {
   if (documents.status === 'ready') message.success('列表已刷新')
 }
 
+/** 删除确认框：默认焦点在「取消」上，避免回车误删 */
+function confirmDeleteFile(name: string, title: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    let settled = false
+    const finish = (value: boolean) => {
+      if (settled) return
+      settled = true
+      resolve(value)
+    }
+    dialog.error({
+      title: '删除这份简历？',
+      content: `「${title}」将从备份文件夹中永久删除（${name}），无法撤销。`,
+      positiveText: '删除',
+      negativeText: '取消',
+      onPositiveClick: () => finish(true),
+      onNegativeClick: () => finish(false),
+      onClose: () => finish(false),
+      onMaskClick: () => finish(false),
+    })
+  })
+}
+
+/** 点删除图标：二次确认后真删；删当前这份只解除文件指针，内容仍留在浏览器里 */
+async function onDeleteFile(file: { name: string; title: string }) {
+  if (!(await confirmDeleteFile(file.name, file.title))) return
+
+  const deletingCurrent = isCurrentFile(file.name)
+  const ok = await documents.deleteFile(file.name)
+  if (!ok) return
+
+  if (deletingCurrent) {
+    nameDraft.value = resumeName.value
+    message.success('已删除；当前内容仍保留在浏览器里，修改不会再写回文件夹')
+  } else {
+    message.success(`已删除「${file.title}」`)
+  }
+}
+
 async function onBindFromLibrary() {
   const ok = await documents.bindFolder()
   if (ok) message.success(`已连接备份文件夹：${documents.folderName}`)
@@ -321,23 +359,36 @@ function openBackupSettings() {
             <!-- 文件列表 -->
             <template v-else>
               <div class="library-list">
-                <button
+                <div
                   v-for="file in documents.files"
                   :key="file.name"
-                  type="button"
                   class="library-item"
                   :class="{ active: isCurrentFile(file.name) }"
-                  @click="onOpenFile(file.name)"
                 >
-                  <span class="library-item-icon">
-                    <IconGlyph :name="isCurrentFile(file.name) ? 'file-text' : 'file-json'" :size="14" />
-                  </span>
-                  <span class="library-item-copy">
-                    <span class="library-item-name">{{ file.title }}</span>
-                    <span class="library-item-meta">{{ formatRelativeTime(file.mtime) }}</span>
-                  </span>
-                  <IconGlyph v-if="isCurrentFile(file.name)" name="check" :size="13" class="library-item-check" />
-                </button>
+                  <button
+                    type="button"
+                    class="library-item-open"
+                    @click="onOpenFile(file.name)"
+                  >
+                    <span class="library-item-icon">
+                      <IconGlyph :name="isCurrentFile(file.name) ? 'file-text' : 'file-json'" :size="14" />
+                    </span>
+                    <span class="library-item-copy">
+                      <span class="library-item-name">{{ file.title }}</span>
+                      <span class="library-item-meta">{{ formatRelativeTime(file.mtime) }}</span>
+                    </span>
+                    <IconGlyph v-if="isCurrentFile(file.name)" name="check" :size="13" class="library-item-check" />
+                  </button>
+                  <button
+                    type="button"
+                    class="library-item-delete"
+                    :title="`删除「${file.title}」`"
+                    aria-label="删除简历"
+                    @click="onDeleteFile(file)"
+                  >
+                    <IconGlyph name="trash-2" :size="13" />
+                  </button>
+                </div>
 
                 <div v-if="!documents.files.length" class="library-empty">
                   <p class="library-empty-title">文件夹里还没有 JSON</p>
@@ -606,14 +657,9 @@ function openBackupSettings() {
 .library-item {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 2px;
   width: 100%;
-  padding: 7px 8px;
-  border: none;
   border-radius: 7px;
-  background: transparent;
-  text-align: left;
-  cursor: pointer;
   transition: background 0.14s var(--ease);
 }
 .library-item:hover {
@@ -621,6 +667,48 @@ function openBackupSettings() {
 }
 .library-item.active {
   background: var(--primary-faint);
+}
+/* 打开这份简历：占满整行，删除按钮独立在外，避免嵌套按钮 */
+.library-item-open {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex: 1;
+  min-width: 0;
+  padding: 7px 4px 7px 8px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+/* 删除按钮：常驻可见（用户反馈「找不到删除入口」），悬停整行时加深 */
+.library-item-delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  margin-right: 6px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  opacity: 0.55;
+  transition:
+    opacity 0.14s var(--ease),
+    background 0.14s var(--ease),
+    color 0.14s var(--ease);
+}
+.library-item:hover .library-item-delete,
+.library-item-delete:focus-visible {
+  opacity: 1;
+}
+.library-item-delete:hover {
+  background: var(--danger-soft);
+  color: var(--danger);
 }
 .library-item-icon {
   display: inline-flex;

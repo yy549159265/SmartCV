@@ -16,7 +16,6 @@
 
 import json
 import logging
-import re
 from typing import Any
 
 from langchain_core.tools import tool
@@ -24,26 +23,10 @@ from langgraph.config import get_stream_writer
 from langgraph.types import interrupt
 from pydantic import BaseModel, Field
 
-from agents.optimize.schemas.diagnosis import QUOTE_MAX_LEN
-from agents.optimize.utils.markdown import locate_unit, resume_to_markdown, write_text_unit
+from agents.resume.optimize.schemas.diagnosis import QUOTE_MAX_LEN
+from agents.utils.resume import locate_unit, norm_text, resume_to_marked_text, write_text_unit
 
 logger = logging.getLogger("smartcv")
-
-
-def _norm_text(text: str) -> str:
-    """去掉空白和 Markdown 装饰，用于原文核对。
-
-    诊断 agent 有时会把 quote 写成 `**加粗**`、`` `代码` `` 或带列表符号，
-    而简历原文是纯文本；不抹掉这些标记，核对必然对不上，优化阶段就会误判成
-    「原文核对失败」而不执行。两侧都走同一个函数，所以是安全的。
-    """
-    value = re.sub(r"\s+", "", text or "")
-    # 强调 / 代码 / 删除线符号：原文里没有，纯装饰
-    value = re.sub(r"[*`~]", "", value)
-    # 成对的下划线强调（__加粗__ / _斜体_）：只去掉包裹符号，单词里的下划线（user_id）不动
-    value = re.sub(r"_{1,2}([^_\s]+?)_{1,2}", r"\1", value)
-    # 行首列表符号（"- xxx" / "• xxx"）
-    return re.sub(r"^[-+•·]+", "", value)
 
 
 def _lost_tail(old: str, quote: str, new: str) -> bool:
@@ -54,14 +37,14 @@ def _lost_tail(old: str, quote: str, new: str) -> bool:
     链接）就凭空消失。这种情况退回重写，不能写进简历。
     """
     # 片段没被截断 → 模型手里就是整段原文，不存在这个问题。
-    # 用原始长度判断：_norm_text 会去掉空白，归一化后的长度比截断上限只会更短。
+    # 用原始长度判断：norm_text 会去掉空白，归一化后的长度比截断上限只会更短。
     if len((quote or "").strip()) < QUOTE_MAX_LEN:
         return False
-    normalized_old = _norm_text(old)
-    normalized_quote = _norm_text(quote)
+    normalized_old = norm_text(old)
+    normalized_quote = norm_text(quote)
     if not normalized_old.startswith(normalized_quote):
         return False
-    normalized_new = _norm_text(new)
+    normalized_new = norm_text(new)
     if len(normalized_old) - len(normalized_quote) <= 20:
         return False
     # 新文字与片段长度相当 = 按片段改写，片段之后的内容整段丢失
@@ -240,7 +223,7 @@ def make_patch_tools(store: OptimizeStore):
 
         content, unit_type, unit_index, old = located
         quote = (item.get("quote") or "").strip()
-        if not quote or _norm_text(quote) not in _norm_text(old):
+        if not quote or norm_text(quote) not in norm_text(old):
             return _mark_failed(
                 review,
                 writer,
@@ -288,7 +271,7 @@ def make_patch_tools(store: OptimizeStore):
         """查看当前简历的标记文本，每行开头带位置编号 [s:章节 r:窗口 c:内容 i:子项]。"""
         writer = get_stream_writer()
         writer({"type": "tool_call", "tool": "get_resume_markdown", "args": {}})
-        result = resume_to_markdown(store.resume)
+        result = resume_to_marked_text(store.resume)
         writer({"type": "tool_result", "tool": "get_resume_markdown", "result": f"返回 {len(result.splitlines())} 行"})
         return result
 

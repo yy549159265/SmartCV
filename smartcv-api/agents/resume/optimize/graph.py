@@ -29,15 +29,12 @@ from langgraph.graph import StateGraph
 from langgraph.graph.message import add_messages
 from typing_extensions import TypedDict
 
-from agents.optimize import diagnose_agent, optimize_agent, summarize_agent
-from agents.optimize.utils.checkpointer import get_checkpointer
-from agents.optimize.utils.markdown import (
-    describe_location,
-    format_reference_examples,
-    resume_to_markdown,
-)
-from agents.optimize.utils.tools import OptimizeStore
+from agents.resume.optimize import diagnose_agent, optimize_agent, summarize_agent
+from agents.resume.optimize.utils.checkpointer import get_checkpointer
+from agents.resume.optimize.utils.examples import format_reference_examples
+from agents.resume.optimize.utils.tools import OptimizeStore
 from agents.utils.choose_llm import choose_llm
+from agents.utils.resume import describe_location, resume_to_marked_text
 from schemas.provider import ProviderConfig
 
 logger = logging.getLogger("smartcv")
@@ -105,7 +102,7 @@ async def run_chat_stream(
         # convert 是纯代码阶段（非 agent），也发 status 事件让前端展示「正在解析 → 完成」
         writer = get_stream_writer()
         writer({"type": "status", "stage": "convert", "text": "正在解析 JSON 简历，转换为带位置文本…"})
-        markdown = resume_to_markdown(store.resume)
+        markdown = resume_to_marked_text(store.resume)
         writer({"type": "status", "stage": "convert", "text": "已完成位置标记，准备诊断"})
         return {"markdown": markdown}
 

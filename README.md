@@ -80,10 +80,22 @@ docker compose up -d                    # 一键起前后端
 
 ### 方式二：源码构建
 
+后端分两层：基础镜像（系统依赖 + Python 依赖 + Playwright Chromium）和业务镜像（只含代码）。
+基础镜像很少变，只有 `requirements.txt` 改了才需要重建。
+
 ```bash
+# 1) 基础镜像，改依赖时才需要重建（首次约几分钟）
+docker build -f smartcv-api/Dockerfile.base -t smartcv-backend-base:py312 smartcv-api/
+
+# 2) 业务镜像，改代码后重建，只需 Copy 代码（几十秒）
 docker build -t 镜像名称:版本号  smartcv-api/
+
+# 前端
 docker build -t 镜像名称:版本号  smartcv-web/
 ```
+
+> 不想每次在本机构建基础镜像，可以把它推到自己的仓库，构建业务镜像时指过去：
+> `docker build --build-arg BASE_IMAGE=<你的仓库地址>/smartcv-backend-base:py312 -t 镜像名称:版本号 smartcv-api/`
 
 推送自己的仓库：
 

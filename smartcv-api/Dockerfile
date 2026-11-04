@@ -1,47 +1,24 @@
 # SmartCV 后端 API 镜像
 # 构建上下文 = smartcv-api/（docker build -f smartcv-api/Dockerfile smartcv-api）
-# 本机开发用 Python 3.14；镜像固定 3.12-slim，依赖版本见 requirements.txt。
+#
+# 分两层：
+#   Dockerfile.base  基础镜像：系统依赖 + requirements.txt + Playwright Chromium
+#                    这些很少变，只有 requirements.txt 改了才需要重建
+#   Dockerfile       本文件：只 COPY 业务代码，几十秒就能构建完
+#
+# 首次使用前先构建一次基础镜像（在仓库根目录执行）：
+#   docker build -f smartcv-api/Dockerfile.base -t smartcv-backend-base:py312 smartcv-api/
+# 不传 BASE_IMAGE 就用本地这个名字；换成自己仓库的镜像也行：
+#   docker build -f smartcv-api/Dockerfile \
+#       --build-arg BASE_IMAGE=<你的仓库地址>/smartcv-backend-base:py312 smartcv-api/
 
-FROM python:3.12-slim
-
-# Debian 软件源换阿里云镜像（国内 apt 快很多，Playwright 的 --with-deps 也走这里）。
-# bookworm 镜像里源文件是 /etc/apt/sources.list.d/debian.sources（deb822 格式），
-# 老镜像可能是 /etc/apt/sources.list，两个都改，找不到就跳过。
-RUN set -eux; \
-    for f in /etc/apt/sources.list /etc/apt/sources.list.d/debian.sources; do \
-        [ -f "$f" ] && sed -i 's|deb.debian.org|mirrors.aliyun.com|g; s|security.debian.org|mirrors.aliyun.com|g' "$f" || true; \
-    done
-
-# curl 供健康检查/调试；fonts-liberation 保证 Chromium 导出的 PDF 字体可用。
-# 不装 gcc：依赖都有预编译轮子。
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends fonts-liberation curl \
-    && rm -rf /var/lib/apt/lists/*
+ARG BASE_IMAGE=smartcv-backend-base:py312
+FROM ${BASE_IMAGE}
 
 WORKDIR /app
 
-# 后端依赖（用清华 PYPI 镜像，国内拉包快）
-COPY requirements.txt ./requirements.txt
-RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt
-
-# Playwright 无头 Chromium（导出 PDF 用）。
-# 默认从 cdn.playwright.dev 下载，国内很慢；npmmirror 按原样镜像了 cft 路径，
-# 例如 builds/cft/151.0.7922.34/linux64/chrome-linux64.zip 实测 200，
-# 所以把下载 Host 指过去即可（playwright 1.62 会读 PLAYWRIGHT_DOWNLOAD_HOST）。
-# --with-deps 的 apt 依赖走上面换好的阿里云源。
-ARG PLAYWRIGHT_DOWNLOAD_HOST=https://cdn.npmmirror.com/binaries/playwright
-RUN PLAYWRIGHT_DOWNLOAD_HOST=${PLAYWRIGHT_DOWNLOAD_HOST} \
-    PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT=120000 \
-    playwright install --with-deps chromium
-
-#ENV HF_ENDPOINT=https://hf-mirror.com \
-#    HF_HUB_DISABLE_XET=1 \
-#    HF_HUB_OFFLINE=1 \
-#    TQDM_DISABLE=1 \
-#    DOCLING_ARTIFACTS_PATH=/app/docling-models
-
+# 只拷贝业务代码；依赖和浏览器都在基础镜像里
 COPY . /app/
-
 
 EXPOSE 8600
 

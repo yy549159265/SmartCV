@@ -54,7 +54,8 @@ services:
   # 配置在 ./searxng/settings.yml（必须开启 search.formats 里的 json）。
   # 镜像来自 Docker Hub，国内拉取慢可换成自己的镜像源或加速地址。
   searxng:
-    image: docker.io/searxng/searxng:latest
+    image: searxng/searxng:v1
+    pull_policy: never
     ports:
       # 只绑本机，方便 curl 调试；后端在容器网络内直接用 http://searxng:8080
       - "127.0.0.1:8080:8080"

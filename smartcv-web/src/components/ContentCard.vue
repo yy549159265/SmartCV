@@ -7,11 +7,11 @@
  *  - twoColumn → 任意多栏 + 分隔符（各栏按内容宽度排列，紧挨分隔符）
  *  - timeRange → 开始 - 结束
  *  - tag       → 标签输入框（空格/回车/逗号 一次识别多个）
- *  - listText  → 圆点/数字切换 + 多条列表项 + 【润色按钮（仅此类型有）】
+ *  - listText  → 圆点/数字切换 + 多条列表项 + 【润色按钮（仅此类型有，可勾选只润色其中几条）】
  *
  * 所有读写都通过 store（单一数据源），本组件不保存任何本地副本。
  */
-import { computed, nextTick, ref, type CSSProperties } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, type CSSProperties } from 'vue'
 import { useResumeStore } from '@/stores/resume'
 import { message } from '@/utils/feedback'
 import { polishTexts, type PolishMode } from '@/api/polish'
@@ -196,6 +196,12 @@ function removeItem(index: number) {
   const items = [...listItems.value]
   items.splice(index, 1)
   saveListItems(items)
+  // 勾选跟着条目走：删掉的那条移出范围，后面的下标整体前移
+  if (polishShow.value) {
+    polishTargets.value = polishTargets.value
+      .filter((i) => i !== index)
+      .map((i) => (i > index ? i - 1 : i))
+  }
 }
 
 /** 缩进层级：每级 24px，最多两级 */
@@ -237,10 +243,20 @@ function onDrop(index: number) {
   dragIndex.value = null
   dragOverIndex.value = null
   if (from === null || from === index) return
+  // 拖动前的顺序：order[新位置] = 原下标，用来把勾选范围跟着条目一起搬
+  const order = listItems.value.map((_, i) => i)
+  const [movedOrder] = order.splice(from, 1)
+  order.splice(index, 0, movedOrder)
   const items = listItems.value.map((it) => ({ ...it }))
   const [moved] = items.splice(from, 1)
   items.splice(index, 0, moved)
   saveListItems(items)
+  if (polishShow.value && polishTargets.value.length) {
+    const picked = new Set(polishTargets.value)
+    polishTargets.value = order
+      .map((oldIndex, newIndex) => (picked.has(oldIndex) ? newIndex : -1))
+      .filter((i) => i >= 0)
+  }
 }
 
 function onDragEnd() {
@@ -256,6 +272,51 @@ function onDragEnd() {
  * 点「取消」则收起输入区，不发任何请求。
  */
 const polishShow = ref(false)
+/**
+ * 润色请求进行中：锁住列表。
+ * 回填是按发送时的下标整体写回的，期间如果用户拖动 / 增删 / 打字，
+ * 这些改动会被结果覆盖掉——不是串位，是静默丢失，所以干脆不让改。
+ */
+const polishing = ref(false)
+
+/**
+ * 改写完成后的高亮：只闪真正变了的条目（模型原样返回的不闪）。
+ * 列表项闪背景 + 主题色描边，图标文字型闪输入框，1.4s 后自动消退。
+ */
+const flashIndexes = ref<number[]>([])
+const textFlash = ref(false)
+const FLASH_MS = 1400
+let flashTimer: number | undefined
+let textFlashTimer: number | undefined
+
+/**
+ * 先清空、下一帧再设上，保证同一批条目连续润色两次时动画也会重新播一遍
+ * （class 一直挂着的话 CSS 动画不会重启）。
+ */
+function flashList(indexes: number[]) {
+  if (!indexes.length) return
+  flashIndexes.value = []
+  nextTick(() => {
+    flashIndexes.value = indexes
+    window.clearTimeout(flashTimer)
+    flashTimer = window.setTimeout(() => (flashIndexes.value = []), FLASH_MS)
+  })
+}
+
+function flashText() {
+  textFlash.value = false
+  nextTick(() => {
+    textFlash.value = true
+    window.clearTimeout(textFlashTimer)
+    textFlashTimer = window.setTimeout(() => (textFlash.value = false), FLASH_MS)
+  })
+}
+
+onBeforeUnmount(() => {
+  window.clearTimeout(flashTimer)
+  window.clearTimeout(textFlashTimer)
+})
+
 /** 用户填的润色描述/思路（可为空，空串时后端按默认规则润色） */
 const polishDescription = ref('')
 const polishInputRef = ref<{ focus: () => void } | null>(null)
@@ -301,6 +362,45 @@ const polishPlaceholder = computed(() =>
     : '可选：写点润色要求，不写则按默认规则处理',
 )
 
+/**
+ * 本次要润色的列表项下标（列表文字型专用）。
+ * 打开润色面板时默认全选有文字的条目，用户取消勾选就只润色剩下的几条；
+ * 发送时按这里的顺序取文字，返回结果再按同一下标写回，未勾选的条目原样不动。
+ */
+const polishTargets = ref<number[]>([])
+
+/** 有文字、可以参与润色的条目下标（空条目没有润色的意义） */
+const polishableIndexes = computed(() =>
+  listItems.value.reduce<number[]>((acc, it, i) => {
+    if (it.text.trim()) acc.push(i)
+    return acc
+  }, []),
+)
+
+/** 当前真正勾选且仍可润色的条目（条目被清空 / 删除后自动从范围里消失） */
+const selectedIndexes = computed(() =>
+  polishTargets.value.filter((i) => polishableIndexes.value.includes(i)),
+)
+
+/** 是否已全选，决定面板上的按钮显示「全选」还是「取消全选」 */
+const allSelected = computed(
+  () =>
+    polishableIndexes.value.length > 0 &&
+    selectedIndexes.value.length === polishableIndexes.value.length,
+)
+
+function toggleTarget(index: number) {
+  if (!polishableIndexes.value.includes(index)) return
+  const set = new Set(selectedIndexes.value)
+  if (set.has(index)) set.delete(index)
+  else set.add(index)
+  polishTargets.value = [...set].sort((a, b) => a - b)
+}
+
+function toggleAllTargets() {
+  polishTargets.value = allSelected.value ? [] : [...polishableIndexes.value]
+}
+
 /** 当前内容是否有可润色的文字（一个字没写就别润色了） */
 const polishable = computed(() =>
   props.content.type === 'iconText'
@@ -314,6 +414,8 @@ function openPolish() {
     message.warning('先写点内容再润色吧')
     return
   }
+  // 列表型默认全选有文字的条目，用户再按需取消
+  if (props.content.type === 'listText') polishTargets.value = [...polishableIndexes.value]
   polishShow.value = true
   nextTick(() => polishInputRef.value?.focus())
 }
@@ -337,47 +439,72 @@ async function sendPolish() {
   // 先取出模式与描述：cancelPolish 会清空描述，但模式/方向要保留
   const mode = polishMode.value
   const description = parts.join('；')
+  const isList = props.content.type === 'listText'
+  // 列表型一条都没勾：留在面板里提示，别关掉让用户重新打开
+  if (isList && selectedIndexes.value.length === 0) {
+    message.warning('先勾选要润色的条目')
+    return
+  }
+  // 范围在关闭面板前取好，cancelPolish 之后 checkboxes 就没了
+  const targets = isList ? [...selectedIndexes.value] : []
   cancelPolish()
   // 输入区开着期间内容被清空了：静默返回（openPolish 已提示过，不再打扰）
   if (!polishable.value) return
-  if (props.content.type === 'iconText') await polishIconText(description, mode)
-  else await polishList(description, mode)
+  await runPolish(description, mode, targets)
 }
 
-/** 列表文字型：批量润色，按输入顺序写回，保留每条原有缩进 */
-async function polishList(description: string, mode: PolishMode) {
+/**
+ * 润色请求只有一条路径：请求、loading、锁列表、错误处理共用，
+ * 只有「发哪几段」和「回来后写哪」按内容类型分支。
+ *  - iconText：段落就是 text 字段，单进单出；
+ *  - listText：只发勾选的条目，按发送顺序回填到原下标，未勾选的条目和缩进原样保留。
+ * 模型返回少了 / 空了 / 和原文一样的那些，一律保留原文。
+ */
+async function runPolish(description: string, mode: PolishMode, targets: number[]) {
+  const isList = props.content.type === 'listText'
   const items = listItems.value
-  const texts = items.map((it) => it.text)
-  const loading = message.loading('正在润色…', { duration: 0 })
+  const texts = isList
+    ? targets.map((i) => items[i]?.text ?? '')
+    : [textModel.value ?? '']
+
+  polishing.value = true
+  const loading = message.loading(
+    isList ? `正在润色 ${texts.length} 条…` : '正在润色…',
+    { duration: 0 },
+  )
   try {
     const polished = await polishTexts(texts, description, mode)
-    // 模型返回少了/空了就保留原文
-    saveListItems(
-      texts.map((orig, i) => ({
-        text: polished[i]?.trim() || orig,
-        indent: items[i]?.indent ?? 0,
-      })),
-    )
-    message.success('润色完成')
-  } catch (e) {
-    message.error(e instanceof Error ? e.message : '润色失败')
-  } finally {
-    loading?.destroy()
-  }
-}
 
-/** 图标文字型：润色单段文字（文字在 text 字段），复用同一 /api/polish 接口 */
-async function polishIconText(description: string, mode: PolishMode) {
-  const orig = textModel.value ?? ''
-  const loading = message.loading('正在润色…', { duration: 0 })
-  try {
-    const polished = await polishTexts([orig], description, mode)
-    // 单条输入对应单条输出；模型返回空了就保留原文
-    textModel.value = polished[0]?.trim() || orig
-    message.success('润色完成')
+    if (!isList) {
+      const value = polished[0]?.trim()
+      if (value && value !== texts[0]) {
+        textModel.value = value
+        flashText()
+        message.success('润色完成')
+      } else {
+        message.info('这段不用改，内容保持原样')
+      }
+      return
+    }
+
+    const next = items.map((it) => ({ ...it }))
+    const changed: number[] = []
+    targets.forEach((itemIndex, k) => {
+      const value = polished[k]?.trim()
+      if (value && value !== next[itemIndex].text) {
+        next[itemIndex].text = value
+        changed.push(itemIndex)
+      }
+    })
+    saveListItems(next)
+    // 只闪真正变了的条目：模型原样返回的那些不闪，别让用户以为改过
+    flashList(changed)
+    if (changed.length) message.success(`已润色 ${changed.length} 条`)
+    else message.info('这几条不用改，内容保持原样')
   } catch (e) {
     message.error(e instanceof Error ? e.message : '润色失败')
   } finally {
+    polishing.value = false
     loading?.destroy()
   }
 }
@@ -488,7 +615,7 @@ function onRemove() {
       <template v-if="content.type === 'iconText'">
         <div class="icontext-toolbar">
           <span class="editor-hint">图标文字内容</span>
-          <n-button size="tiny" quaternary class="polish-btn" @click.stop="openPolish">
+          <n-button size="tiny" quaternary class="polish-btn" :disabled="polishing" @click.stop="openPolish">
             <IconGlyph name="sparkles" :size="12" />
             润色
           </n-button>
@@ -534,7 +661,7 @@ function onRemove() {
             <n-button size="tiny" type="primary" @click.stop="sendPolish">润色</n-button>
           </div>
         </div>
-        <div class="icontext-row">
+        <div class="icontext-row" :class="{ 'just-polished': textFlash }">
           <n-popover v-model:show="iconPopoverShow" trigger="click" placement="bottom-start" :width="320">
             <template #trigger>
               <button
@@ -579,6 +706,7 @@ function onRemove() {
             v-model:value="textModel"
             size="small"
             type="textarea"
+            :disabled="polishing"
             :autosize="{ minRows: 1 }"
             placeholder="文字（支持 Markdown；选中后 Ctrl+B 加粗）"
             @keydown="onMarkdownKeydown"
@@ -685,13 +813,23 @@ function onRemove() {
             <n-radio-button value="ordered">数字列表</n-radio-button>
           </n-radio-group>
           <!-- 润色按钮：只有列表文字型提供 -->
-          <n-button size="tiny" quaternary class="polish-btn" @click.stop="openPolish">
+          <n-button size="tiny" quaternary class="polish-btn" :disabled="polishing" @click.stop="openPolish">
             <IconGlyph name="sparkles" :size="12" />
             润色
           </n-button>
         </div>
         <!-- 润色输入区：模式分段胶囊 + 方向多选药丸 + 可选思路（与样式面板同一套视觉语言） -->
         <div v-if="polishShow" class="polish-input">
+          <!-- 润色范围：默认全选，取消勾选就只润色剩下的几条 -->
+          <div class="polish-scope">
+            <span class="polish-scope-label">润色范围</span>
+            <span class="polish-scope-count">
+              已选 {{ selectedIndexes.length }} / {{ polishableIndexes.length }}
+            </span>
+            <button type="button" class="polish-scope-all" @click="toggleAllTargets">
+              {{ allSelected ? '取消全选' : '全选' }}
+            </button>
+          </div>
           <div class="polish-mode">
             <button
               v-for="m in POLISH_MODES"
@@ -731,16 +869,30 @@ function onRemove() {
             <n-button size="tiny" type="primary" @click.stop="sendPolish">润色</n-button>
           </div>
         </div>
-        <div class="list-items">
+        <div class="list-items" :class="{ locked: polishing }">
           <div
             v-for="(item, i) in listItems"
             :key="i"
             class="list-item-edit"
-            :class="{ dragging: dragIndex === i, 'drag-over': dragOverIndex === i && dragIndex !== i }"
+            :class="{
+              dragging: dragIndex === i,
+              'drag-over': dragOverIndex === i && dragIndex !== i,
+              'just-polished': flashIndexes.includes(i),
+            }"
             :style="{ paddingLeft: `${(item.indent ?? 0) * INDENT_STEP}px` }"
             @dragover="onDragOver(i, $event)"
             @drop.prevent="onDrop(i)"
           >
+            <!-- 润色范围勾选框：只在润色面板打开时出现，空条目不可勾 -->
+            <n-checkbox
+              v-if="polishShow"
+              class="list-item-check"
+              :checked="selectedIndexes.includes(i)"
+              :disabled="!item.text.trim()"
+              :title="item.text.trim() ? '勾选后参与本次润色' : '空条目无需润色'"
+              @update:checked="toggleTarget(i)"
+              @click.stop
+            />
             <!-- 拖拽手柄：按住上下拖，松手插到目标行位置 -->
             <span
               class="list-item-drag"
@@ -777,6 +929,7 @@ function onRemove() {
               :value="item.text"
               size="small"
               type="textarea"
+              :disabled="polishing"
               :autosize="{ minRows: 1 }"
               placeholder="列表内容（支持 Markdown；选中后 Ctrl+B 加粗）"
               @update:value="(v: string) => setItem(i, v)"
@@ -785,7 +938,7 @@ function onRemove() {
             <n-button size="tiny" quaternary type="error" @click.stop="removeItem(i)">✕</n-button>
           </div>
         </div>
-        <n-button size="tiny" quaternary type="primary" @click.stop="addItem">＋ 添加一项</n-button>
+        <n-button size="tiny" quaternary type="primary" :disabled="polishing" @click.stop="addItem">＋ 添加一项</n-button>
       </template>
     </div>
     <template #footer>
@@ -1048,6 +1201,33 @@ function onRemove() {
   justify-content: flex-end;
   gap: 6px;
 }
+/* 润色范围：面板顶部一行，说明这次只会润色勾选的条目 */
+.polish-scope {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.polish-scope-label {
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+}
+.polish-scope-count {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.polish-scope-all {
+  margin-left: auto;
+  padding: 0 2px;
+  border: none;
+  background: transparent;
+  font-size: 11.5px;
+  color: var(--primary);
+  cursor: pointer;
+}
+.polish-scope-all:hover {
+  text-decoration: underline;
+}
 
 /* 图标文字型：图标按钮 + 文字输入框 */
 .icontext-row {
@@ -1243,6 +1423,11 @@ function onRemove() {
   flex-direction: column;
   gap: 6px;
 }
+/* 润色请求进行中：列表整体锁住（回填会按发送时的快照写回，期间的改动都会被覆盖） */
+.list-items.locked {
+  pointer-events: none;
+  opacity: 0.6;
+}
 .list-item-edit {
   position: relative;
   display: flex;
@@ -1253,6 +1438,34 @@ function onRemove() {
 }
 .list-item-edit :deep(.n-input) {
   flex: 1;
+}
+/* 勾选参与润色的条目：只靠左侧复选框区分，行本身保持卡片原有底色 */
+.list-item-check {
+  flex: none;
+  margin-top: 4px;
+}
+/* 润色完成：改写过的条目亮一下再褪去，明确「这几条变了」 */
+@keyframes polishFlash {
+  0% {
+    background-color: var(--primary-soft);
+    box-shadow: inset 0 0 0 1.5px var(--primary);
+  }
+  55% {
+    background-color: var(--primary-faint);
+    box-shadow: inset 0 0 0 1.5px var(--primary);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: inset 0 0 0 1.5px transparent;
+  }
+}
+.list-item-edit.just-polished {
+  border-radius: 4px;
+  animation: polishFlash 1.4s ease-out;
+}
+.icontext-row.just-polished :deep(.n-input) {
+  border-radius: 6px;
+  animation: polishFlash 1.4s ease-out;
 }
 /* 拖动中的行变淡；目标位置在行上方画一条主题色指示线 */
 .list-item-edit.dragging {

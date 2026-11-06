@@ -53,11 +53,17 @@ async def run(
     failed = sum(1 for r in reviews if r.get("status") == "failed")
     unpatched = sum(1 for r in reviews if r.get("status") == "change")
     unreviewed = sum(1 for r in reviews if r.get("status") == "pending")
+    # 档位分布：让摘要能区分「未改」背后的原因（无需修改 / 信息不足 / 收益不足）
+    _disposition = lambda value: sum(
+        1 for d in diagnosis if (d.get("disposition") or "suggest") == value
+    )
     stats = (
         f"诊断总数：{total} 处\n"
         f"实际修改：{changed} 处\n"
         f"未修改：{total - changed} 处"
-        f"（不需要改 {skipped}、执行失败 {failed}、待执行 {unpatched}、未审查 {unreviewed}）"
+        f"（不需要改 {skipped}、执行失败 {failed}、待执行 {unpatched}、未审查 {unreviewed}）\n"
+        f"档位分布：必须修改 {_disposition('must')}、建议修改 {_disposition('suggest')}、"
+        f"可以保留 {_disposition('keep')}、信息不足 {_disposition('insufficient')}"
     )
     message = (
         f"数量统计（系统已算好，必须原样使用）：\n{stats}\n\n"
@@ -69,7 +75,7 @@ async def run(
     async for item in agent.astream(
         {"messages": [{"type": "system", "content": _SYSTEM_PROMPT}, {"type": "human", "content": message}]},
         stream_mode=["messages", "custom"],
-        config={"recursion_limit": 20, "configurable": {"session_id": session_id}},
+        config={"configurable": {"session_id": session_id}},
     ):
         if not isinstance(item, tuple):
             continue

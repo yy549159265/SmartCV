@@ -19,10 +19,11 @@ from langgraph.config import get_stream_writer
 from langgraph.types import Command
 
 from agents.resume.optimize.schemas.diagnosis import DiagnosisResult
-from agents.resume.optimize.schemas.task import get_chat_task
+from agents.resume.optimize.utils.task import get_chat_task
 from agents.resume.optimize.utils.checkpointer import get_checkpointer
-from agents.resume.optimize.utils.tools import make_ask_tool
-from agents.resume.optimize.utils.web_search import make_web_search_tool
+from agents.resume.optimize.tools.ask_user import make_ask_tool
+from agents.resume.optimize.tools.web_search import make_web_search_tool
+from agents.utils.resume import describe_location_detail
 from agents.utils.skillmiddleware import SkillMiddleware
 
 logger = logging.getLogger("smartcv")
@@ -40,7 +41,7 @@ _REWRITE_MODE_RULES = {
         "可以在诊断中指出「表达平淡、句式与目标岗位差距大、信息组织松散」等问题，"
         "`suggestion` 可以要求大幅重写句式、句序和段落内表达，不必保留原句。"
         "但边界不变：不得建议新增或编造事实、数字、经历、技术栈，"
-        "不得建议增删章节 / 调整顺序 / 改动排版，`kind=structure` 仍只用于结构问题。"
+        "也不得建议增删章节 / 调整顺序 / 改动排版——这些改动本次无法执行，不要产出这类诊断。"
     ),
 }
 
@@ -131,6 +132,15 @@ def _diagnosis_items(structured) -> list[dict]:
     return _merge_same_coordinate(result)
 
 
+# 档位强弱：合并同坐标诊断时，保留更强的处理档位，避免「必须修改」被「可以保留」冲掉。
+_DISPOSITION_STRENGTH = {"must": 3, "suggest": 2, "insufficient": 1, "keep": 0}
+
+
+def _stronger_disposition(a: str, b: str) -> str:
+    """返回两条档位里更强（更该改）的那一个。缺省按 suggest 处理。"""
+    return a if _DISPOSITION_STRENGTH.get(a, 2) >= _DISPOSITION_STRENGTH.get(b, 2) else b
+
+
 def _merge_same_coordinate(items: list[dict]) -> list[dict]:
     """把指向同一个坐标的多条诊断合并成一条。
 
@@ -139,14 +149,14 @@ def _merge_same_coordinate(items: list[dict]) -> list[dict]:
     直接不执行」。这里按坐标合并，保留第一条的位置与原文片段（quote 必须与当前
     正文一致，不能换），把后面几条的原因 / 依据 / 方向补进同一条，避免丢诊断。
 
-    structure 类诊断和坐标不全的诊断没有可比的位置，原样保留。
+    坐标不全的诊断没有可比的位置，原样保留。
     """
     merged: dict[tuple, dict] = {}
     result: list[dict] = []
 
     for item in items:
         coords = tuple(item.get(key) for key in ("s", "r", "c", "i"))
-        if item.get("kind") == "structure" or any(value is None for value in coords):
+        if any(value is None for value in coords):
             result.append(item)
             continue
 
@@ -167,6 +177,10 @@ def _merge_same_coordinate(items: list[dict]) -> list[dict]:
             if extra in current:
                 continue
             base[field] = f"{current}；{extra}" if current else extra
+        # 档位取更强的那个（must > suggest > insufficient > keep）
+        base["disposition"] = _stronger_disposition(
+            base.get("disposition") or "suggest", item.get("disposition") or "suggest"
+        )
 
     return result
 
@@ -193,6 +207,7 @@ async def run(
     references: str = "",
     reference_items: list[dict] | None = None,
     rewrite_mode: str = "standard",
+    resume: list[dict] | None = None,
 ) -> tuple[list[dict], list[str]]:
     """跑诊断 agent：发 agent_start → 思考流式 delta → diagnosis 事件 → agent_end。
 
@@ -200,6 +215,7 @@ async def run(
     history 是上一轮的修改总结（可能为空），用于「重新生成 / 刚才那处」这类追问。
     references 是选中的优秀示例（纯结构 Markdown，不带位置编号）；reference_items
     只用来给前端展示「本次参考了哪几份」，不含正文。
+    resume 传入时，给每条诊断附上结构化位置（section / location），前端按章节树状展示。
     """
     writer = get_stream_writer()
     writer({"type": "agent_start", "agent": "diagnose", "label": "诊断 agent"})
@@ -226,7 +242,6 @@ async def run(
 
     # 每次诊断用独立 thread：互不串状态；checkpointer 统一由 main.py 的 lifespan 打开
     config = {
-        "recursion_limit": 25,
         "configurable": {
             "session_id": session_id,
             "thread_id": f"{session_id or 'anon'}:diagnose:{uuid.uuid4().hex}",
@@ -297,6 +312,14 @@ async def run(
 
     items = _diagnosis_items(structured)
     style_notes = _style_notes(structured)
+    # 附上结构化位置：前端「诊断结论」按章节树状展示，需要 section（章节标题）做分组、
+    # sectionIndex 做排序、location（章内位置，如「第 2 条」）做标注。
+    if resume is not None:
+        for item in items:
+            detail = describe_location_detail(resume, item)
+            item["section"] = detail["section"]
+            item["sectionIndex"] = detail["sectionIndex"]
+            item["location"] = detail["within"]
     if not items:
         logger.warning("diagnose-agent 没有返回结构化诊断结果")
     writer({"type": "diagnosis", "count": len(items), "items": items, "styleNotes": style_notes})

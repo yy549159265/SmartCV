@@ -122,9 +122,7 @@ def _location(resume: list[dict], s, r, c, i) -> str:
     if not _is_int(s) or not (0 <= s < len(resume)):
         return "未知位置"
     if all(_is_int(v) for v in (r, c, i)):
-        return describe_location(
-            resume, {"kind": "text", "s": s, "r": r, "c": c, "i": i}
-        )
+        return describe_location(resume, {"s": s, "r": r, "c": c, "i": i})
     return (resume[s].get("title") or "").strip() or f"第 {s + 1} 章"
 
 

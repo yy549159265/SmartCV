@@ -1,27 +1,24 @@
-"""优化流水线用的工具。
+"""优化 agent 的工具：审查诊断、执行替换、查看标记文本。
 
-- 优化 agent：review_diagnosis / patch_content / get_resume_markdown。
-  工具的「状态」挂在 OptimizeStore 上（简历 JSON + 诊断审查状态）。
-  review_diagnosis 逐条判定改不改；patch_content 只收诊断序号，按该诊断的 [s,r,c,i]
-  坐标就地替换文字，JSON 结构/样式/图片不动；跑完直接拿 store.resume 返回前端，
-  前端据此重绘，格式不会乱。
+工具的「状态」挂在 OptimizeStore 上（简历 JSON + 诊断审查状态）：
+- review_diagnosis 逐条判定改不改；
+- patch_content 只收诊断序号，按该诊断的 [s,r,c,i] 坐标就地替换文字，
+  JSON 结构 / 样式 / 图片不动，跑完直接拿 store.resume 返回前端；
+- get_resume_markdown 查看当前标记文本。
 
-- 诊断 agent：ask_user_question。
-  信息不足时进入工具 → interrupt() 暂停诊断 → 前端展示选择题并 POST 答案 →
-  工具拿到 Command(resume=...) 的答案后返回给模型，诊断继续。
+审查与修改分开：必须全部诊断都审查完才允许第一次修改，实际改动数 =
+判为 change 且成功执行的诊断数，不会改到诊断之外的位置。
 
-工具每次调用都经 get_stream_writer() 发一条 custom 事件（tool_call / tool_result），
-由外层图转发成 SSE，前端据此展示「执行过程」。
+每次调用都经 get_stream_writer() 发 tool_call / tool_result（修改还额外发
+diagnosis_status），由外层图转发成 SSE，前端据此展示执行过程。
 """
 
-import json
 import logging
-from typing import Any
+from typing import Annotated
 
 from langchain_core.tools import tool
 from langgraph.config import get_stream_writer
-from langgraph.types import interrupt
-from pydantic import BaseModel, Field
+from pydantic import Field
 
 from agents.resume.optimize.schemas.diagnosis import QUOTE_MAX_LEN
 from agents.utils.resume import locate_unit, norm_text, resume_to_marked_text, write_text_unit
@@ -87,7 +84,7 @@ class OptimizeStore:
     def can_patch(self, index: int) -> bool:
         """该诊断是否有可定位的坐标和可核对的原文片段。"""
         item = self.diagnosis_at(index)
-        if item is None or item.get("kind") == "structure":
+        if item is None:
             return False
         if any(item.get(key) is None for key in ("s", "r", "c", "i")):
             return False
@@ -121,13 +118,24 @@ def make_patch_tools(store: OptimizeStore):
     """
 
     @tool
-    def review_diagnosis(index: int, decision: str, reason: str) -> str:
+    def review_diagnosis(
+        index: Annotated[
+            int,
+            Field(description="诊断序号（0 起，对应诊断结果里的「诊断 0 / 诊断 1 …」）"),
+        ],
+        decision: Annotated[
+            str,
+            Field(description='"change" = 需要修改；"skip" = 不需要修改'),
+        ],
+        reason: Annotated[
+            str,
+            Field(description="判定理由：change 说明为什么必须改，skip 说明为什么不需要改或改不了"),
+        ],
+    ) -> str:
         """审查一条诊断：判定是否需要修改，并写出理由。
 
-        Args:
-            index: 诊断序号（0 起，对应诊断结果里的「诊断 0 / 诊断 1 …」）
-            decision: "change" = 需要修改；"skip" = 不需要修改
-            reason: 判定理由。change 说明为什么必须改，skip 说明为什么不需要改或改不了
+        按诊断的档位（disposition）处理：keep（可以保留）与 insufficient（信息不足）
+        必须判 skip；must / suggest 才需要按「改写收益」决定 change 还是 skip。
         """
         writer = get_stream_writer()
         writer(
@@ -158,6 +166,15 @@ def make_patch_tools(store: OptimizeStore):
         if not reason:
             return _tool_error(writer, "review_diagnosis", "reason 不能为空")
 
+        disposition = item.get("disposition") or "suggest"
+        if decision == "change" and disposition in ("keep", "insufficient"):
+            label = "可以保留" if disposition == "keep" else "信息不足"
+            return _tool_error(
+                writer,
+                "review_diagnosis",
+                f"诊断 {index} 的档位是「{label}」，不应修改；请判为 skip 并说明原因",
+            )
+
         if decision == "change" and not store.can_patch(index):
             return _tool_error(
                 writer,
@@ -174,17 +191,21 @@ def make_patch_tools(store: OptimizeStore):
         return message
 
     @tool
-    def patch_content(index: int, text: str) -> str:
+    def patch_content(
+        index: Annotated[int, Field(description="诊断序号（0 起）")],
+        text: Annotated[
+            str,
+            Field(
+                description=(
+                    "替换后的完整新文字：只改其中一句时，这段文字的其他内容"
+                    "（后半句、链接、数字）要原样保留，只写片段部分会被拒绝"
+                )
+            ),
+        ],
+    ) -> str:
         """执行一条已判定为 change 的诊断：把它指向的那段文字替换成 text。
 
         只替换文字，不增删内容，结构与排版不变；同一个诊断只能成功修改一次。
-
-        text 必须是该坐标的**完整**新文字：只改其中一句时，这段文字的其他内容
-        （后半句、链接、数字）要原样保留；只写片段部分会被拒绝。
-
-        Args:
-            index: 诊断序号（0 起）
-            text: 替换后的完整文字
         """
         writer = get_stream_writer()
         writer({"type": "tool_call", "tool": "patch_content", "args": {"index": index, "text": text}})
@@ -236,6 +257,14 @@ def make_patch_tools(store: OptimizeStore):
             # 模型给了个和原文一样的版本：这是笔误，不算执行失败，允许它改了再试
             return _tool_error(writer, "patch_content", f"诊断 {index} 的新文字和原文相同，请重写后再调用")
 
+        if norm_text(new) == norm_text(old):
+            # 只改了空白 / Markdown 装饰（加粗、斜体等），文字没实质变化：等同没改，允许重写
+            return _tool_error(
+                writer,
+                "patch_content",
+                f"诊断 {index} 的新文字与原文字实质相同（只差格式或空白），没有实际修改，请重写后再调用",
+            )
+
         if _lost_tail(old, quote, new):
             # 只照着 60 字的原文片段改写，会把片段之后的正文整段删掉：保持 change 状态让它重写
             logger.warning("patch_content 拦截疑似截断的替换：诊断 %d，「%s」→「%s」", index, old, new)
@@ -276,101 +305,3 @@ def make_patch_tools(store: OptimizeStore):
         return result
 
     return [review_diagnosis, patch_content, get_resume_markdown]
-
-
-# ==================== 诊断 agent：向用户反问 ====================
-
-
-class AskOption(BaseModel):
-    """一个预设选项。"""
-
-    label: str = Field(..., min_length=1, max_length=40, description="选项文字（用户点选的就是它）")
-    description: str = Field("", max_length=120, description="可选补充说明，前端显示在选项下方")
-
-
-class AskQuestion(BaseModel):
-    """一个问题。预设选项 2~3 个；第 4 个「其他（自定义输入）」由前端固定追加，不要自己写。"""
-
-    id: str = Field("", max_length=32, description="问题 id，不填由后端补 q1 / q2…")
-    header: str = Field("", max_length=16, description="短标签（如「目标岗位」），前端作为小标题")
-    question: str = Field(..., min_length=1, max_length=200, description="完整问题，一行，直接问用户")
-    multiSelect: bool = Field(False, description="true = 多选，false = 单选")
-    options: list[AskOption] = Field(
-        ...,
-        min_length=2,
-        max_length=3,
-        description="2~3 个预设选项（从简历内容里生成具体选项）",
-    )
-
-
-class AskInput(BaseModel):
-    """ask_user_question 的完整入参：一个总标题 + 一组问题。"""
-
-    title: str = Field(..., min_length=1, max_length=60, description="本轮反问的总标题，一句话说明为什么问")
-    questions: list[AskQuestion] = Field(..., min_length=1, max_length=4, description="1~4 个问题")
-
-
-def _normalize_ask(payload: AskInput) -> dict:
-    """校验并补全问题 id / header，返回可直接下发前端的 JSON 结构。"""
-    questions: list[dict] = []
-    used: set[str] = set()
-    for index, q in enumerate(payload.questions, start=1):
-        qid = (q.id or "").strip() or f"q{index}"
-        base, suffix = qid, 2
-        while qid in used:
-            qid = f"{base}-{suffix}"
-            suffix += 1
-        used.add(qid)
-        questions.append(
-            {
-                "id": qid,
-                "header": (q.header or f"问题 {index}").strip(),
-                "question": q.question.strip(),
-                "multiSelect": bool(q.multiSelect),
-                "options": [
-                    {"label": o.label.strip(), "description": (o.description or "").strip()}
-                    for o in q.options
-                ],
-                # 第 4 项由前端固定渲染成「其他（自定义输入）」
-                "allowCustom": True,
-            }
-        )
-    return {"title": payload.title.strip(), "questions": questions}
-
-
-def make_ask_tool():
-    """创建诊断 agent 的反问工具。
-
-    工具只负责 `interrupt(payload)` 暂停；真正的「发 SSE + 等前端 POST 答案」
-    在 diagnose_agent.run 里做 —— 这样恢复时工具会从头重跑（interrupt 直接
-    返回答案），不会重复发提问事件。
-    """
-
-    @tool(args_schema=AskInput)
-    def ask_user_question(title: str, questions: list[dict[str, Any]]) -> str:
-        """当简历或 JD 缺少关键信息、无法做出可靠诊断时，向用户提出 1~4 个选择题。
-
-        只在「不问就会猜」的情况下使用：如目标岗位/JD 缺失、经历缺少时间或成果、
-        用户要求太笼统、简历里有占位符或事实矛盾。能从简历/JD 推断的不要问。
-
-        每个问题给 2~3 个具体选项；用户还可以选第 4 项「其他」自行输入。
-        调用后前端会暂停并等待用户回答，本工具返回答案 JSON（answers / cancelled）。
-        得到答案后必须把答案作为诊断依据；用户跳过或超时则按信息不足继续诊断。
-
-        Args:
-            title: 本轮反问的总标题（一句话说明为什么问）
-            questions: 1~4 个问题；每题包含 header、question、multiSelect、options
-        """
-        payload = _normalize_ask(AskInput.model_validate({"title": title, "questions": questions}))
-        # 暂停：value 会随 SSE 下发前端；恢复时这里直接拿到 Command(resume=...) 的值
-        answer = interrupt(payload)
-        if not isinstance(answer, dict):
-            answer = {}
-        answers = answer.get("answers") or []
-        cancelled = bool(answer.get("cancelled")) or not answers
-        return json.dumps(
-            {"title": payload["title"], "answers": answers, "cancelled": cancelled},
-            ensure_ascii=False,
-        )
-
-    return ask_user_question

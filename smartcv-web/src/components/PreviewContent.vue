@@ -33,6 +33,8 @@ const props = defineProps<{
   diffUnits?: Record<number, DiffMark>
   /** 逐个文字单元的操作态；不传 = 只显示高亮、不能切换 */
   diffUnitViews?: Record<number, ChangeView>
+  /** 逐个文字单元的内联 diff HTML（删除线 + 高亮，文本已转义）；不传 = 不渲染内联 diff */
+  unitDiffs?: Record<number, string>
 }>()
 
 /** 实际挂到 data-diff 上的标记：还原过的改动换成"已还原 / 已忽略"两档样式 */
@@ -41,6 +43,12 @@ const diffAttr = computed(() => resolveDiffAttr(props.diffMark, props.diffView))
 /** 第 i 个文字单元：高亮 + 切换按钮（一次 patch 只改一个单元时用） */
 const unitAttr = (i: number) => resolveDiffAttr(props.diffUnits?.[i], props.diffUnitViews?.[i])
 const unitView = (i: number) => props.diffUnitViews?.[i]
+
+/** 第 i 个文字单元的内联 diff HTML；被还原或没有内联 diff 时返回 null（回退普通渲染） */
+const unitDiffHtml = (i: number): string | null => {
+  if (props.diffUnitViews?.[i]?.reverted) return null
+  return props.unitDiffs?.[i] ?? null
+}
 
 /** 最终生效样式（已处理继承） */
 const eff = computed(() => effectiveContentStyle(props.row, props.section, props.content))
@@ -119,6 +127,7 @@ const imageStyle = computed<CSSProperties>(() => {
     class="preview-content md-body"
     :class="{ 'diff-action-host': !!diffView }"
     :data-diff="diffAttr"
+    :data-diff-key="diffView ? `content:${content.id}` : undefined"
     :style="rootStyle"
   >
     <!-- 逐处切换：左上角浮出 ← / →（不参与布局，不影响排版与分页） -->
@@ -130,13 +139,14 @@ const imageStyle = computed<CSSProperties>(() => {
       class="pb-icontext"
       :class="{ 'diff-action-host': !!unitView(0) }"
       :data-diff="unitAttr(0)"
+      :data-diff-key="unitView(0) ? `unit:${content.id}:0` : undefined"
       :style="{ justifyContent: JUSTIFY_MAP[eff.textAlign] }"
     >
       <!-- 单元级改动（后端只改了这段文字）：按钮浮在这一行左侧 -->
       <DiffActionButton v-if="unitView(0)" class="diff-action-float" :view="unitView(0)!" />
       <!-- 图标可能是 emoji，也可能是品牌 SVG（v-html 两种都能渲染） -->
       <span v-if="content.content.icon" class="pb-icon" v-html="content.content.icon" />
-      <div class="pb-text" v-html="md(content.content.text)" />
+      <div class="pb-text" v-html="unitDiffHtml(0) || md(content.content.text)" />
       <div v-if="(content.content.tags ?? []).length" class="pb-tags">
         <span v-for="t in content.content.tags" :key="t" class="pb-tag">{{ t }}</span>
       </div>
@@ -153,9 +163,13 @@ const imageStyle = computed<CSSProperties>(() => {
         <span v-if="i > 0 && content.content.separator" class="pb-sep">
           {{ content.content.separator }}
         </span>
-        <div class="pb-col-wrap" :data-diff="unitAttr(i)">
+        <div
+          class="pb-col-wrap"
+          :data-diff="unitAttr(i)"
+          :data-diff-key="unitView(i) ? `unit:${content.id}:${i}` : undefined"
+        >
           <DiffActionButton v-if="unitView(i)" class="diff-action-float" :view="unitView(i)!" />
-          <div class="pb-col" v-html="md(col)" />
+          <div class="pb-col" v-html="unitDiffHtml(i) || md(col)" />
         </div>
       </template>
     </div>
@@ -165,6 +179,7 @@ const imageStyle = computed<CSSProperties>(() => {
       v-else-if="content.type === 'timeRange'"
       class="pb-timerange"
       :data-diff="unitAttr(0)"
+      :data-diff-key="unitView(0) ? `unit:${content.id}:0` : undefined"
       :style="{ justifyContent: JUSTIFY_MAP[eff.textAlign] }"
     >
       <DiffActionButton v-if="unitView(0)" class="diff-action-float" :view="unitView(0)!" />
@@ -184,6 +199,7 @@ const imageStyle = computed<CSSProperties>(() => {
         :key="i"
         class="pb-tag"
         :data-diff="unitAttr(i)"
+        :data-diff-key="unitView(i) ? `unit:${content.id}:${i}` : undefined"
       >
         {{ t }}
         <DiffActionButton v-if="unitView(i)" class="diff-action-float" :view="unitView(i)!" />
@@ -199,6 +215,7 @@ const imageStyle = computed<CSSProperties>(() => {
         :key="i"
         class="pb-list-item"
         :data-diff="unitAttr(i)"
+        :data-diff-key="unitView(i) ? `unit:${content.id}:${i}` : undefined"
         :style="{
           marginLeft: `${(item.indent ?? 0) * INDENT_STEP}px`,
           justifyContent: JUSTIFY_MAP[eff.textAlign],
@@ -209,7 +226,7 @@ const imageStyle = computed<CSSProperties>(() => {
         <span class="pb-list-marker">
           {{ content.content.listType === 'ordered' ? `${i + 1}.` : '•' }}
         </span>
-        <span class="pb-list-text" v-html="md(item.text)" />
+        <span class="pb-list-text" v-html="unitDiffHtml(i) || md(item.text)" />
       </div>
     </div>
 

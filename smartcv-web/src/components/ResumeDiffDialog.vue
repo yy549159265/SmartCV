@@ -16,11 +16,14 @@
  *    渲染组件，与左侧预览 / PDF 导出是同一份代码，所见即所得。
  *  - **状态放 store**：关掉弹窗（比如想再看看对话）再打开，已还原的处不会丢。
  */
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import PreviewSection from './PreviewSection.vue'
 import {
   buildControls,
+  collectContentUnits,
+  coordToTarget,
   diffResume,
+  inlineDiffHtml,
   mergeResume,
   type DiffControls,
   type DiffMarks,
@@ -28,6 +31,7 @@ import {
 import { useSyncScroll } from '@/composables/useSyncScroll'
 import { previewZoom } from '@/composables/usePreviewZoom'
 import { contentWidth } from '@/composables/usePageSize'
+import type { DiagnosisItem } from '@/api/chat'
 import type { Section } from '@/types'
 
 const props = withDefaults(
@@ -41,6 +45,10 @@ const props = withDefaults(
     reverted: string[]
     /** 弹窗标题：聊天修改 / 全文纠错共用这个弹窗 */
     title?: string
+    /** 本次诊断项（带 s/r/c/i 坐标），用于把每处改动关联到对应诊断卡片 */
+    diagnosis?: DiagnosisItem[]
+    /** 从诊断页「查看对比」跳回来时的目标：{ key, nonce }，nonce 保证连点同一处也重新闪烁 */
+    flash?: { key: string; nonce: number } | null
   }>(),
   { title: 'AI 修改对比' },
 )
@@ -54,6 +62,8 @@ const emit = defineEmits<{
   toggle: [key: string]
   'revert-all': []
   'accept-all': []
+  /** 跳到某条诊断（打开诊断结论弹窗并定位到对应卡片） */
+  'jump-diagnosis': [index: number]
 }>()
 
 /* ---------- 比对 / 合并 ---------- */
@@ -115,11 +125,55 @@ const marksAfter = computed<DiffMarks>(() => {
  *  - 改 / 增 → 右栏；删除 → 左栏（删除的节点右栏本来就没有）。
  */
 const controlsBefore = computed<DiffControls>(() =>
-  buildControls(diff.value, 'before', revertedSet.value, (key) => emit('toggle', key)),
+  buildControls(diff.value, 'before', revertedSet.value, (key) => emit('toggle', key), diagIndexByKey.value, jumpToDiagnosis),
 )
 const controlsAfter = computed<DiffControls>(() =>
-  buildControls(diff.value, 'after', revertedSet.value, (key) => emit('toggle', key)),
+  buildControls(diff.value, 'after', revertedSet.value, (key) => emit('toggle', key), diagIndexByKey.value, jumpToDiagnosis),
 )
+
+/** 跳转到某条诊断：转发给父组件（打开诊断结论弹窗并定位） */
+function jumpToDiagnosis(index: number) {
+  emit('jump-diagnosis', index)
+}
+
+/**
+ * 诊断坐标 → 改动 key 的映射。
+ * 诊断项 [s r c i] 指向一个「文字单元」；对应改动可能是单元级（只改文字）
+ * 也可能是内容级（类型/样式/项数也变了）。两种 key 都登记，单元级优先。
+ */
+const diagIndexByKey = computed<ReadonlyMap<string, number>>(() => {
+  const map = new Map<string, number>()
+  for (let idx = 0; idx < (props.diagnosis?.length ?? 0); idx++) {
+    const d = props.diagnosis![idx]
+    if (d.s == null || d.r == null || d.c == null || d.i == null) continue
+    const target = coordToTarget(props.before, d.s, d.r, d.c, d.i)
+    if (!target) continue
+    const unitKey = `unit:${target.contentId}:${target.unitIndex}`
+    if (!map.has(unitKey)) map.set(unitKey, idx)
+    const contentKey = `content:${target.contentId}`
+    if (!map.has(contentKey)) map.set(contentKey, idx)
+  }
+  return map
+})
+
+/**
+ * 右栏「修改后」一栏的内联词级 diff：内容 id → 单元序号 → diff HTML。
+ * 只对单元级改动（纯文字替换）生成：原文删除线 + 新文高亮，其余照常渲染。
+ */
+const afterInlineDiffs = computed<Record<string, Record<number, string>>>(() => {
+  const beforeUnits = collectContentUnits(props.before)
+  const afterUnits = collectContentUnits(props.after)
+  const out: Record<string, Record<number, string>> = {}
+  for (const change of diff.value.changes) {
+    if (change.level !== 'unit') continue
+    const i = change.unitIndex ?? 0
+    const before = beforeUnits.get(change.nodeId)?.[i]
+    const after = afterUnits.get(change.nodeId)?.[i]
+    if (before === undefined || after === undefined || before === after) continue
+    ;(out[change.nodeId] ??= {})[i] = inlineDiffHtml(before, after)
+  }
+  return out
+})
 
 /** 某一侧被标记的处数（内容块 + 内容里的文字单元；栏头显示"本侧改动几处"） */
 const markedCount = (marks: DiffMarks) =>
@@ -130,7 +184,64 @@ const markedCount = (marks: DiffMarks) =>
 const leftEl = ref<HTMLElement | null>(null)
 const rightEl = ref<HTMLElement | null>(null)
 
-useSyncScroll(leftEl, rightEl, () => props.show)
+/**
+ * 正在执行「跳到某处改动」的滚动定位。
+ *
+ * 两栏是比例同步滚动的：直接 scrollIntoView 两栏时，左栏滚一下会按比例把右栏
+ * 拽回去，右栏滚一下又反过来拽左栏，两个平滑动画互相覆盖，最后停在哪算哪 ——
+ * 表现就是「跳过来不定位」。定位期间先关掉同步，让两栏各自滚到自己的目标。
+ */
+const jumping = ref(false)
+let jumpTimer = 0
+
+useSyncScroll(leftEl, rightEl, () => props.show && !jumping.value)
+
+/** 诊断页「查看对比」跳回来：滚动定位到目标改动并红框闪烁几秒 */
+watch(
+  () => props.flash?.nonce,
+  (nonce) => {
+    if (nonce == null) return
+    const key = props.flash!.key
+    // 对比弹窗可能刚好从「关闭」状态被重新打开（onJumpToDiff 会先 diffOpen=true），
+    // 两侧 A4 预览比诊断列表重得多，一次 nextTick 甚至十几帧都可能还没挂载完；
+    // 用时间预算（最多约 2s）逐帧重试，直到目标元素出现，而不是固定只试 12 帧。
+    const deadline = performance.now() + 2000
+    const locate = () => {
+      const sel = `[data-diff-key="${key}"]`
+      const elL = leftEl.value?.querySelector<HTMLElement>(sel)
+      const elR = rightEl.value?.querySelector<HTMLElement>(sel)
+      // 元素找到了但两栏还没真正排出来（弹窗刚挂载 / 还在 display:none 里）时，
+      // scrollIntoView 算不出距离、滚不动 —— 必须等容器有了高度再滚。
+      const laidOut = (pane: HTMLElement | null) => !!pane && pane.clientHeight > 0
+      const panesReady = (!elL || laidOut(leftEl.value)) && (!elR || laidOut(rightEl.value))
+      if ((elL || elR) && panesReady) {
+        // 定位期间关掉同步滚动，否则两栏的平滑滚动会互相覆盖
+        jumping.value = true
+        window.clearTimeout(jumpTimer)
+        jumpTimer = window.setTimeout(() => {
+          jumping.value = false
+        }, 900)
+        // 新增/删除只在其中一栏有元素，另一栏不滚动；都有的两边各自滚到可见
+        elL?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        elR?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        ;[elL, elR].forEach((el) => {
+          if (!el) return
+          el.classList.remove('diff-flash')
+          // 强制重排，让连点同一处时动画能重新播放
+          void el.offsetWidth
+          el.classList.add('diff-flash')
+          window.setTimeout(() => el.classList.remove('diff-flash'), 2400)
+        })
+        return
+      }
+      if (performance.now() < deadline) requestAnimationFrame(locate)
+    }
+    void nextTick(() => locate())
+  },
+  // 对比弹窗可能刚好从「关闭」状态被重新打开（此时 flash 已就位），
+  // immediate 让首次挂载也执行一次，否则这次跳转不会闪烁。
+  { immediate: true },
+)
 
 /** 栏内纸张：与页面预览同宽同缩放，两边看到的排版、换行都一致 */
 const paperStyle = computed(() => ({
@@ -206,6 +317,7 @@ function onClose() {
               :section="s"
               :marks="marksAfter"
               :controls="controlsAfter"
+              :unit-diffs="afterInlineDiffs"
             />
           </div>
         </div>

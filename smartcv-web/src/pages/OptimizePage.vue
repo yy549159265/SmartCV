@@ -21,12 +21,21 @@ import { useOptimizeStore, type ChatItem, type ChatStep } from '@/stores/optimiz
 import { useStatsStore } from '@/stores/stats'
 import type { ChatAnswer, DiagnosisItem, RewriteMode } from '@/api/chat'
 import { checkResumeGrammar } from '@/api/grammar'
+import { coordToTarget, diffResume } from '@/utils/resumeDiff'
 
 /** 各 agent 生命周期的友好文案：running（进行中）/ done（完成） */
 const AGENT_STATUS: Record<string, { running: string; done: string }> = {
   diagnose: { running: '诊断简历中', done: '诊断完成' },
   optimize: { running: '修改简历中', done: '修改完成' },
   summarize: { running: '总结中', done: '总结完成' },
+}
+
+/** 诊断档位文案：诊断 agent 对这条结论给出的「修改建议」 */
+const DIAG_DISPOSITION_LABEL: Record<string, string> = {
+  must: '必须修改',
+  suggest: '建议修改',
+  keep: '可以保留',
+  insufficient: '信息不足',
 }
 
 /** 诊断项的审查状态文案：默认「待分析」，优化 agent 审查后更新 */
@@ -74,6 +83,45 @@ function isMergedStatus(i: number): boolean {
   return next?.kind === 'agent' && next.agent === 'diagnose'
 }
 
+/** 节点详情当前是否展开：有未回答的反问时强制展开，避免把交互藏起来 */
+function isNodeBodyOpen(m: Extract<ChatItem, { kind: 'agent' }>): boolean {
+  return m.nodeOpen || m.questions.some((q) => q.status === 'pending' || q.status === 'submitting')
+}
+
+/** 折叠态是否要展示缩略行：诊断节点的摘要由「诊断结论」入口/占位条承担，不重复 */
+function showNodePreview(m: Extract<ChatItem, { kind: 'agent' }>): boolean {
+  if (isNodeBodyOpen(m)) return false
+  if (m.agent === 'diagnose' && (m.diagnosis.length > 0 || m.status === 'running')) return false
+  return true
+}
+
+/** 折叠态的缩略内容：一行铺满卡片宽度，超出由 CSS 省略号截断 */
+function nodePreview(m: Extract<ChatItem, { kind: 'agent' }>): string {
+  const text = (m.text ?? '').replace(/[#>*_`]/g, '').replace(/\s+/g, ' ').trim()
+  if (m.agent === 'diagnose' && m.diagnosis.length) {
+    return diagCounts(m.diagnosis)
+      .map((c) => `${c.label} ${c.count}`)
+      .join(' · ')
+  }
+  if (m.agent === 'optimize') {
+    const parts: string[] = []
+    if (m.status === 'done') parts.push(`确认修改 ${doneCount()} 处`)
+    if (text) parts.push(text)
+    return parts.join(' · ') || '正在逐条审查诊断…'
+  }
+  return text || statusText(m)
+}
+
+/** 当前节点是不是这一轮流程的最后一个：往后到下一个用户消息之间没有别的 agent 节点 */
+function isLastFlowNode(i: number): boolean {
+  for (let j = i + 1; j < optimizeStore.messages.length; j++) {
+    const next = optimizeStore.messages[j]
+    if (next.kind === 'user') break
+    if (next.kind === 'agent') return false
+  }
+  return true
+}
+
 /** 已成功修改的诊断条数（优化 agent 完成时展示） */
 function doneCount(): number {
   for (let i = optimizeStore.messages.length - 1; i >= 0; i--) {
@@ -88,10 +136,139 @@ function doneCount(): number {
 /** 诊断结论弹窗：保存当前查看的诊断块（引用，状态更新会实时反映到弹窗） */
 const diagShow = ref(false)
 const diagDetail = ref<Extract<ChatItem, { kind: 'agent' }> | null>(null)
+/** 诊断列表滚动容器（对比弹窗「查看诊断」跳转定位用） */
+const diagListEl = ref<HTMLElement | null>(null)
 
 function openDiagDetail(m: Extract<ChatItem, { kind: 'agent' }>) {
   diagDetail.value = m
   diagShow.value = true
+}
+
+/** 找最近一个带诊断列表的 diagnose 块（与 store 内部 diagnosisOwner 同语义） */
+function diagOwner(): Extract<ChatItem, { kind: 'agent' }> | null {
+  for (let i = optimizeStore.messages.length - 1; i >= 0; i--) {
+    const m = optimizeStore.messages[i]
+    if (m.kind === 'agent' && m.agent === 'diagnose' && m.diagnosis.length) return m
+  }
+  return null
+}
+
+/** 诊断项按章节分组的树结构：章节标题 + 章内诊断项（保留全局序号用于跳转定位） */
+interface DiagGroup {
+  section: string
+  sectionIndex: number
+  items: { di: number; d: DiagnosisItem }[]
+}
+
+const groupedDiag = computed<DiagGroup[]>(() => {
+  const detail = diagDetail.value
+  if (!detail) return []
+  const groups = new Map<string, DiagGroup>()
+  const order: string[] = []
+  detail.diagnosis.forEach((d, di) => {
+    const section = d.section ?? '简历'
+    const sectionIndex = d.sectionIndex ?? -1
+    const key = `${sectionIndex}\u0000${section}`
+    let g = groups.get(key)
+    if (!g) {
+      g = { section, sectionIndex, items: [] }
+      groups.set(key, g)
+      order.push(key)
+    }
+    g.items.push({ di, d })
+  })
+  // 按简历章节顺序（sectionIndex）排序
+  order.sort((a, b) => {
+    const ga = groups.get(a)!
+    const gb = groups.get(b)!
+    return ga.sectionIndex !== gb.sectionIndex ? ga.sectionIndex - gb.sectionIndex : a.localeCompare(b)
+  })
+  return order.map((k) => groups.get(k)!)
+})
+
+/** 折叠的章节 key（`sectionIndex\0section`），默认全展开 */
+const collapsedGroups = ref<Set<string>>(new Set())
+
+function diagGroupKey(group: DiagGroup): string {
+  return `${group.sectionIndex}\u0000${group.section}`
+}
+
+function toggleGroup(key: string) {
+  const next = new Set(collapsedGroups.value)
+  if (next.has(key)) next.delete(key)
+  else next.add(key)
+  collapsedGroups.value = next
+}
+
+/** 当前正在闪烁定位的诊断卡片序号（对比弹窗跳过来时标红闪一下，方便确认看的是哪一条） */
+const diagFlashIndex = ref<number | null>(null)
+
+function flashDiagCard(index: number) {
+  // 先清掉再设置，保证同一张卡片连点也能重新触发闪烁
+  diagFlashIndex.value = null
+  void nextTick(() => {
+    diagFlashIndex.value = index
+    window.setTimeout(() => {
+      if (diagFlashIndex.value === index) diagFlashIndex.value = null
+    }, 2200)
+  })
+}
+
+/** 对比弹窗里点某处「查看诊断」：打开诊断结论弹窗（叠加在对比弹窗之上）并闪烁定位对应卡片 */
+function onJumpToDiagnosis(index: number) {
+  const owner = diagOwner()
+  if (!owner) return
+  openDiagDetail(owner)
+  flashDiagCard(index)
+  // 弹窗用 display-directive="if" 挂载，可能晚于一次 nextTick；逐帧重试直到卡片出现
+  const scrollTo = (attempt: number) => {
+    const el = diagListEl.value?.querySelector(`[data-diag-index="${index}"]`)
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      return
+    }
+    if (attempt < 12) requestAnimationFrame(() => scrollTo(attempt + 1))
+  }
+  void nextTick(() => scrollTo(0))
+}
+
+/** 对比弹窗关联的诊断项：只有聊天修改有诊断，全文纠错没有 */
+const latestDiagnosis = computed<DiagnosisItem[]>(() => {
+  if (optimizeStore.pendingDiff?.source !== 'chat') return []
+  return diagOwner()?.diagnosis ?? []
+})
+
+/** 诊断序号 → 对比弹窗里的改动 key（反向映射，诊断页「查看对比」跳转用） */
+const diffKeyByDiagIndex = computed<ReadonlyMap<number, string>>(() => {
+  const map = new Map<number, string>()
+  const pending = optimizeStore.pendingDiff
+  if (!pending) return map
+  const keys = new Set(diffResume(pending.before, pending.after).changes.map((c) => c.key))
+  latestDiagnosis.value.forEach((d, idx) => {
+    if (d.s == null || d.r == null || d.c == null || d.i == null) return
+    const target = coordToTarget(pending.before, d.s, d.r, d.c, d.i)
+    if (!target) return
+    const unitKey = `unit:${target.contentId}:${target.unitIndex}`
+    if (keys.has(unitKey)) {
+      map.set(idx, unitKey)
+      return
+    }
+    const contentKey = `content:${target.contentId}`
+    if (keys.has(contentKey)) map.set(idx, contentKey)
+  })
+  return map
+})
+
+/** 诊断页「查看对比」的闪烁目标：{ key, nonce }，nonce 保证同一处连点也重新触发 */
+const diffFlash = ref<{ key: string; nonce: number } | null>(null)
+
+/** 诊断结论弹窗里点「查看对比」：关闭诊断弹窗、回到对比弹窗并闪烁对应改动 */
+function onJumpToDiff(index: number) {
+  const key = diffKeyByDiagIndex.value.get(index)
+  if (!key) return
+  diagShow.value = false
+  optimizeStore.diffOpen = true
+  diffFlash.value = { key, nonce: Date.now() }
 }
 
 /** 取出 agent 块当前应该显示的状态文案 */
@@ -794,64 +971,87 @@ function onDiscardDiff() {
           >
             <div class="status-line" :class="{ done: m.done }">
               <span class="status-mark">
-                <span v-if="m.done" class="check">✓</span>
+                <span v-if="m.done" class="check"><IconGlyph name="check" :size="12" /></span>
                 <span v-else class="pulse"></span>
               </span>
               <span class="status-line-text">{{ m.text }}</span>
             </div>
           </div>
 
-          <!-- agent 块：诊断 / 优化 / 摘要统一卡片，状态头 + 回答(常显) + 思考/工具(各自折叠) -->
+          <!-- agent 块：流程节点（诊断 → 优化 → 总结）。节点之间用带箭头的竖线相连；
+               点节点头折叠/展开：折叠显示一行缩略内容，展开显示该节点的工作详情 -->
           <div v-else class="msg-block from-process">
-            <!-- 诊断结论占位：思考/工具阶段先占住结论的位置并持续扫光，
-                 避免用户以为没在诊断；结论一到就换成下方可点的「诊断结论」入口 -->
-            <div
-              v-if="m.agent === 'diagnose' && m.status === 'running' && !m.diagnosis.length"
-              class="diag-pending"
-            >
-              <span class="diag-pending-icon" aria-hidden="true">✦</span>
-              <span class="diag-pending-text">{{ diagPendingText(m) }}</span>
-              <span class="diag-pending-dots" aria-hidden="true"><i></i><i></i><i></i></span>
-            </div>
-
-            <!-- ✦ 诊断结论入口：放在诊断卡最前面，闪烁提示可点击 -->
-            <button
-              v-if="m.diagnosis.length"
-              type="button"
-              class="diag-entry"
-              @click="openDiagDetail(m)"
-            >
-              <span class="diag-entry-icon" aria-hidden="true">✦</span>
-              <span class="diag-entry-main">
-                <span class="diag-entry-title">诊断结论</span>
-                <span class="diag-report-count">{{ m.diagnosis.length }} 处</span>
-              </span>
-              <span class="diag-entry-chips">
-                <span
-                  v-for="c in diagCounts(m.diagnosis)"
-                  :key="c.status"
-                  class="diag-chip"
-                  :class="c.status"
-                >
-                  {{ c.label }} {{ c.count }}
-                </span>
-              </span>
-              <span class="diag-entry-action">查看详情 →</span>
-            </button>
-
-            <div class="agent-card">
-              <!-- convert 阶段结束状态：并入诊断卡，作为卡片的第一行（不带对勾，避免和下方状态头重复） -->
-              <div v-if="leadText(m, i)" class="agent-lead">{{ leadText(m, i) }}</div>
-              <!-- 状态头：running = 主题色呼吸，done = 绿色对勾 -->
-              <div class="agent-status" :class="m.status">
-                <span class="status-mark">
-                  <span v-if="m.status === 'done'" class="check">✓</span>
+            <div class="flow-node" :class="[m.status, { 'is-last': isLastFlowNode(i) }]">
+              <!-- 左侧轨道：节点标记 + 指向下一个节点的竖线与箭头 -->
+              <div class="flow-rail" aria-hidden="true">
+                <span class="flow-marker">
+                  <span v-if="m.status === 'done'" class="check"><IconGlyph name="check" :size="11" /></span>
                   <span v-else class="pulse"></span>
                 </span>
-                <span class="status-text">{{ statusText(m) }}</span>
+                <span class="flow-line"></span>
+                <span class="flow-arrow"></span>
               </div>
 
-              <div class="agent-body">
+              <div class="flow-card">
+                <!-- 节点头：标题 + 状态摘要，整行可点 -->
+                <button
+                  type="button"
+                  class="flow-head"
+                  :aria-expanded="isNodeBodyOpen(m)"
+                  @click="m.nodeOpen = !m.nodeOpen"
+                >
+                  <span class="flow-title">{{ m.label || m.agent }}</span>
+                  <span class="flow-status" :class="m.status">{{ statusText(m) }}</span>
+                  <span class="flow-caret" :class="{ open: isNodeBodyOpen(m) }">
+                    <IconGlyph name="chevron-down" :size="14" />
+                  </span>
+                </button>
+
+                <!-- 诊断结论占位：思考/工具阶段先占住结论的位置并持续扫光，
+                     避免用户以为没在诊断；结论一到就换成下方可点的「诊断结论」入口 -->
+                <div
+                  v-if="m.agent === 'diagnose' && m.status === 'running' && !m.diagnosis.length"
+                  class="diag-pending"
+                >
+                  <span class="diag-pending-icon" aria-hidden="true"><IconGlyph name="scan-line" :size="12" /></span>
+                  <span class="diag-pending-text">{{ diagPendingText(m) }}</span>
+                  <span class="diag-pending-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+                </div>
+
+                <!-- 诊断结论入口：结论是产出，不随节点详情折叠 -->
+                <button
+                  v-if="m.diagnosis.length"
+                  type="button"
+                  class="diag-entry"
+                  @click="openDiagDetail(m)"
+                >
+                  <span class="diag-entry-icon" aria-hidden="true"><IconGlyph name="scan-line" :size="12" /></span>
+                  <span class="diag-entry-main">
+                    <span class="diag-entry-title">诊断结论</span>
+                    <span class="diag-report-count">{{ m.diagnosis.length }} 处</span>
+                  </span>
+                  <span class="diag-entry-chips">
+                    <span
+                      v-for="c in diagCounts(m.diagnosis)"
+                      :key="c.status"
+                      class="diag-chip"
+                      :class="c.status"
+                    >
+                      {{ c.label }} {{ c.count }}
+                    </span>
+                  </span>
+                  <span class="diag-entry-action">查看详情 <IconGlyph name="arrow-right" :size="12" /></span>
+                </button>
+
+                <!-- 折叠态：一句话说清这个节点做了什么 -->
+                <div v-if="showNodePreview(m)" class="flow-preview">
+                  <span>{{ nodePreview(m) }}</span>
+                </div>
+
+                <!-- 展开态：该节点的工作详情 -->
+                <div v-if="isNodeBodyOpen(m)" class="agent-body">
+                  <!-- convert 阶段结束状态：并入诊断节点，作为详情的第一行 -->
+                  <div v-if="leadText(m, i)" class="agent-lead">{{ leadText(m, i) }}</div>
                 <!-- 🧭 位置诊断：诊断 agent 实际收到的带位置编号的简历文本 -->
                 <div v-if="m.markdown" class="agent-block">
                   <button class="agent-sub-toggle" @click="m.markdownOpen = !m.markdownOpen">
@@ -997,6 +1197,7 @@ function onDiscardDiff() {
                   </button>
                   <div v-if="m.answerOpen" class="agent-answer" v-html="renderMarkdown(m.text)"></div>
                 </div>
+              </div>
               </div>
             </div>
           </div>
@@ -1153,17 +1354,90 @@ function onDiscardDiff() {
     </section>
   </main>
 
-  <!-- 诊断结论弹窗：从时间线最前面的入口打开；状态随优化过程实时更新 -->
+  <!-- 诊断结论弹窗：从时间线最前面的入口打开；状态随优化过程实时更新。
+       z-index 显式抬高，保证它叠加在「对比弹窗」之上（两个都是 n-modal，默认层级不够可靠） -->
   <n-modal
     v-model:show="diagShow"
     display-directive="if"
     preset="card"
+    :z-index="5000"
     style="width: 980px; max-width: 94vw"
   >
     <template #header>
       <div class="diag-modal-head">
-        <span class="diag-report-icon" aria-hidden="true">✦</span>
+        <span class="diag-report-icon" aria-hidden="true"><IconGlyph name="scan-line" :size="12" /></span>
         <span class="diag-modal-title">诊断结论</span>
+        <!-- 状态说明：讲清「修改建议」和「最终执行」两列分别按什么标准判断 -->
+        <n-popover
+          trigger="click"
+          placement="bottom-start"
+          :width="400"
+          :z-index="6000"
+          :show-arrow="false"
+          :style="{
+            boxShadow: '0 12px 32px -12px rgba(28, 33, 48, 0.28), 0 0 0 1px var(--border-strong)',
+          }"
+        >
+          <template #trigger>
+            <button type="button" class="diag-help-btn" aria-label="状态说明" title="两列状态是怎么判断的">
+              <IconGlyph name="info" :size="14" />
+            </button>
+          </template>
+          <div class="diag-help">
+            <div class="diag-help-section">
+              <div class="diag-help-head">
+                <span class="diag-help-title">修改建议</span>
+                <span class="diag-help-sub">诊断阶段</span>
+              </div>
+              <div class="diag-help-row">
+                <span class="diag-help-tag d-must">必须修改</span>
+                <span class="diag-help-desc">事实错误、关键信息缺失、与 JD 硬性要求不符</span>
+                <span class="diag-help-flag must">一定修改</span>
+              </div>
+              <div class="diag-help-row">
+                <span class="diag-help-tag d-suggest">建议修改</span>
+                <span class="diag-help-desc">没有硬伤，但能更专业、更量化、更贴合 JD</span>
+                <span class="diag-help-flag">概率更改</span>
+              </div>
+              <div class="diag-help-row">
+                <span class="diag-help-tag d-keep">可以保留</span>
+                <span class="diag-help-desc">原文已清晰准确，不必改</span>
+                <span class="diag-help-flag">禁止修改</span>
+              </div>
+              <div class="diag-help-row">
+                <span class="diag-help-tag d-insufficient">信息不足</span>
+                <span class="diag-help-desc">缺少关键信息，问不到就不改</span>
+                <span class="diag-help-flag">禁止修改</span>
+              </div>
+            </div>
+            <div class="diag-help-section">
+              <div class="diag-help-head">
+                <span class="diag-help-title">最终执行</span>
+                <span class="diag-help-sub">优化阶段</span>
+              </div>
+              <div class="diag-help-row">
+                <span class="diag-help-tag st-pending">待分析</span>
+                <span class="diag-help-desc">还没审查</span>
+              </div>
+              <div class="diag-help-row">
+                <span class="diag-help-tag st-change">待修改</span>
+                <span class="diag-help-desc">判定要改，等待执行</span>
+              </div>
+              <div class="diag-help-row">
+                <span class="diag-help-tag st-skip">不更改</span>
+                <span class="diag-help-desc">判定不改，收益不足或有风险</span>
+              </div>
+              <div class="diag-help-row">
+                <span class="diag-help-tag st-done">已修改</span>
+                <span class="diag-help-desc">已替换成新文字</span>
+              </div>
+              <div class="diag-help-row">
+                <span class="diag-help-tag st-failed">未执行</span>
+                <span class="diag-help-desc">坐标或原文对不上</span>
+              </div>
+            </div>
+          </div>
+        </n-popover>
         <span class="diag-report-count">{{ diagDetail?.diagnosis.length ?? 0 }} 处</span>
         <span class="diag-report-chips">
           <span
@@ -1178,44 +1452,107 @@ function onDiscardDiff() {
       </div>
     </template>
 
-    <div v-if="diagDetail" class="diag-modal-list">
+    <div v-if="diagDetail" ref="diagListEl" class="diag-modal-list">
       <div
-        v-for="(d, di) in diagDetail.diagnosis"
-        :key="di"
-        class="diag-item"
-        :class="`s-${d.status ?? 'pending'}`"
+        v-for="group in groupedDiag"
+        :key="diagGroupKey(group)"
+        class="diag-group"
       >
-        <div class="diag-head">
-          <span class="diag-index">{{ di + 1 }}</span>
-          <span v-if="d.quote" class="diag-quote">「{{ d.quote }}」</span>
-          <span v-else class="diag-tag">结构调整</span>
-          <span class="diag-status" :class="d.status ?? 'pending'">
-            {{ DIAG_STATUS_LABEL[d.status ?? 'pending'] }}
-          </span>
+        <!-- 章节标题：树的一级节点，点击折叠/展开章内诊断项 -->
+        <div
+          class="diag-group-head"
+          :class="{ collapsed: collapsedGroups.has(diagGroupKey(group)) }"
+          role="button"
+          tabindex="0"
+          @click="toggleGroup(diagGroupKey(group))"
+          @keydown.enter="toggleGroup(diagGroupKey(group))"
+        >
+          <IconGlyph name="chevron-down" :size="14" class="diag-group-caret" />
+          <span class="diag-group-title">{{ group.section }}</span>
+          <span class="diag-group-count">{{ group.items.length }} 处</span>
         </div>
-        <!-- 标签列固定宽度，标题和每条正文左边缘对齐，长文也整齐 -->
-        <div class="diag-grid">
-          <span class="diag-label">问题</span>
-          <span class="diag-value">{{ d.reason }}</span>
-          <span class="diag-label">方向</span>
-          <span class="diag-value">{{ d.suggestion }}</span>
-          <span class="diag-label">依据</span>
-          <span class="diag-value">{{ d.evidence }}</span>
-          <template v-if="d.reference">
-            <span class="diag-label">示例</span>
-            <span class="diag-value">{{ d.reference }}</span>
-          </template>
-          <template v-if="d.note">
-            <span class="diag-label">{{ d.status === 'failed' ? '失败原因' : '判定理由' }}</span>
-            <span class="diag-value">{{ d.note }}</span>
-          </template>
+        <!-- 章内诊断项：树的叶子节点 -->
+        <div v-if="!collapsedGroups.has(diagGroupKey(group))" class="diag-group-items">
+          <div
+            v-for="(it, gi) in group.items"
+            :key="it.di"
+            class="diag-item"
+            :class="[`s-${it.d.status ?? 'pending'}`, { 'diag-flash': diagFlashIndex === it.di }]"
+            :data-diag-index="it.di"
+          >
+            <div class="diag-head">
+              <span class="diag-index">{{ gi + 1 }}</span>
+              <span v-if="it.d.location" class="diag-location">{{ it.d.location }}</span>
+              <span v-if="it.d.quote" class="diag-quote">「{{ it.d.quote }}」</span>
+              <span v-else class="diag-tag">无原文片段</span>
+              <!-- 右侧：只有这处真的改了，才有跳回对比弹窗的入口 -->
+              <span class="diag-head-right">
+                <button
+                  v-if="diffKeyByDiagIndex.has(it.di)"
+                  type="button"
+                  class="diag-jump-diff"
+                  title="回到对比弹窗，定位这处改动"
+                  @click="onJumpToDiff(it.di)"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path
+                      d="M16 3h5v5M21 3l-7 7M8 21H3v-5M3 21l7-7"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    />
+                  </svg>
+                  查看对比
+                </button>
+              </span>
+            </div>
+            <!-- 两个状态分开写清楚：诊断给的建议 vs 优化阶段最终是改还是没改 -->
+            <div class="diag-states">
+              <span class="diag-state">
+                <span class="diag-state-label">修改建议</span>
+                <span
+                  class="diag-state-value"
+                  :class="`d-${it.d.disposition ?? 'suggest'}`"
+                >
+                  {{ DIAG_DISPOSITION_LABEL[it.d.disposition ?? 'suggest'] }}
+                </span>
+              </span>
+              <span class="diag-state">
+                <span class="diag-state-label">最终执行</span>
+                <span
+                  class="diag-state-value"
+                  :class="`st-${it.d.status ?? 'pending'}`"
+                >
+                  {{ DIAG_STATUS_LABEL[it.d.status ?? 'pending'] }}
+                </span>
+              </span>
+            </div>
+            <!-- 标签列固定宽度，标题和每条正文左边缘对齐，长文也整齐 -->
+            <div class="diag-grid">
+              <span class="diag-label">问题</span>
+              <span class="diag-value">{{ it.d.reason }}</span>
+              <span class="diag-label">方向</span>
+              <span class="diag-value">{{ it.d.suggestion }}</span>
+              <span class="diag-label">依据</span>
+              <span class="diag-value">{{ it.d.evidence }}</span>
+              <template v-if="it.d.reference">
+                <span class="diag-label">示例</span>
+                <span class="diag-value">{{ it.d.reference }}</span>
+              </template>
+              <template v-if="it.d.note">
+                <span class="diag-label">{{ it.d.status === 'failed' ? '失败原因' : '判定理由' }}</span>
+                <span class="diag-value">{{ it.d.note }}</span>
+              </template>
+            </div>
+          </div>
         </div>
       </div>
     </div>
 
     <template #footer>
       <div class="diag-modal-footer">
-        <span class="diag-modal-hint">状态会随优化过程实时更新；位置编号仅内部使用，不展示</span>
+        <span class="diag-modal-hint">已按简历章节分组 · 状态会随优化过程实时更新</span>
         <n-button size="small" type="primary" @click="diagShow = false">关闭</n-button>
       </div>
     </template>
@@ -1229,10 +1566,13 @@ function onDiscardDiff() {
     :before="optimizeStore.pendingDiff?.before ?? []"
     :after="optimizeStore.pendingDiff?.after ?? []"
     :reverted="optimizeStore.pendingDiff?.reverted ?? []"
+    :diagnosis="latestDiagnosis"
+    :flash="diffFlash"
     @update:show="(v: boolean) => { if (!v) optimizeStore.dismissDiff() }"
     @toggle="(key: string) => optimizeStore.toggleDiffChange(key)"
     @revert-all="optimizeStore.revertAllDiff()"
     @accept-all="optimizeStore.acceptAllDiff()"
+    @jump-diagnosis="onJumpToDiagnosis"
     @apply="onApplyDiff"
     @discard="onDiscardDiff"
   />
@@ -1628,45 +1968,175 @@ function onDiscardDiff() {
 .from-process {
   justify-content: flex-start;
 }
-.agent-card {
+/* 流程节点：左侧一条轨道（节点标记 + 指向下一个节点的竖线箭头），
+   右侧是纯白可折叠卡片 —— 诊断 → 优化 → 总结的执行顺序一眼可见。
+   标记用靛蓝，竖线用中性发丝线，语义色不参与主状态。 */
+.flow-node {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  max-width: 100%;
+  align-items: stretch;
+  gap: 8px;
+  width: 100%;
   min-width: 0;
-  background: var(--surface-soft);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: 7px 11px;
 }
-/* 状态头：running 主题色柔光呼吸 / done 完成绿 */
-.agent-status {
+.flow-rail {
+  position: relative;
+  flex: none;
+  width: 18px;
+}
+.flow-marker {
+  position: absolute;
+  top: 7px;
+  left: 0;
+  z-index: 1;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  align-self: flex-start;
-  max-width: 100%;
-  padding: 3px 9px;
-  border-radius: 999px;
-  font-size: 12px;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  background: var(--panel-bg);
+  color: var(--text-tertiary);
+  transition: border-color 0.16s var(--ease), background 0.16s var(--ease);
+}
+.flow-node.running .flow-marker {
+  border-color: var(--primary);
+  color: var(--primary);
+  animation: node-breathe 1.6s ease-in-out infinite;
+}
+.flow-node.done .flow-marker {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: #fff;
+  animation: check-in 0.32s var(--ease);
+}
+/* 竖线从标记下沿一直画到卡片底部之外，落进节点之间的间隙 */
+.flow-line {
+  position: absolute;
+  left: 50%;
+  top: 25px;
+  bottom: -14px;
+  width: 1px;
+  margin-left: -0.5px;
+  background: var(--border-strong);
+}
+/* 指向下一个节点的小箭头：边框画的实心三角，与竖线同色 */
+.flow-arrow {
+  position: absolute;
+  left: 50%;
+  bottom: -15px;
+  width: 0;
+  height: 0;
+  margin-left: -3px;
+  border-left: 3px solid transparent;
+  border-right: 3px solid transparent;
+  border-top: 5px solid var(--border-strong);
+}
+/* 最后一个节点没有下一个可指，收掉竖线与箭头 */
+.flow-node.is-last .flow-line,
+.flow-node.is-last .flow-arrow {
+  display: none;
+}
+@keyframes node-breathe {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(71, 83, 199, 0);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(71, 83, 199, 0.14);
+  }
+}
+/* 节点卡片：与诊断结论弹窗、整页面板同一层级 —— 纯白面板 + 发丝线描边 */
+.flow-card {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  transition: border-color 0.16s var(--ease);
+}
+.flow-card:hover {
+  border-color: var(--border-strong);
+}
+/* 节点头：标题 + 状态摘要 + 折叠箭头，整行可点 */
+.flow-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 11px;
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.16s var(--ease);
+}
+.flow-head:hover {
+  background: var(--surface-soft);
+}
+.flow-title {
+  flex: none;
+  font-size: 12.5px;
   font-weight: 600;
-  background: var(--primary-soft);
-  color: var(--primary-hover);
-  cursor: default;
-  user-select: none;
-  transition: background 0.2s var(--ease), color 0.2s var(--ease);
+  color: var(--text);
 }
-.agent-status.running {
-  /* 柔光呼吸：背景 + 圆点一起明暗变化，跑到哪个 agent 一眼可见 */
-  animation: status-blink 1.6s ease-in-out infinite;
-}
-.agent-status.done {
-  background: var(--success-soft);
-  color: var(--success);
-  cursor: default;
-}
-.status-text {
+.flow-status {
+  flex: 1;
+  min-width: 0;
+  font-size: 11.5px;
+  color: var(--text-tertiary);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.flow-status::before {
+  content: '';
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  vertical-align: 1px;
+}
+.flow-status.running {
+  color: var(--primary);
+}
+.flow-caret {
+  flex: none;
+  display: inline-flex;
+  color: var(--text-tertiary);
+  transition: transform 0.16s var(--ease), color 0.16s var(--ease);
+}
+.flow-caret.open {
+  transform: rotate(180deg);
+  color: var(--primary);
+}
+/* 折叠态的缩略内容：只留一行，超出直接省略号。
+   截断放在内层 —— 外层是 flex 子项，内边距不该参与文字截断的计算。 */
+.flow-preview {
+  min-width: 0;
+  /* 上下留白取同一个值：节点头悬停底色下边 → 文字，与文字 → 卡片下边框等距 */
+  padding: 8px 11px;
+  font-size: 11.5px;
+  line-height: 1.65;
+  color: var(--text-secondary);
+}
+.flow-preview > span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 结论入口 / 诊断占位条放进卡片后，四周留出与卡片内文一致的内缩；
+   上下用同一个 8px，节点头到结论、结论到卡片下边框的留白才对称 */
+.flow-card > .diag-pending,
+.flow-card > .diag-entry {
+  width: auto;
+  margin: 8px 9px;
 }
 .status-mark {
   display: inline-flex;
@@ -1677,13 +2147,14 @@ function onDiscardDiff() {
   flex: none;
 }
 .status-mark .check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   color: var(--primary);
-  font-weight: 700;
   line-height: 1;
 }
-.agent-status.done .check,
 .status-line.done .check {
-  color: var(--success);
+  color: var(--primary);
   animation: check-in 0.32s var(--ease);
 }
 .status-mark .pulse {
@@ -1692,17 +2163,6 @@ function onDiscardDiff() {
   border-radius: 50%;
   background: var(--primary);
   animation: dot-pulse 1.2s ease-in-out infinite;
-}
-@keyframes status-blink {
-  0%,
-  100% {
-    background: var(--primary-soft);
-    box-shadow: 0 0 0 0 rgba(71, 83, 199, 0);
-  }
-  50% {
-    background: var(--primary-faint);
-    box-shadow: 0 0 0 4px rgba(71, 83, 199, 0.14);
-  }
 }
 @keyframes dot-pulse {
   0%,
@@ -1768,8 +2228,8 @@ function onDiscardDiff() {
   color: var(--text-secondary);
 }
 .status-line.done {
-  background: var(--success-soft);
-  color: var(--success);
+  background: var(--surface-sunken);
+  color: var(--text-secondary);
 }
 .status-line-text {
   white-space: nowrap;
@@ -1780,9 +2240,10 @@ function onDiscardDiff() {
   flex-direction: column;
   gap: 4px;
 }
+/* 分隔线居中：线上方是 flex gap 8，线下方同样留 8 */
 .agent-block + .agent-block {
   border-top: 1px solid var(--border);
-  padding-top: 6px;
+  padding-top: 8px;
 }
 /* 思考/工具的折叠开关行（标题可点）：负外边距让文字仍与卡片内文左对齐 */
 .agent-sub-toggle {
@@ -1803,7 +2264,7 @@ function onDiscardDiff() {
 }
 .agent-sub-toggle:hover {
   color: var(--text-secondary);
-  background: var(--panel-bg);
+  background: var(--surface-soft);
 }
 /* 字段小提示：悬浮弹出解释气泡 */
 .field-tip {
@@ -1854,11 +2315,18 @@ function onDiscardDiff() {
   visibility: visible;
   transform: translate(-50%, 0);
 }
+/* 展开详情：节点头下沿、分区之间、卡片下边框统一 8px ——
+   第一块（如「思考过程」）上方 8px、下方到分隔线也是 8px，上下才对称 */
 .agent-body {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-top: 2px;
+  gap: 8px;
+  padding: 8px 11px;
+}
+/* 紧跟诊断结论 / 诊断占位条时，上方留白已由它们的下边距提供，不再叠加 */
+.diag-entry + .agent-body,
+.diag-pending + .agent-body {
+  padding-top: 0;
 }
 /* 折叠内容出现时轻轻下落，减少"凭空冒出来"的生硬感 */
 .agent-think,
@@ -1883,7 +2351,7 @@ function onDiscardDiff() {
   padding: 7px 9px;
   border: 1px solid var(--border);
   border-radius: 7px;
-  background: var(--panel-bg);
+  background: var(--surface-soft);
 }
 .ref-note-head {
   display: flex;
@@ -1947,7 +2415,7 @@ function onDiscardDiff() {
   overflow: auto;
   border: 1px solid var(--border);
   border-radius: 6px;
-  background: var(--panel-bg);
+  background: var(--surface-soft);
   color: var(--text-secondary);
   font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
   font-size: 11px;
@@ -2062,7 +2530,7 @@ function onDiscardDiff() {
   padding: 10px 12px;
   border: 1px solid var(--primary-soft);
   border-radius: var(--radius-md);
-  background: linear-gradient(180deg, var(--primary-faint), var(--panel-bg));
+  background: var(--primary-faint);
   color: inherit;
   font: inherit;
   text-align: left;
@@ -2107,6 +2575,7 @@ function onDiscardDiff() {
 .diag-entry-action {
   display: inline-flex;
   align-items: center;
+  gap: 3px;
   margin-left: auto;
   font-size: 11.5px;
   font-weight: 600;
@@ -2158,25 +2627,32 @@ function onDiscardDiff() {
   flex-wrap: wrap;
   margin-left: auto;
 }
+/* 状态计数：只用一个 5px 色点 + 中性的数字文字，不做彩色底块 */
 .diag-chip {
-  padding: 1px 7px;
-  border-radius: 999px;
-  background: var(--surface-sunken);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   color: var(--text-tertiary);
   font-size: 10.5px;
   font-weight: 500;
   white-space: nowrap;
 }
+.diag-chip::before {
+  content: '';
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.9;
+}
 .diag-chip.change {
-  background: var(--warning-soft);
   color: var(--warning);
 }
 .diag-chip.done {
-  background: var(--success-soft);
   color: var(--success);
 }
 .diag-chip.failed {
-  background: var(--danger-soft);
   color: var(--danger);
 }
 /* 诊断结论弹窗：大尺寸、列表内部滚动，每个条目独立小卡 */
@@ -2191,13 +2667,178 @@ function onDiscardDiff() {
   font-weight: 700;
   color: var(--text);
 }
+/* 标题旁的「状态说明」入口：圆形幽灵按钮，悬停才染主题色 */
+.diag-help-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition:
+    background 0.14s var(--ease),
+    color 0.14s var(--ease);
+}
+.diag-help-btn:hover {
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+/* 状态说明：两段标准，标签配色和卡片里的状态徽标完全一致 */
+.diag-help {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 2px 2px 0;
+}
+.diag-help-section {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.diag-help-section + .diag-help-section {
+  padding-top: 13px;
+  border-top: 1px solid var(--border);
+}
+.diag-help-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.diag-help-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+}
+.diag-help-sub {
+  font-size: 10.5px;
+  color: var(--text-tertiary);
+}
+.diag-help-row {
+  display: grid;
+  grid-template-columns: 60px 1fr auto;
+  align-items: start;
+  gap: 8px;
+}
+/* 右列一句话回答「这条是否必须改」 */
+.diag-help-flag {
+  font-size: 10.5px;
+  line-height: 18px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+.diag-help-flag.must {
+  color: var(--danger);
+  font-weight: 600;
+}
+/* 状态说明里的标签：与卡片上的状态值同一套「色点 + 小字」，方便直接对上 */
+.diag-help-tag {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 18px;
+  color: var(--text-tertiary);
+  font-size: 10.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.diag-help-tag::before {
+  content: '';
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.diag-help-tag.d-must {
+  color: var(--danger);
+}
+.diag-help-tag.d-suggest {
+  color: var(--warning);
+}
+.diag-help-tag.d-keep {
+  color: var(--success);
+}
+.diag-help-tag.d-insufficient {
+  color: var(--text-tertiary);
+}
+.diag-help-tag.st-change {
+  color: var(--warning);
+}
+.diag-help-tag.st-done {
+  color: var(--success);
+}
+.diag-help-tag.st-failed {
+  color: var(--danger);
+}
+.diag-help-desc {
+  font-size: 11.5px;
+  line-height: 18px;
+  color: var(--text-secondary);
+}
 .diag-modal-list {
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: 14px;
   max-height: 68vh;
   overflow-y: auto;
   padding-right: 4px;
+}
+/* 树状分组：章节是一级节点，章内诊断项是叶子 */
+.diag-group {
+  display: flex;
+  flex-direction: column;
+}
+.diag-group-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 2px 2px 7px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  cursor: pointer;
+  border-radius: 6px;
+  user-select: none;
+  transition: color 0.16s var(--ease);
+}
+.diag-group-head:hover {
+  color: var(--primary-hover);
+}
+/* 折叠箭头：chevron-down，展开向下、折叠旋转 90° 指向右 */
+.diag-group-caret {
+  flex: none;
+  color: var(--text-tertiary);
+  transition: transform 0.16s var(--ease);
+}
+.diag-group-head.collapsed .diag-group-caret {
+  transform: rotate(-90deg);
+}
+.diag-group-title {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.diag-group-count {
+  flex: none;
+  color: var(--text-tertiary);
+  font-size: 10.5px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+/* 叶子容器：左侧竖线 + 缩进，形成树的分支 */
+.diag-group-items {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-left: 14px;
+  border-left: 2px solid var(--border);
+  margin-left: 5px;
 }
 .diag-modal-footer {
   display: flex;
@@ -2213,11 +2854,15 @@ function onDiscardDiff() {
   position: relative;
   padding: 11px 13px 11px 16px;
   border: 1px solid var(--border);
-  border-radius: 9px;
-  background: var(--surface-soft);
+  border-radius: var(--radius-md);
+  background: var(--panel-bg);
   font-size: 12px;
   line-height: 1.6;
   animation: diag-item-in 0.28s var(--ease) both;
+  transition: border-color 0.16s var(--ease);
+}
+.diag-item:hover {
+  border-color: var(--border-strong);
 }
 /* 列表出现时按顺序轻微错峰，长列表也不会"整块砸下来" */
 .diag-item:nth-child(2) {
@@ -2245,7 +2890,7 @@ function onDiscardDiff() {
   left: 0;
   top: 9px;
   bottom: 9px;
-  width: 3px;
+  width: 2px;
   border-radius: 0 2px 2px 0;
   background: var(--border-strong);
 }
@@ -2266,16 +2911,13 @@ function onDiscardDiff() {
 }
 .diag-index {
   flex: none;
-  min-width: 17px;
-  height: 17px;
-  padding: 0 4px;
-  border-radius: 9px;
-  background: var(--panel-bg);
-  color: var(--text-secondary);
-  font-size: 10px;
-  font-weight: 700;
+  min-width: 15px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 600;
   line-height: 17px;
-  text-align: center;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 .diag-quote {
   color: var(--text);
@@ -2292,29 +2934,126 @@ function onDiscardDiff() {
   font-size: 10px;
   line-height: 17px;
 }
-/* 审查状态徽章：待分析/不更改 灰，待修改 琥珀，已修改 绿，未执行 红 */
-.diag-status {
+/* 章内位置徽章（如「第 2 条」「第 3 个标签」）：落在章节标题下的具体位置 */
+.diag-location {
   flex: none;
-  margin-left: auto;
   padding: 0 6px;
   border-radius: 8px;
-  background: var(--surface-sunken);
-  color: var(--text-tertiary);
+  background: var(--primary-soft);
+  color: var(--primary-hover);
   font-size: 10px;
   line-height: 17px;
   white-space: nowrap;
 }
-.diag-status.change {
-  background: var(--warning-soft);
+/* 右侧区域：跳回对比弹窗的入口靠右对齐 */
+.diag-head-right {
+  flex: none;
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+/* 两个状态：诊断给的「修改建议」+ 优化阶段的「最终执行结果」，分开标注避免混淆 */
+.diag-states {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 16px;
+  margin: 1px 0 6px;
+}
+.diag-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.diag-state-label {
+  color: var(--text-tertiary);
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+/* 「修改建议」「最终执行」的值：5px 色点 + 彩色小字。
+   整页只有靛蓝一处品牌色，语义色只做状态提示、不做底块，避免变成后台看板。 */
+.diag-state-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 17px;
+  white-space: nowrap;
+}
+.diag-state-value::before {
+  content: '';
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+/* 修改建议：必须修改(红) / 建议修改(琥珀) / 可以保留(绿) / 信息不足(灰) */
+.diag-state-value.d-must {
+  color: var(--danger);
+}
+.diag-state-value.d-suggest {
   color: var(--warning);
 }
-.diag-status.done {
-  background: var(--success-soft);
+.diag-state-value.d-keep {
   color: var(--success);
 }
-.diag-status.failed {
-  background: var(--danger-soft);
+.diag-state-value.d-insufficient {
+  color: var(--text-tertiary);
+}
+/* 最终执行：待修改(琥珀) / 已修改(绿) / 未执行(红) / 不更改·待分析(灰) */
+.diag-state-value.st-change {
+  color: var(--warning);
+}
+.diag-state-value.st-done {
+  color: var(--success);
+}
+.diag-state-value.st-failed {
   color: var(--danger);
+}
+/* 跳回对比弹窗的小按钮：只有该诊断对应到一处实际改动时才显示 */
+.diag-jump-diff {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 7px;
+  height: 17px;
+  border: none;
+  border-radius: 8px;
+  background: var(--primary-soft);
+  color: var(--primary-hover);
+  font-size: 10px;
+  line-height: 17px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s var(--ease), color 0.15s var(--ease);
+}
+.diag-jump-diff svg {
+  width: 11px;
+  height: 11px;
+}
+.diag-jump-diff:hover {
+  background: var(--primary);
+  color: #fff;
+}
+/* 从对比弹窗点「查看这条诊断」跳过来时，目标卡片靛蓝描边闪烁几下，便于定位。
+   跳转是定位提示、不是错误，所以用品牌色而不是告警红。 */
+.diag-flash {
+  animation: diag-flash 0.9s var(--ease) 2;
+  border-color: var(--primary) !important;
+}
+@keyframes diag-flash {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(71, 83, 199, 0);
+  }
+  50% {
+    box-shadow: 0 0 0 3px rgba(71, 83, 199, 0.38);
+  }
 }
 /* 正文两列：标签右对齐、值左对齐，所有条目的正文左边缘对齐 */
 .diag-grid {
@@ -2322,7 +3061,7 @@ function onDiscardDiff() {
   grid-template-columns: 42px minmax(0, 1fr);
   gap: 5px 8px;
   padding-top: 6px;
-  border-top: 1px dashed var(--border);
+  border-top: 1px solid var(--border);
 }
 .diag-label {
   color: var(--text-tertiary);
@@ -2342,8 +3081,8 @@ function onDiscardDiff() {
 .question-archive {
   margin-top: 4px;
 }
-/* 反问卡嵌在 agent 卡里时去掉外阴影，避免两层浮层 */
-.agent-card :deep(.ask-card) {
+/* 反问卡嵌在流程节点卡片里时去掉外阴影，避免两层浮层 */
+.flow-card :deep(.ask-card) {
   box-shadow: none;
 }
 /* 回答：Markdown 渲染结果，样式收敛一点更紧凑 */

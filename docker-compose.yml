@@ -1,9 +1,3 @@
-# SmartCV 前后端编排（docker compose up -d）
-#   frontend（nginx:443）→ 浏览器访问 https://localhost:5173，/api 由 nginx 反代到 backend
-#   nginx.conf 和证书已经打进前端镜像；HTTP 80 只保留给容器内健康检查
-#   backend（FastAPI:8600）
-#   searxng（SearXNG:8080）→ 诊断 agent 的 web_search 工具用的自建搜索
-# 镜像为预构建的 v1 版本：本地缺失时 compose 会从阿里云仓库拉取，需先 docker login。
 services:
   backend:
     image: registry.cn-hangzhou.aliyuncs.com/smartcv/smartcv-backend:v1
@@ -11,21 +5,13 @@ services:
       - "8600:8600"
     volumes:
       - /opt/smartcv/stats:/app/data
-      # 优秀示例库：上传的 JSON 需要持久化，重建/升级容器后仍然保留
       - /opt/smartcv/reference-examples:/app/reference-examples
     environment:
-      # 优秀示例存放目录（与上面的挂载点一致）
       SMARTCV_REFERENCE_DIR: /app/reference-examples
-      # 诊断 agent 的 web_search 走自建 SearXNG（容器网络内用服务名）
-      # 本地直接跑后端、只用容器起 searxng 时，默认值 http://127.0.0.1:8080 同样可用
       SEARXNG_URL: http://searxng:8080
-      # 可选：单次返回条数 / 超时秒数（不填用代码里的 5 条、8 秒）
-      # WEB_SEARCH_MAX_RESULTS: "5"
-      # WEB_SEARCH_TIMEOUT: "8"
     depends_on:
       - searxng
     healthcheck:
-      # 纯 TCP 拨号检测：端口能连上即认为就绪（uvicorn 已监听）
       test: ["CMD", "python", "-c", "import socket,sys; s=socket.socket(); s.settimeout(3); s.connect(('127.0.0.1',8600)); s.close()"]
       interval: 10s
       timeout: 3s
@@ -38,36 +24,40 @@ services:
       backend:
         condition: service_healthy
     ports:
-      # 对外只暴露 HTTPS；容器内 80 端口仍用于下面的健康检查
       - "443:443"
     volumes:
       - /opt/smartcv/certs/:/etc/nginx/certs:ro
+      - /opt/smartcv/logs:/var/log/nginx
+    command:
+      - /bin/sh
+      - -c
+      - |
+        ts=$$(date +%Y%m%d-%H%M%S)
+        for f in access error; do
+          if [ -f /var/log/nginx/$$f.log ]; then
+            mv /var/log/nginx/$$f.log /var/log/nginx/$$f.$$ts.log
+          fi
+        done
+        exec nginx -g 'daemon off;'
     healthcheck:
-      # nginx 就绪检测：访问容器内 HTTP 80 首页返回 200
-      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:80/"]
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "--max-time", "3", "http://127.0.0.1:80/"]
       interval: 10s
       timeout: 3s
       retries: 5
       start_period: 10s
 
-  # 自建搜索：只给诊断 agent 的 web_search 用，不需要任何 API Key。
-  # 配置在 ./searxng/settings.yml（必须开启 search.formats 里的 json）。
-  # 镜像来自 Docker Hub，国内拉取慢可换成自己的镜像源或加速地址。
   searxng:
     image: searxng/searxng:v1
     pull_policy: never
     ports:
-      # 只绑本机，方便 curl 调试；后端在容器网络内直接用 http://searxng:8080
-      - "127.0.0.1:8080:8080"
+      - "8080:8080"
     volumes:
       - ./searxng:/etc/searxng
     environment:
       SEARXNG_BASE_URL: http://searxng:8080/
-      # 私有时可以换成自己的随机串；不暴露到公网，够用
       SEARXNG_SECRET: ${SEARXNG_SECRET:-smartcv-searxng-secret}
     restart: unless-stopped
     healthcheck:
-      # SearXNG 自带 /healthz（容器内是 wget/busybox）
       test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/healthz"]
       interval: 30s
       timeout: 5s

@@ -42,13 +42,18 @@ export type DiagnosisStatus = 'pending' | 'change' | 'skip' | 'done' | 'failed'
  * s/r/c/i 是后端定位用的坐标，只在数据里存在，不展示给用户；
  * 前端只渲染 quote / reason / evidence / suggestion 这些文字信息。
  */
+/** 诊断档位：诊断 agent 对「这条结论该怎么处理」的第一层判断 */
+export type DiagnosisDisposition = 'must' | 'suggest' | 'keep' | 'insufficient'
+
 export interface DiagnosisItem {
-  kind: 'text' | 'structure'
+  /** 处理档位：must 必须修改 / suggest 建议修改 / keep 可以保留 / insufficient 信息不足 */
+  disposition?: DiagnosisDisposition
+  /** 定位坐标：只改已有文字，因此每条诊断都必须能落到 [s 章节, r 窗口, c 内容, i 子项] */
   s?: number | null
   r?: number | null
   c?: number | null
   i?: number | null
-  /** 该位置当前正文的开头片段（≤60 字），structure 类为空 */
+  /** 该位置当前正文的开头片段（≤60 字） */
   quote: string
   /** 为什么这个位置的内容需要改动 */
   reason: string
@@ -58,6 +63,12 @@ export interface DiagnosisItem {
   suggestion: string
   /** 若参考了优秀示例：示例序号 + 可迁移的写法特征（只写写法，不含示例事实） */
   reference?: string
+  /** 后端附加：所在章节标题，用于按章节树状分组 */
+  section?: string
+  /** 后端附加：章节序号（0 起），用于按简历章节顺序排序 */
+  sectionIndex?: number
+  /** 后端附加：章内位置（如「第 2 条」「第 3 个标签」） */
+  location?: string
   /** 前端状态：默认待分析；优化 agent 审查/执行后更新 */
   status?: DiagnosisStatus
   /** 判定理由（change/skip）或失败原因（failed） */

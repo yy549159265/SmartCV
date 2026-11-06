@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from agents.md2json.schemas.resume import Section
 from agents.resume.grammar.agent import run_grammar_agent
 from agents.resume.optimize.graph import run_chat_stream
-from agents.resume.optimize.schemas.task import create_chat_task, get_chat_task
+from agents.resume.optimize.utils.task import create_chat_task, get_chat_task
 from agents.single.agent import run_analyze_agent, run_polish_agent
 from routers.deps import get_agent_session
 from schemas.provider import ProviderConfig

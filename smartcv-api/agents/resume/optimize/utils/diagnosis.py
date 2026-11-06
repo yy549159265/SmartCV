@@ -6,6 +6,18 @@
 
 from typing import Any
 
+# 档位中文标签：诊断文本里给优化/总结 agent 看，不直接面向用户。
+_DISPOSITION_LABEL = {
+    "must": "必须修改",
+    "suggest": "建议修改",
+    "keep": "可以保留",
+    "insufficient": "信息不足",
+}
+
+
+def _disposition_label(value: Any) -> str:
+    return _DISPOSITION_LABEL.get(value, "建议修改")
+
 
 def _result_line(review: dict[str, Any]) -> str:
     """把一条审查状态转成给总结 agent 看的「处理结果」行。"""
@@ -54,9 +66,9 @@ def format_diagnosis(
         number = index if zero_based else index + 1
         prefix = f"诊断 {number}" if zero_based else f"{number}."
 
-        # structure 类没有坐标；s 为 None 也按结构问题处理，避免拼出 [s:None ...]
-        if item.get("kind") == "structure" or item.get("s") is None:
-            head = f"{prefix} [结构调整]"
+        # 坐标不全（正常不会出现）时标注不可定位，避免拼出 [s:None ...]
+        if item.get("s") is None:
+            head = f"{prefix} [无坐标，不可修改]"
         else:
             head = prefix
             if include_coords:
@@ -75,6 +87,7 @@ def format_diagnosis(
         if locations is not None and index < len(locations) and locations[index]:
             lines.append(f"   位置：{locations[index]}")
         lines += [
+            f"   档位：{_disposition_label(item.get('disposition'))}",
             f"   问题：{item.get('reason') or ''}",
             f"   依据：{item.get('evidence') or ''}",
             f"   方向：{item.get('suggestion') or ''}",

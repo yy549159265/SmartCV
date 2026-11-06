@@ -17,11 +17,13 @@
 import logging
 import os
 import re
+from typing import Annotated
 
 import httpx
 from cachetools import TTLCache
 from langchain_core.tools import tool
 from langgraph.config import get_stream_writer
+from pydantic import Field
 
 logger = logging.getLogger("smartcv")
 
@@ -120,7 +122,9 @@ def make_web_search_tool():
     calls = 0
 
     @tool
-    def web_search(query: str) -> str:
+    def web_search(
+        query: Annotated[str, Field(description="搜索关键词：具体、简短，一次只查一个事实")],
+    ) -> str:
         """联网搜索外部信息。
 
         只在诊断确实需要简历/JD 之外的公开信息时使用，例如：
@@ -130,9 +134,6 @@ def make_web_search_tool():
 
         不要用它查找简历改写模板，也不要用搜索结果替换简历事实。
         一次诊断最多调用 3 次；查询词要具体，避免宽泛搜索。
-
-        Args:
-            query: 搜索关键词（具体、简短）
         """
         nonlocal calls
         writer = get_stream_writer()

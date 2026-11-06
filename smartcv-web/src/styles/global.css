@@ -277,6 +277,31 @@ button {
 }
 
 /* ============================================================
+ * 对比弹窗：内联词级 diff（只出现在「修改后」一栏）
+ *
+ * <del>/<ins> 只由 resumeDiff.inlineDiffHtml 生成（原文改动用删除线标红、
+ * 新增用高亮标绿），不经过 Markdown —— Markdown 的删除线是 <s>，所以
+ * 这两个标签可以直接全局命中、不影响普通预览。这里用的都是不影响盒子尺寸
+ * 的绘制属性（background / text-decoration / box-shadow），进 PDF 导出时
+ * 也不会有 <del>/<ins>（导出不传 unitDiffs），因此不影响分页与排版。
+ * ============================================================ */
+.md-body del,
+.md-body ins {
+  text-decoration: none;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+.md-body del {
+  background: rgba(169, 79, 74, 0.14);
+  text-decoration: line-through;
+  text-decoration-color: var(--danger, #a94f4a);
+}
+.md-body ins {
+  background: rgba(63, 143, 90, 0.22);
+  box-shadow: 0 0 0 1px rgba(63, 143, 90, 0.26);
+}
+
+/* ============================================================
  * 预览选中高亮：画布点了章节/内容后，预览里对应渲染块持续闪烁
  * （类名是动态加在预览组件元素上的，必须全局生效，不能写在 scoped 里）
  * ============================================================ */
@@ -293,6 +318,25 @@ button {
   }
   50% {
     outline-color: rgba(71, 83, 199, 0.9);
+  }
+}
+
+/* 对比弹窗从诊断页跳回来时，目标改动红框闪烁几下（类名由 ResumeDiffDialog
+ * 动态加在带 data-diff-key 的元素上，必须全局生效，不能写在 scoped 里）。
+ * 只用 outline（绘制属性，不改盒子尺寸），不影响两栏排版与滚动高度。 */
+.diff-flash {
+  outline: 3px solid var(--danger);
+  outline-offset: 2px;
+  border-radius: 4px;
+  animation: diff-flash 0.8s ease-in-out 3;
+}
+@keyframes diff-flash {
+  0%,
+  100% {
+    outline-color: rgba(169, 79, 74, 0.15);
+  }
+  50% {
+    outline-color: rgba(169, 79, 74, 0.95);
   }
 }
 

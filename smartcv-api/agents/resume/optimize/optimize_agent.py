@@ -14,7 +14,7 @@ from langchain.agents import create_agent
 from langgraph.config import get_stream_writer
 
 from agents.resume.optimize.utils.diagnosis import format_diagnosis
-from agents.resume.optimize.utils.tools import OptimizeStore, make_patch_tools
+from agents.resume.optimize.tools.optimize_resume import OptimizeStore, make_patch_tools
 from agents.utils.resume import locate_unit
 from agents.utils.skillmiddleware import SkillMiddleware
 
@@ -23,14 +23,13 @@ logger = logging.getLogger("smartcv")
 _SYSTEM_PROMPT = (Path(__file__).resolve().parent / "system_prompt_optimize.md").read_text(encoding="utf-8")
 
 # 改写强度只改变「表达可以改多深」，事实 / 结构 / 坐标边界不变。
+# 值会被替换进 system_prompt_optimize.md 的 {rewrite_rules} 占位符。
 _REWRITE_MODE_RULES = {
     "standard": (
-        "\n\n# 本次改写强度：标准\n"
-        "对判为 change 的诊断，尽量保留原句式和用词，只做必要改写；"
-        "原文已经通顺时只换几个词不算修改。"
+        "对判为 change 的诊断，保留作者原有的语气、信息量和事实边界，"
+        "但句子要重新组织：收紧松散表达、合并重复、调整语序，不要原句照搬。"
     ),
     "bold": (
-        "\n\n# 本次改写强度：大胆\n"
         "对判为 change 的诊断，可以在该文字单元的完整范围内大幅重写句式、句序和表达，"
         "不必保留原句。但必须遵守：\n"
         "1. 事实只来自简历、JD 和用户回答，数字、日期、公司、学校、项目、技术栈、链接、邮箱、"
@@ -42,10 +41,11 @@ _REWRITE_MODE_RULES = {
 
 
 def _system_prompt(rewrite_mode: str) -> str:
-    """把本次改写强度追加到系统提示词末尾。"""
-    return _SYSTEM_PROMPT + _REWRITE_MODE_RULES.get(
+    """把本次改写强度替换进系统提示词中间的 {rewrite_rules} 占位符。"""
+    rewrite_rules = _REWRITE_MODE_RULES.get(
         rewrite_mode, _REWRITE_MODE_RULES["standard"]
     )
+    return _SYSTEM_PROMPT.replace("{rewrite_rules}", rewrite_rules)
 
 
 def _target_texts(store: OptimizeStore, diagnosis: list[dict]) -> list[str]:
@@ -57,12 +57,21 @@ def _target_texts(store: OptimizeStore, diagnosis: list[dict]) -> list[str]:
     texts: list[str] = []
     for item in diagnosis:
         coords = [item.get(key) for key in ("s", "r", "c", "i")]
-        if item.get("kind") == "structure" or not all(isinstance(v, int) for v in coords):
+        if not all(isinstance(v, int) for v in coords):
             texts.append("")
             continue
         located = locate_unit(store.resume, *coords)
         texts.append(located[3] if located else "")
     return texts
+
+
+def build_agent(llm, store: OptimizeStore):
+    """创建优化 agent：工具闭包绑定本次的 store，改动直接落在 store.resume 上。"""
+    return create_agent(
+        model=llm,
+        middleware=[SkillMiddleware(["coordinate", "optimize"])],
+        tools=make_patch_tools(store),
+    )
 
 
 async def run(
@@ -89,11 +98,7 @@ async def run(
     # 诊断项登记到 store：审查状态、坐标、原文核对都以这份只读副本为准
     store.set_diagnoses(diagnosis)
 
-    agent = create_agent(
-        model=llm,
-        middleware=[SkillMiddleware(["coordinate", "optimize-review"])],
-        tools=make_patch_tools(store),
-    )
+    agent = build_agent(llm, store)
     jd_block = f"<JD>\n{jd}\n</JD>\n\n" if (jd or "").strip() else ""
     # 优化 agent 用 0 起的「诊断 N」编号，和 review_diagnosis / patch_content 的 index 对齐
     diagnosis_text = format_diagnosis(
@@ -119,7 +124,7 @@ async def run(
     async for item in agent.astream(
         {"messages": [{"type": "system", "content": _system_prompt(rewrite_mode)}, {"type": "human", "content": message}]},
         stream_mode=["messages", "custom"],
-        config={"recursion_limit": 20, "configurable": {"session_id": session_id}},
+        config={"configurable": {"session_id": session_id}},
     ):
         if not isinstance(item, tuple):
             continue

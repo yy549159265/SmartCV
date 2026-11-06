@@ -44,3 +44,6 @@ docling-models
 /smartcv-api/data/stats.json
 # 优秀示例库（用户上传，全局共享，运行期数据）
 /smartcv-api/data/reference-examples/
+
+# ============ 本地部署脚本（含服务器 / 仓库密码，勿入库） ============
+/deploy.ps1

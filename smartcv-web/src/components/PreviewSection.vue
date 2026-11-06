@@ -40,6 +40,8 @@ const props = withDefaults(
     marks?: DiffMarks
     /** 逐处切换的操作表（对比弹窗用）；不传 = 只显示高亮、不能切换 */
     controls?: DiffControls
+    /** 内容 id → 单元序号 → 内联 diff HTML（只在「修改后」一栏出现） */
+    unitDiffs?: Record<string, Record<number, string>>
   }>(),
   {
     showTitle: true,
@@ -96,6 +98,7 @@ const sectionAttr = computed(() =>
       class="preview-section-title"
       :class="{ 'has-underline': eff.titleUnderline }"
       :data-diff="sectionAttr"
+      :data-diff-key="sectionView ? `section:${section.id}` : undefined"
       :style="titleStyle"
     >
       <span class="preview-title-row">
@@ -115,6 +118,7 @@ const sectionAttr = computed(() =>
         :table-cols="tableCols"
         :marks="marks"
         :controls="controls"
+        :unit-diffs="unitDiffs"
       />
     </div>
   </section>

@@ -24,6 +24,8 @@ const props = defineProps<{
   marks?: DiffMarks
   /** 逐处切换的操作表（对比弹窗用）；不传 = 只显示高亮、不能切换 */
   controls?: DiffControls
+  /** 内容 id → 单元序号 → 内联 diff HTML（只在「修改后」一栏出现） */
+  unitDiffs?: Record<string, Record<number, string>>
 }>()
 
 /** 是否为容器窗口（有 rows 字段就算，即使还是空的） */
@@ -56,6 +58,9 @@ const contentView = (id: string) => props.controls?.contents[id]
 /** 取某个内容内部的单元标记 / 单元操作（一次 patch 只改其中一行文字时用） */
 const unitMarks = (id: string) => props.marks?.units[id]
 const unitViews = (id: string) => props.controls?.units[id]
+
+/** 取某个内容内部的单元内联 diff HTML（只在「修改后」一栏出现） */
+const unitDiffsOf = (id: string) => props.unitDiffs?.[id]
 </script>
 
 <template>
@@ -64,6 +69,7 @@ const unitViews = (id: string) => props.controls?.units[id]
     :class="{ 'diff-action-host': !!rowView }"
     :data-row-id="row.id"
     :data-diff="rowAttr"
+    :data-diff-key="rowView ? `row:${row.id}` : undefined"
   >
     <DiffActionButton v-if="rowView" class="diff-action-float" :view="rowView" />
 
@@ -82,6 +88,7 @@ const unitViews = (id: string) => props.controls?.units[id]
         :table-cols="cols"
         :marks="marks"
         :controls="controls"
+        :unit-diffs="unitDiffs"
         :style="childGridStyle(i)"
       />
     </div>
@@ -102,6 +109,7 @@ const unitViews = (id: string) => props.controls?.units[id]
         :diff-view="contentView(b.id)"
         :diff-units="unitMarks(b.id)"
         :diff-unit-views="unitViews(b.id)"
+        :unit-diffs="unitDiffsOf(b.id)"
         :data-content-id="b.id"
       />
     </div>

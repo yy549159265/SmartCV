@@ -89,6 +89,8 @@ export type ChatItem =
       styleNotes: string[]
       /** 「优秀示例」是否展开 */
       examplesOpen: boolean
+      /** 节点详情是否展开：展开 = 工作详情，折叠 = 一行缩略内容 */
+      nodeOpen: boolean
       status: 'running' | 'done'
     }
 
@@ -243,7 +245,7 @@ export const useOptimizeStore = defineStore('optimize', {
               lead = prev.text
               this.messages.pop()
             }
-            this.messages.push({ kind: 'agent', agent, label, text: '', thinking: '', steps: [], thinkingOpen: false, toolsOpen: false, answerOpen: true, diagnosis: [], lead, markdown: '', markdownOpen: false, questions: [], questionsOpen: false, searches: [], searchesOpen: false, references: [], styleNotes: [], examplesOpen: false, status: 'running' })
+            this.messages.push({ kind: 'agent', agent, label, text: '', thinking: '', steps: [], thinkingOpen: false, toolsOpen: false, answerOpen: true, diagnosis: [], lead, markdown: '', markdownOpen: false, questions: [], questionsOpen: false, searches: [], searchesOpen: false, references: [], styleNotes: [], examplesOpen: false, nodeOpen: agent === 'summarize', status: 'running' })
           },
           // 诊断 agent 的输入简历（带位置编号），挂在诊断块上供「位置诊断」展开查看
           onResumeMarkdown: (text) => {

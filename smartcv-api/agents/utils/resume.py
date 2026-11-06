@@ -117,8 +117,8 @@ def describe_location(resume: list[dict], item: dict) -> str:
     总结 agent 按这个位置写清单，下一轮诊断靠它知道「上一轮改了哪里」，
     所以要用标题而不是纯编号。
     """
-    if item.get("kind") == "structure" or not isinstance(item.get("s"), int):
-        return "整体结构"
+    if not isinstance(item.get("s"), int):
+        return "简历"
     s = item["s"]
     if not 0 <= s < len(resume):
         return "简历"
@@ -133,6 +133,38 @@ def describe_location(resume: list[dict], item: dict) -> str:
     if unit_type == "tag":
         return f"{title}·第 {i + 1} 个标签"
     return title
+
+
+def describe_location_detail(resume: list[dict], item: dict) -> dict:
+    """把诊断坐标拆成结构化位置：章节标题 / 章节序号 / 章内位置 / 完整路径。
+
+    前端「诊断结论」按章节树状展示用：前端拿到 section + sectionIndex 分组排序，
+    再用 within 标注「第几条」，不用再解析一段拼接字符串。
+    path 是 describe_location 的语义等价物，留给需要单行展示的场景。
+    """
+    if not isinstance(item.get("s"), int):
+        return {"section": "简历", "sectionIndex": -1, "within": "", "path": "简历"}
+    s = item["s"]
+    if not 0 <= s < len(resume):
+        return {"section": "简历", "sectionIndex": s, "within": "", "path": "简历"}
+    title = (resume[s].get("title") or "").strip() or f"第 {s + 1} 章"
+    coords = [item.get(key) for key in ("r", "c", "i")]
+    located = locate_unit(resume, s, *coords) if all(isinstance(v, int) for v in coords) else None
+    if located is None:
+        return {"section": title, "sectionIndex": s, "within": "", "path": title}
+    unit_type = located[1]
+    i = item["i"]
+    if unit_type == "item":
+        within = f"第 {i + 1} 条"
+    elif unit_type == "tag":
+        within = f"第 {i + 1} 个标签"
+    elif unit_type == "col":
+        within = f"第 {i + 1} 栏"
+    elif unit_type == "range":
+        within = "时间"
+    else:
+        within = "正文"
+    return {"section": title, "sectionIndex": s, "within": within, "path": f"{title}·{within}"}
 
 
 def norm_text(text: str) -> str:

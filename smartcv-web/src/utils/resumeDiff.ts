@@ -23,7 +23,7 @@
  *
  * 两份数据都当作只读：mergeResume 只生成新对象，不会改动入参。
  */
-import type { Content, ContentData, LayoutWindow, ListItem, Section } from '@/types'
+import type { Content, ContentData, ContentType, LayoutWindow, ListItem, Section } from '@/types'
 
 /** 一处标记的类型；查不到标记 = 该节点未改动 */
 export type DiffMark = 'added' | 'removed' | 'changed'
@@ -93,6 +93,10 @@ export interface ChangeView {
   reverted: boolean
   /** 点击切换：接受 ↔ 还原 */
   toggle: () => void
+  /** 关联的诊断序号（0 起）；有值则显示「查看诊断」入口 */
+  diagIndex?: number
+  /** 跳到这条诊断（打开诊断结论弹窗并定位） */
+  jumpToDiagnosis?: () => void
 }
 
 /** 四层各自的改动操作表 */
@@ -209,7 +213,7 @@ function sameContent(a: Content, b: Content): boolean {
  *   iconText → [text]；twoColumn → 每列；timeRange → [起 - 止]；
  *   listText → 每个列表项；tag → 每个标签；image / spacer → 没有文字单元。
  */
-function unitTexts(content: Content): string[] {
+export function unitTexts(content: Content): string[] {
   const d = content.content ?? {}
   switch (content.type) {
     case 'iconText':
@@ -816,6 +820,8 @@ export function buildControls(
   side: 'before' | 'after',
   reverted: RevertedSet,
   toggle: (key: string) => void,
+  diagIndexByKey?: ReadonlyMap<string, number>,
+  jumpToDiagnosis?: (index: number) => void,
 ): DiffControls {
   const controls = emptyControls()
   for (const change of diff.changes) {
@@ -829,6 +835,11 @@ export function buildControls(
       reverted: reverted.has(change.key),
       toggle: () => toggle(change.key),
     }
+    const diagIndex = diagIndexByKey?.get(change.key)
+    if (diagIndex !== undefined) {
+      view.diagIndex = diagIndex
+      view.jumpToDiagnosis = () => jumpToDiagnosis?.(diagIndex)
+    }
     if (change.level === 'unit') {
       // 单元级：按钮挂在内容里的第 i 行/栏上
       const index = change.unitIndex ?? 0
@@ -840,4 +851,150 @@ export function buildControls(
     controls[BUCKET[change.level]][change.nodeId] = view
   }
   return controls
+}
+
+/* ============================================================
+ * 四、坐标 ↔ 节点 id 映射 + 内联 diff（对比弹窗附加能力）
+ * ============================================================ */
+
+/** 后端坐标里可 patch 的内容类型（与 agents/utils/resume.py 的 _PATCHABLE_TYPES 一致） */
+const PATCHABLE_TYPES = new Set<ContentType>(['iconText', 'twoColumn', 'timeRange', 'listText', 'tag'])
+
+/** 一条诊断的坐标映射到简历里的章节 id + 内容 id + 单元序号 */
+export interface CoordTarget {
+  sectionId: string
+  contentId: string
+  unitIndex: number
+}
+
+/**
+ * 把诊断的 [s r c i] 坐标映射成简历节点的 id。
+ * 与后端 locate_unit 走同一套遍历：叶子窗口按 DFS 编号（rows 非空才算容器）、
+ * 内容只统计可 patch 类型（image/spacer 跳过）、单元序号即 i。
+ */
+export function coordToTarget(
+  resume: Section[],
+  s: number,
+  r: number,
+  c: number,
+  i: number,
+): CoordTarget | null {
+  if (!(0 <= s && s < resume.length)) return null
+  const section = resume[s]
+  const leaves: LayoutWindow[] = []
+  const walk = (rows: LayoutWindow[]) => {
+    for (const row of rows) {
+      if (row.rows && row.rows.length) walk(row.rows)
+      else leaves.push(row)
+    }
+  }
+  walk(section.rows ?? [])
+  if (!(0 <= r && r < leaves.length)) return null
+  const patchable = (leaves[r].contents ?? []).filter((c) => PATCHABLE_TYPES.has(c.type))
+  if (!(0 <= c && c < patchable.length)) return null
+  return { sectionId: section.id, contentId: patchable[c].id, unitIndex: i }
+}
+
+/** 收集简历里所有内容节点的文字单元（内容 id → 单元文本列表），与 unitTexts 对齐 */
+export function collectContentUnits(resume: Section[]): Map<string, string[]> {
+  const map = new Map<string, string[]>()
+  const walkRows = (rows: LayoutWindow[]) => {
+    for (const row of rows) {
+      if (row.rows && row.rows.length) walkRows(row.rows)
+      for (const content of row.contents ?? []) {
+        map.set(content.id, unitTexts(content))
+      }
+    }
+  }
+  for (const section of resume) walkRows(section.rows ?? [])
+  return map
+}
+
+/** 内联 diff 的一段：相同 / 删除 / 新增 */
+export interface InlineDiffSeg {
+  kind: 'eq' | 'del' | 'ins'
+  text: string
+}
+
+const CJK_CHAR = /[一-鿿]/
+
+/**
+ * 把文本切成 diff 用的小单元：每个汉字单独一个，连续的非汉字（英文/数字/标点/空格）
+ * 合并成一个 —— 这样中文能逐字对齐，英文单词又不会被拆散。
+ */
+function tokenize(s: string): string[] {
+  const tokens: string[] = []
+  let i = 0
+  while (i < s.length) {
+    if (CJK_CHAR.test(s[i])) {
+      tokens.push(s[i])
+      i++
+    } else {
+      let j = i
+      while (j < s.length && !CJK_CHAR.test(s[j])) j++
+      tokens.push(s.slice(i, j))
+      i = j
+    }
+  }
+  return tokens
+}
+
+/** 两段文字的最小内联 diff（LCS 回溯 + 相邻同类型合并） */
+export function diffInlineText(a: string, b: string): InlineDiffSeg[] {
+  const at = tokenize(a)
+  const bt = tokenize(b)
+  const m = at.length
+  const n = bt.length
+  const lcs: number[][] = Array.from({ length: m + 1 }, () => new Array<number>(n + 1).fill(0))
+  for (let i = m - 1; i >= 0; i--) {
+    for (let j = n - 1; j >= 0; j--) {
+      lcs[i][j] = at[i] === bt[j] ? lcs[i + 1][j + 1] + 1 : Math.max(lcs[i + 1][j], lcs[i][j + 1])
+    }
+  }
+  const ops: InlineDiffSeg[] = []
+  let i = 0
+  let j = 0
+  while (i < m && j < n) {
+    if (at[i] === bt[j]) {
+      ops.push({ kind: 'eq', text: at[i] })
+      i++
+      j++
+    } else if (lcs[i + 1][j] >= lcs[i][j + 1]) {
+      ops.push({ kind: 'del', text: at[i] })
+      i++
+    } else {
+      ops.push({ kind: 'ins', text: bt[j] })
+      j++
+    }
+  }
+  while (i < m) {
+    ops.push({ kind: 'del', text: at[i] })
+    i++
+  }
+  while (j < n) {
+    ops.push({ kind: 'ins', text: bt[j] })
+    j++
+  }
+  const segs: InlineDiffSeg[] = []
+  for (const op of ops) {
+    const last = segs[segs.length - 1]
+    if (last && last.kind === op.kind) last.text += op.text
+    else segs.push({ kind: op.kind, text: op.text })
+  }
+  return segs
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+/** 生成可直接 v-html 的内联 diff HTML：删除线 <del> + 高亮 <ins>，文本已转义 */
+export function inlineDiffHtml(a: string, b: string): string {
+  return diffInlineText(a, b)
+    .map((seg) => {
+      if (seg.kind === 'eq') return escapeHtml(seg.text)
+      if (seg.kind === 'del') return `<del>${escapeHtml(seg.text)}</del>`
+      return `<ins>${escapeHtml(seg.text)}</ins>`
+    })
+    .join('')
 }

@@ -42,7 +42,6 @@ _SYSTEM_PROMPT = (Path(__file__).resolve().parent / "system_prompt_md2json.md").
 )
 
 _FENCE = re.compile(r"```(?:json)?\s*(.*?)```", re.S)
-# 结构化输出比较重，给足时间；但也不能让一次解析无限挂着
 _TIMEOUT_S = 120
 
 
@@ -68,7 +67,6 @@ def blocks_to_markdown(blocks: list[Block]) -> str:
                 if item:
                     lines.append(f"- {item}")
         else:
-            # table 的文本已经是 “A | B | C” 形式，按原样保留
             lines.extend(line for line in text.splitlines() if line.strip())
 
         lines.append("")
@@ -119,7 +117,6 @@ def structure_resume(
         )
         content = response.content
         if isinstance(content, list):
-            # 少数 OpenAI 兼容网关会返回 content blocks
             content = "".join(
                 str(part.get("text", "")) if isinstance(part, dict) else str(part)
                 for part in content
@@ -131,7 +128,7 @@ def structure_resume(
             logger.warning("简历规范化：模型未返回合法 JSON session=%s", session_id)
             return None
         canonical = CanonicalResume.model_validate(normalize_payload(payload))
-    except Exception as exc:  # 网络/鉴权/超时/校验失败都走确定性兜底
+    except Exception as exc:
         logger.warning(
             "简历规范化失败（%s），回退确定性流水线 session=%s",
             exc.__class__.__name__,
@@ -164,7 +161,6 @@ def run_parse_pipeline(
     session_id: str | None = None,
 ) -> list[Section]:
     """MinerU 产物 → 简历 Section[]。异常会把对应步骤标 failed。"""
-    # 1) 清洗：去页眉页脚/页码/乱码/重复段落
     store.start_step(Step.CLEAN)
     try:
         clean = normalize_document(result)
@@ -175,7 +171,6 @@ def run_parse_pipeline(
     store.finish_step(Step.CLEAN)
     logger.info("简历清洗：保留 %d 块，丢弃 %d 块", len(clean.blocks), len(clean.dropped))
 
-    # 2) 章节识别：优先让模型做语义规范化；失败再走确定性分章
     store.start_step(Step.SEGMENT)
     canonical: CanonicalResume | None = None
     plans = None
@@ -184,8 +179,6 @@ def run_parse_pipeline(
             canonical = structure_resume(provider, clean.blocks, session_id=session_id)
 
         if canonical is None:
-            # 模型不可用时不再额外调一次 LLM 分类标题：
-            # 精确别名匹配不上的章节保留为 other，原文和原标题都不会丢。
             plans = merge_sections(split_sections(clean.blocks))
     except Exception as exc:
         logger.exception("简历章节识别失败 session=%s", session_id)
@@ -197,7 +190,6 @@ def run_parse_pipeline(
     else:
         logger.info("简历章节：确定性识别 %d 个", len(plans or []))
 
-    # 3) 转 JSON：纯代码排版；模型只提供语义字段
     store.start_step(Step.CONVERT)
     try:
         template = load_template()
@@ -206,11 +198,9 @@ def run_parse_pipeline(
             try:
                 sections = build_canonical_sections(canonical, template)
             except Exception:
-                # 排版代码有问题也不应该让整次上传失败
                 logger.exception("简历 JSON：规范化排版失败 session=%s", session_id)
                 sections = []
         if not sections:
-            # 模型返回了内容但排不出章节 / 没有模型：退回确定性路径，保证有结果
             if canonical is not None:
                 logger.warning("简历 JSON：规范化结果为空，回退确定性流水线 session=%s", session_id)
             plans = plans or merge_sections(split_sections(clean.blocks))
@@ -221,13 +211,10 @@ def run_parse_pipeline(
         raise RuntimeError("简历 JSON 构建失败") from exc
     store.finish_step(Step.CONVERT)
 
-    # 4) 校验：覆盖率与关键信息是否丢失（只记计数/ID，不记正文）
     store.start_step(Step.VALIDATE)
     try:
-        # canonical 路径没有规则切分出的 plans，传 None 只校验正文块
         report = validate_sections(clean.blocks, plans, sections)
     except Exception as exc:
-        # 校验只是兜底，失败不应该让已经生成的结果作废
         logger.warning("简历校验异常（%s），跳过校验", exc.__class__.__name__)
         report = None
     if report is not None:

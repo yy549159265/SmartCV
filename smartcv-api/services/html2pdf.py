@@ -26,11 +26,6 @@ _playwright = None
 _browser = None
 _init_lock = asyncio.Lock()
 
-# Playwright 的 Node driver 用系统 TEMP 建 artifacts 目录。Windows 上 %TEMP%
-# 是 Medium 完整性，而 PyCharm AI Debugger 之类的沙箱会用 Low 完整性令牌启动
-# 服务，Low 进程无法在 Medium 目录下 mkdir，Chromium 启动就会报
-# "EPERM: operation not permitted, mkdtemp ...playwright-artifacts-XXXXXX"。
-# 项目目录可写，把 driver 的 TEMP 指到这里，既绕开完整性限制，也不污染系统临时目录。
 _TMP_ROOT = Path(__file__).resolve().parent.parent / ".runtime" / "playwright"
 
 
@@ -47,7 +42,6 @@ def _driver_tmp_dir() -> Path | None:
         return None
 
 
-# 防呆：别让超大 HTML 打爆后端内存
 _MAX_HTML_SIZE = 2 * 1024 * 1024
 
 
@@ -60,8 +54,6 @@ async def _get_browser():
                 from playwright.async_api import async_playwright
 
                 tmp_dir = _driver_tmp_dir()
-                # Node driver 在 start() 时复制当前进程环境，之后一直用自己的 TEMP，
-                # 所以只需在 start() 前后临时改环境变量，避免影响其它组件。
                 old_env = {key: os.environ.get(key) for key in ("TEMP", "TMP")}
                 if tmp_dir is not None:
                     os.environ["TEMP"] = str(tmp_dir)
@@ -78,7 +70,6 @@ async def _get_browser():
                 try:
                     _browser = await _playwright.chromium.launch()
                 except Exception:
-                    # 启动失败时把 driver 收掉，避免下次重试又漏一个 node 进程
                     await close_browser()
                     raise
     return _browser
@@ -99,7 +90,6 @@ async def close_browser():
         except Exception:
             pass
         _playwright = None
-        # 清理本次进程的临时目录；Chromium 可能还占着文件，失败就算了
         shutil.rmtree(_TMP_ROOT / str(os.getpid()), ignore_errors=True)
 
 
@@ -119,15 +109,11 @@ async def resume_html_to_pdf(html: str) -> bytes:
     browser = await _get_browser()
     page = await browser.new_page()
     try:
-        # set_content 会等文档加载完；图片都是 base64 内联，无外部请求
         await page.set_content(html)
         pdf = await page.pdf(
             format="A4",
             print_background=True,
             margin={"top": "0", "bottom": "0", "left": "0", "right": "0"},
-            # 前端在 HTML 里注入了 @page { size: 794px 1123px; margin: 0 }，
-            # 用 CSS 声明的纸面大小，而不是 Chromium 对 A4 的浮点换算（793.7 × 1122.5），
-            # 物理纸面才能和前端预览的 A4 画布完全一致，避免整页块被 Chromium 硬拆成两页。
             prefer_css_page_size=True,
         )
         return pdf

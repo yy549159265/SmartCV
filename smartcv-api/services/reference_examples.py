@@ -25,10 +25,8 @@ from pathlib import Path
 
 logger = logging.getLogger("smartcv")
 
-# 单份示例 JSON 的序列化上限（含 dataURL 图片时可能较大，但也要防呆）
 MAX_EXAMPLE_BYTES = 5 * 1024 * 1024
 
-# 示例 id 只允许 uuid4 的 32 位十六进制，杜绝用文件名做路径穿越
 _ID_PATTERN = re.compile(r"^[0-9a-f]{32}$")
 
 _lock = threading.Lock()
@@ -40,7 +38,6 @@ def _default_dir() -> Path:
         return Path(env)
     if Path("/.dockerenv").exists():
         return Path("/app/data/reference-examples")
-    # 开发机：smartcv-api/data/reference-examples（本文件在 services/ 下，向上两级）
     return Path(__file__).resolve().parent.parent / "data" / "reference-examples"
 
 

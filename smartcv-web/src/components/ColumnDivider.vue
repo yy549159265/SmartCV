@@ -1,24 +1,9 @@
 <script setup lang="ts">
-/**
- * 列分隔条：放在两列之间，按住左右拖动可以改变两侧列宽。
- *
- * 用法（在 App.vue 里）：
- *   <ColumnDivider @resize="(dx) => libraryWidth = clamp(libraryWidth + dx, ...)" @reset="..." />
- *
- * 实现要点：
- *  - pointerdown 时用 setPointerCapture 把后续 move/up 事件"钉"在本元素上，
- *    拖出元素范围也能继续收到事件，松手自然结束；
- *  - 拖动期间给 body 加 col-resize 光标 + 禁止选中文本，避免拖出选区；
- *  - 双击分隔条 = 恢复默认宽度（父组件处理 reset 事件）。
- */
 import { ref } from 'vue'
 
 const emit = defineEmits<{
-  /** 拖动中：水平位移增量（px，向右为正） */
   resize: [deltaX: number]
-  /** 拖动结束 */
   resizeEnd: []
-  /** 双击：请求恢复默认宽度 */
   reset: []
 }>()
 
@@ -28,7 +13,6 @@ let lastX = 0
 function onPointerDown(e: PointerEvent) {
   dragging.value = true
   lastX = e.clientX
-  // 把后续 pointermove/pointerup 都锁定到本元素
   ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
   document.body.style.cursor = 'col-resize'
   document.body.style.userSelect = 'none'
@@ -78,9 +62,8 @@ function onPointerUp(e: PointerEvent) {
   display: flex;
   align-items: center;
   justify-content: center;
-  touch-action: none; /* 触屏上也不让浏览器接管手势 */
+  touch-action: none;
 }
-/* 视觉分隔线：平时细灰线，悬停/拖动时变主题色 */
 .column-divider::before {
   content: '';
   position: absolute;

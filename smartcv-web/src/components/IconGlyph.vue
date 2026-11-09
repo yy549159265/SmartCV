@@ -1,9 +1,4 @@
 <script setup lang="ts">
-/**
- * Lucide 风格线性图标（path 数据取自 lucide，MIT 许可，直接内置不引依赖）。
- * 主页与顶栏统一用它，保证线宽、圆角、视觉重量完全一致。
- * v-html 渲染的只有本文件写死的 path 数据，不经过任何用户输入。
- */
 const PATHS: Record<string, string> = {
   'file-up': '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M12 12v6"/><path d="m15 15-3-3-3 3"/>',
   'file-json':

@@ -1,11 +1,4 @@
 <script setup lang="ts">
-/**
- * 诊断页 JD 下方的优秀示例选择器：最多选 3 份。
- *
- * 示例库可能有上百份，页面上不直接铺列表：点开弹窗搜索、勾选，
- * 确认后这里只展示已选中的示例。选中顺序就是发给后端的顺序
- * （后端按顺序编号为「示例 1/2/3」），所以编号跟着选择顺序走。
- */
 import { computed, onMounted, ref } from 'vue'
 import IconGlyph from '@/components/IconGlyph.vue'
 import { listReferenceExamples, type ReferenceExampleMeta } from '@/api/referenceExamples'
@@ -33,7 +26,6 @@ onMounted(load)
 
 const metaById = computed(() => new Map(items.value.map((item) => [item.id, item])))
 
-/** 页面上只展示已选示例；元数据未加载完时先占位，避免闪空 */
 const selectedItems = computed(() =>
   props.selected.map(
     (id) =>
@@ -47,18 +39,14 @@ const selectedItems = computed(() =>
   ),
 )
 
-/** 已选示例区域是否折叠（只影响页面展示，不影响已选数据） */
 const collapsed = ref(false)
 
 const selectedPreview = computed(() =>
   selectedItems.value.map((item) => item.direction).join(' · '),
 )
 
-/* ---------- 选择弹窗 ---------- */
-
 const showPicker = ref(false)
 const keyword = ref('')
-/** 弹窗里的临时选择；点「确定选择」才写回，取消不改变已选 */
 const draft = ref<string[]>([])
 
 const draftOrder = computed(() => new Map(draft.value.map((id, i) => [id, i + 1])))
@@ -89,7 +77,6 @@ function toggleDraft(item: ReferenceExampleMeta) {
 function confirm() {
   emit('update:selected', [...draft.value])
   showPicker.value = false
-  // 选完展开，让用户看到这次选中的结果
   collapsed.value = false
 }
 
@@ -134,7 +121,6 @@ function goLibrary() {
       </button>
     </div>
 
-    <!-- 只展示已选中的示例；折叠后隐藏 -->
     <div v-if="!collapsed && selectedItems.length" class="ref-selected-list">
       <div v-for="(item, i) in selectedItems" :key="item.id" class="ref-selected-item">
         <span class="ref-index on">{{ i + 1 }}</span>
@@ -275,7 +261,6 @@ function goLibrary() {
   color: var(--text);
 }
 
-/* 折叠箭头：与 JD 区同款的小折角 */
 .ref-caret {
   flex: none;
   position: relative;
@@ -350,7 +335,6 @@ function goLibrary() {
   background: var(--primary-faint);
 }
 
-/* ---------- 已选列表 ---------- */
 .ref-selected-list {
   display: flex;
   flex-direction: column;
@@ -410,7 +394,6 @@ function goLibrary() {
   background: var(--danger-soft);
 }
 
-/* ---------- 选择弹窗 ---------- */
 .ref-modal-head {
   display: flex;
   align-items: center;

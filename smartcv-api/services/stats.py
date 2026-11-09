@@ -16,9 +16,7 @@ def _default_stats_file() -> Path:
     if env:
         return Path(env)
     if Path("/.dockerenv").exists():
-        # 容器内固定写挂载点，不随 __file__ 位置漂移
         return Path("/app/data/stats.json")
-    # 开发机：仓库根 smartcv-api/data/stats.json（stats.py 在 services/ 下，向上两级）
     return Path(__file__).resolve().parent.parent / "data" / "stats.json"
 
 

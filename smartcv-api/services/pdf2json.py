@@ -181,7 +181,6 @@ async def _request_retry(
     重连一次通常就能成功。
     """
     last_exc: httpx.TransportError | None = None
-    # 日志里去掉签名查询串，避免把 MinerU 的临时凭证写进日志
     safe_url = url.split("?", 1)[0]
     for i in range(attempts):
         try:
@@ -189,7 +188,6 @@ async def _request_retry(
         except httpx.TransportError as e:
             last_exc = e
             if i < attempts - 1:
-                # ConnectError 的 str(e) 经常是空的，必须带上类名和 cause 才能定位
                 reason = str(e).strip() or (
                     repr(e.__cause__) if e.__cause__ else "无错误详情"
                 )
@@ -232,17 +230,11 @@ async def parse_with_mineru(
         "Content-Type": "application/json",
         "Authorization": f"Bearer {token}",
     }
-    # trust_env=False：httpx 默认会读取 Windows 的系统代理，Clash 等代理在
-    # cdn-mineru.openxlab.org.cn 的 TLS 握手上会失败（空消息的 ConnectError），
-    # 直连则正常。MinerU 是境内服务，这里统一不走系统代理。
     async with httpx.AsyncClient(timeout=60, trust_env=False, follow_redirects=True) as client:
-        # 1. 申请上传链接
         r = await _request_retry(
             client, "POST", f"{_BASE}/file-urls/batch",
             headers=headers,
             json={
-                # data_id 是这条 MinerU 任务的业务关联键，直接用 agent 会话 id，
-                # 这样 MinerU 侧的任务能对上"哪次简历解析 / 哪个用户"。
                 "files": [{"name": filename, "data_id": session_id or uuid.uuid4().hex}],
                 "model_version": "vlm",
             },
@@ -255,21 +247,17 @@ async def parse_with_mineru(
                 status_code=502, detail="MinerU 申请上传链接失败：返回数据不完整"
             )
 
-        # 2. 上传文件（签名链接，不要 Content-Type）
         up = await _request_retry(client, "PUT", upload_urls[0], content=content)
         if up.status_code != 200:
             raise HTTPException(
                 status_code=502, detail=f"MinerU 文件上传失败：HTTP {up.status_code}"
             )
 
-        # 3-4. 轮询结果
         item = await _poll_result(client, headers, batch_id)
         zip_url = item.get("full_zip_url")
         if not zip_url:
             raise HTTPException(status_code=502, detail="MinerU 结果缺少下载链接")
 
-        # 5. 下载 zip，解出 full.md（兜底）和 content_list.json（块级结构）
-        # CDN 偶发抖动，下载多给一次重试
         zr = await _request_retry(client, "GET", zip_url, attempts=4)
         if zr.status_code != 200:
             raise HTTPException(
@@ -346,15 +334,12 @@ async def parse_resume_document(
             store.cancel()
             raise asyncio.CancelledError()
 
-    # 1. 文件上传与校验
     store.start_step(Step.UPLOAD)
-    # 只允许 .pdf / .docx（老的 .doc 二进制格式需用户另存）
     filename = file.filename or ""
     if not filename.lower().endswith(_ALLOWED_SUFFIXES):
         store.fail_step(Step.UPLOAD, "只支持 .pdf / .docx 格式")
         raise HTTPException(status_code=400, detail="只支持 .pdf / .docx 格式")
 
-    # 只读 5MB+1 字节：超了立刻拒，不会把超大文件整个读进内存。
     content = await file.read(_MAX_FILE_SIZE + 1)
     if len(content) > _MAX_FILE_SIZE:
         store.fail_step(Step.UPLOAD, "文件超过 5MB，请压缩后再上传")
@@ -362,7 +347,6 @@ async def parse_resume_document(
     store.finish_step(Step.UPLOAD)
     await check_disconnected()
 
-    # 2. 文档解析：MinerU 云解析
     store.start_step(Step.PARSE)
     if parser == "mineru":
         if not mineru_token:
@@ -371,8 +355,6 @@ async def parse_resume_document(
         try:
             result = await parse_with_mineru(content, filename, mineru_token, session_id)
         except httpx.HTTPError as e:
-            # 传输层错误（DNS / TLS 握手 / 超时 / 拒连）会直接抛 httpx 异常，
-            # 这里转成可读中文，让前端能看到是「连不上 MinerU」而不是裸 500。
             store.fail_step(Step.PARSE, "MinerU 连接失败")
             reason = str(e).strip() or "无错误详情，请检查网络或系统代理设置"
             raise HTTPException(
@@ -396,9 +378,6 @@ async def parse_resume_document(
     store.finish_step(Step.PARSE)
     await check_disconnected()
 
-    # 3. 清洗 → 大模型语义规范化 → 确定性排版 → 校验。
-    #    优先让模型输出语义字段（学校/学位/专业/时间分开），失败再回退确定性分章；
-    #    流水线是阻塞调用，放线程里跑，事件循环留着服务状态轮询。
     try:
         return await asyncio.to_thread(
             run_parse_pipeline, result, store, provider, session_id

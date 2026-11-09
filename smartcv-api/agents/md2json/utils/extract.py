@@ -11,7 +11,6 @@ from dataclasses import dataclass, field
 
 from ..schemas.models import Block
 
-# 时间范围：2021.07、2021/07、2021年7月、2021-07；结束支持至今/现在/今
 _TIME_RANGE = re.compile(
     r"(?P<start>(?:19|20)\d{2}(?:\s*[./\-年]\s*\d{1,2}\s*月?)?)"
     r"\s*(?:-|–|—|~|～|至|到)\s*"
@@ -118,7 +117,6 @@ def extract_entries(blocks: list[Block]) -> list[Entry]:
 
     for i, text in enumerate(lines):
         if is_bullet(text):
-            # 有暂存时间说明上一条目已结束，这是一条新条目
             if current is None or pending_time is not None:
                 current = new_entry(pending_titles)
                 pending_titles.clear()
@@ -130,7 +128,6 @@ def extract_entries(blocks: list[Block]) -> list[Entry]:
         fields = split_fields(rest)
 
         if start and not fields:
-            # 只有时间段：上一条还没时间就补上；否则暂存给下一条
             if current is not None and not (current.start or current.end) and not pending_titles:
                 current.start, current.end = start, end
             else:
@@ -146,8 +143,6 @@ def extract_entries(blocks: list[Block]) -> list[Entry]:
             current = new_entry(columns, start, end)
             continue
 
-        # 标题 + 时间都已齐备，后面的普通行就是这条目的描述，别再当标题排队；
-        # 但如果下一行又是时间，说明这一行是下一个条目的标题，先把上一条落下来。
         if current is None and pending_titles and pending_time:
             if next_has_time(i):
                 new_entry(pending_titles)
@@ -158,12 +153,10 @@ def extract_entries(blocks: list[Block]) -> list[Entry]:
                 current.paragraphs.append(text)
             continue
 
-        # 非条目行：短标题先暂存，等下一条条目/列表行认领
         if _looks_like_title_only(text):
             if current is None:
                 pending_titles.append(text)
             elif next_is_bullet(i):
-                # 无时间的新公司/项目：后面紧跟列表，按新条目处理
                 current = new_entry([text])
             else:
                 current.paragraphs.append(text)
@@ -173,7 +166,6 @@ def extract_entries(blocks: list[Block]) -> list[Entry]:
             current = new_entry([])
         current.paragraphs.append(text)
 
-    # 结尾遗留的短标题：并到最后一个条目；没有条目就单独成段
     if pending_titles:
         if entries:
             entries[-1].paragraphs[:0] = pending_titles
@@ -211,7 +203,6 @@ def extract_personal(blocks: list[Block]) -> list[PersonalItem]:
                 continue
             items.append(PersonalItem(icon=_pick_icon(label, value), text=value))
 
-    # 没有显式“姓名”标签时，把第一条短中文当姓名
     if items and not any(item.icon == "👤" for item in items):
         for item in items:
             if _CJK_ONLY.match(item.text) and not _LOCATION_HINT.search(item.text):

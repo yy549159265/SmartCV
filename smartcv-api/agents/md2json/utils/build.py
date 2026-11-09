@@ -251,14 +251,6 @@ def build_sections(plans: list[SectionPlan], template: Template) -> list[Section
     return sections
 
 
-# ---------------------------------------------------------------------------
-# 大模型规范化结果（CanonicalResume）→ Section[]
-#
-# 与上面的确定性路径共用 _Ids / 内容构造函数，但字段来源是 canonical.py 的
-# 结构化数据：时间、学校、学位、专业已经是独立字段，这里只负责排版。
-# ---------------------------------------------------------------------------
-
-
 def _lines(items: list[str]) -> list[str]:
     """一条数组元素一行；元素内部如果还有换行，也拆开，避免多行挤在一个块里。"""
     result: list[str] = []
@@ -292,7 +284,6 @@ def _time_parts(
     end = (end or "").strip()
     fallback = (fallback or "").strip()
     if not start and not end and fallback:
-        # 兼容模型仍输出 “2007.2-2011.6” / “2014.1-至今” 这种整段时间
         found_start, found_end, _ = find_time(fallback)
         if found_start or found_end:
             start, end = found_start, found_end
@@ -307,7 +298,6 @@ def _time_content(ids: _Ids, start: str, end: str, text: str) -> Content | None:
     if start and end:
         return _time_range(ids, start, end, "right")
     if text:
-        # 只有开始时间或无法拆分时，按原文显示，不要渲染成 “start - ”
         return Content(
             id=ids.content(),
             type="iconText",
@@ -368,7 +358,6 @@ def _personal_rows(ids: _Ids, canonical: CanonicalResume) -> list[LayoutWindow]:
         right.append(_icon_text(ids, "", extra))
 
     if left and right:
-        # 右侧加占位，让邮箱和电话在同一行，视觉上更像简历抬头
         prefix: list[Content] = []
         if personal.name:
             prefix.append(_spacer(ids, 52))
@@ -388,7 +377,6 @@ def _education_rows(ids: _Ids, item: EducationItem) -> list[LayoutWindow]:
     rows: list[LayoutWindow] = []
 
     if item.school:
-        # 学校在左、学位/专业/时间在右，仍然是一行
         right_columns = [c.strip() for c in right_columns if c and c.strip()]
         if right_columns:
             if len(right_columns) >= 2:
@@ -441,7 +429,6 @@ def _work_rows(
         body.append(_tag(ids, clean_tags))
     lines = _lines(description)
     if lines:
-        # 一条职责一个 bullet，绝不把两条职责合并成一条
         body.append(_list_text(ids, lines))
     if body:
         rows.append(_vertical(ids, body))
@@ -532,7 +519,6 @@ def _skill_rows(ids: _Ids, canonical: CanonicalResume) -> list[LayoutWindow]:
 
     rows: list[LayoutWindow] = []
     if shared_label:
-        # 分组名单独一行，下面再排多列标签，标签之间才能对齐
         rows.append(_vertical(ids, [_icon_text(ids, "", shared_label)]))
     rows.append(_horizontal(ids, leaves))
     return rows
@@ -651,7 +637,6 @@ def build_canonical_sections(canonical: CanonicalResume, template: Template) -> 
                 ("other", other.title, lambda i, item=other: _other_rows(i, item))
             )
 
-    # 同类型章节保持 canonical 顺序（other 可能有多个不同标题）
     specs.sort(key=lambda spec: template.order_index(spec[0]))
 
     ids = _Ids()

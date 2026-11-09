@@ -1,16 +1,4 @@
 <script setup lang="ts">
-/**
- * 内容的"编辑卡片"（中间画布用）
- *
- * 渲染同样完全按 content.type 驱动（与预设名无关），每个类型对应一套编辑控件：
- *  - iconText  → 图标输入框 + 文字输入框
- *  - twoColumn → 任意多栏 + 分隔符（各栏按内容宽度排列，紧挨分隔符）
- *  - timeRange → 开始 - 结束
- *  - tag       → 标签输入框（空格/回车/逗号 一次识别多个）
- *  - listText  → 圆点/数字切换 + 多条列表项 + 【润色按钮（仅此类型有，可勾选只润色其中几条）】
- *
- * 所有读写都通过 store（单一数据源），本组件不保存任何本地副本。
- */
 import { computed, nextTick, onBeforeUnmount, ref, type CSSProperties } from 'vue'
 import { useResumeStore } from '@/stores/resume'
 import { message } from '@/utils/feedback'
@@ -26,32 +14,20 @@ import { onMarkdownKeydown } from '@/utils/textShortcuts'
 
 const props = defineProps<{
   section: Section
-  /** 该内容所在的布局窗口（决定横向/竖向） */
   row: LayoutWindow
   content: Content
 }>()
 const store = useResumeStore()
 
-/** 图标选择器弹层（受控，点外部自动关闭） */
 const { show: iconPopoverShow, triggerRef: iconTriggerRef } = useClickPopover()
-/** ⋯ 菜单弹层（受控，点外部自动关闭） */
 const { show: moreShow, triggerRef: moreTriggerRef } = useClickPopover()
 
 const isSelected = computed(() => store.selectedId === props.content.id)
 
-/* ---------- 展开编辑弹窗 ---------- */
-
-/**
- * 编辑方式：画布里的内容卡片永远只占一行（横向窗口里放很多块也不会挤），
- * 点卡片上的类型标签（图标 + 类型名）就在弹窗里编辑内容 —— 空间充足，输入框不会被压扁。
- * 卡片里不再单独放「▸ 展开」按钮：它占地方，而且点类型标签本来就能展开。
- */
 const editShow = ref(false)
 
-/** 弹窗标题：编辑内容 · 类型名 */
 const modalTitle = computed(() => `编辑内容 · ${CONTENT_TYPE_NAMES[props.content.type]}`)
 
-/** 卡片上显示的类型小图标（和组件库一致，一眼认出是什么类型） */
 const TYPE_ICONS: Record<ContentType, string> = {
   iconText: '🅰️',
   twoColumn: '↔️',
@@ -62,13 +38,10 @@ const TYPE_ICONS: Record<ContentType, string> = {
   spacer: '🫥',
 }
 
-/** 打开编辑弹窗 */
 function openEdit() {
   store.select(props.content.id)
   editShow.value = true
 }
-
-/* ---------- 内容字段的双向绑定：读写都走 store ---------- */
 
 function contentModel<K extends keyof ContentData>(key: K) {
   return computed({
@@ -91,7 +64,6 @@ const imageSizeModel = contentModel('imageSize')
 const imageShapeModel = contentModel('imageShape')
 const imageAlignModel = contentModel('imageAlign')
 
-/** 编辑卡里的图片预览样式（圆形裁正方形；圆角/原图保持原比例） */
 const imagePreviewStyle = computed<CSSProperties>(() => {
   const shape = props.content.content.imageShape === 'circle'
     ? 'circle'
@@ -106,24 +78,20 @@ const imagePreviewStyle = computed<CSSProperties>(() => {
   }
 })
 
-/** 选择图标：写入内容并立即关闭选择器（选完就走，不用再点外面一下） */
 function pickIcon(icon: string) {
   iconModel.value = icon
   iconPopoverShow.value = false
 }
 
-/* ---------- 图片型：上传 / 尺寸 / 清除 ---------- */
-
 function onPickImage(e: Event) {
   const input = e.target as HTMLInputElement
   const file = input.files?.[0]
-  input.value = '' // 允许重复选同一张图
+  input.value = ''
   if (!file) return
   if (!file.type.startsWith('image/')) {
     message.warning('请选择图片文件')
     return
   }
-  // 压缩提示：太大的图先压到 400px 内再存（简历场景够用）
   const reader = new FileReader()
   reader.onload = () => {
     const img = new Image()
@@ -150,8 +118,6 @@ function onClearImage() {
   imageModel.value = ''
 }
 
-/* ---------- 分栏型：增加 / 删除一栏（栏数任意，预览里每栏平均分配宽度） ---------- */
-
 function addColumn() {
   columnsModel.value = [...(columnsModel.value ?? []), '']
 }
@@ -168,16 +134,12 @@ function removeColumn(index: number) {
   columnsModel.value = cols
 }
 
-/* ---------- 列表文字型的列表项操作（数组元素不能直接用 v-model） ---------- */
-
-/** 当前列表项（统一成 { text, indent } 对象形式，兼容旧数据里的纯字符串） */
 const listItems = computed(() =>
   (props.content.content.items ?? []).map((item) =>
     typeof item === 'string' ? { text: item, indent: 0 } : { text: item.text ?? '', indent: item.indent ?? 0 },
   ),
 )
 
-/** 把列表项写回 store */
 function saveListItems(items: { text: string; indent: number }[]) {
   store.updateContent(props.section.id, props.content.id, { content: { items } })
 }
@@ -196,7 +158,6 @@ function removeItem(index: number) {
   const items = [...listItems.value]
   items.splice(index, 1)
   saveListItems(items)
-  // 勾选跟着条目走：删掉的那条移出范围，后面的下标整体前移
   if (polishShow.value) {
     polishTargets.value = polishTargets.value
       .filter((i) => i !== index)
@@ -204,7 +165,6 @@ function removeItem(index: number) {
   }
 }
 
-/** 缩进层级：每级 24px，最多两级 */
 const INDENT_STEP = 24
 const INDENT_MAX = 2
 
@@ -215,9 +175,6 @@ function indentItem(index: number, delta: 1 | -1) {
   saveListItems(items)
 }
 
-/* ---------- 列表项拖动排序（原生 HTML5 drag，不依赖外部库） ---------- */
-
-/** 正在拖的项下标 / 当前悬停的目标行下标 */
 const dragIndex = ref<number | null>(null)
 const dragOverIndex = ref<number | null>(null)
 
@@ -225,25 +182,22 @@ function onDragStart(index: number, e: DragEvent) {
   dragIndex.value = index
   if (e.dataTransfer) {
     e.dataTransfer.effectAllowed = 'move'
-    // Firefox 要求必须 setData 才会真正开始拖动
     e.dataTransfer.setData('text/plain', String(index))
   }
 }
 
 function onDragOver(index: number, e: DragEvent) {
   if (dragIndex.value === null) return
-  e.preventDefault() // 允许 drop
+  e.preventDefault()
   if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
   dragOverIndex.value = index
 }
 
-/** 松手：把拖动的项移到目标行所在的位置 */
 function onDrop(index: number) {
   const from = dragIndex.value
   dragIndex.value = null
   dragOverIndex.value = null
   if (from === null || from === index) return
-  // 拖动前的顺序：order[新位置] = 原下标，用来把勾选范围跟着条目一起搬
   const order = listItems.value.map((_, i) => i)
   const [movedOrder] = order.splice(from, 1)
   order.splice(index, 0, movedOrder)
@@ -264,35 +218,15 @@ function onDragEnd() {
   dragOverIndex.value = null
 }
 
-/* ---------- 润色（listText / iconText 类型会显示按钮） ---------- */
-
-/**
- * 点「润色」先展开一个思路输入区（而不是直接发请求）：
- * 用户可以写一句润色思路再「发送」，也可以什么都不写直接「发送」，
- * 点「取消」则收起输入区，不发任何请求。
- */
 const polishShow = ref(false)
-/**
- * 润色请求进行中：锁住列表。
- * 回填是按发送时的下标整体写回的，期间如果用户拖动 / 增删 / 打字，
- * 这些改动会被结果覆盖掉——不是串位，是静默丢失，所以干脆不让改。
- */
 const polishing = ref(false)
 
-/**
- * 改写完成后的高亮：只闪真正变了的条目（模型原样返回的不闪）。
- * 列表项闪背景 + 主题色描边，图标文字型闪输入框，1.4s 后自动消退。
- */
 const flashIndexes = ref<number[]>([])
 const textFlash = ref(false)
 const FLASH_MS = 1400
 let flashTimer: number | undefined
 let textFlashTimer: number | undefined
 
-/**
- * 先清空、下一帧再设上，保证同一批条目连续润色两次时动画也会重新播一遍
- * （class 一直挂着的话 CSS 动画不会重启）。
- */
 function flashList(indexes: number[]) {
   if (!indexes.length) return
   flashIndexes.value = []
@@ -317,27 +251,17 @@ onBeforeUnmount(() => {
   window.clearTimeout(textFlashTimer)
 })
 
-/** 用户填的润色描述/思路（可为空，空串时后端按默认规则润色） */
 const polishDescription = ref('')
 const polishInputRef = ref<{ focus: () => void } | null>(null)
 
-/**
- * 润色模式（后端按它选用不同的系统提示词）：
- *  - strict 严谨（默认）：规则锁死，只优化表达，不改变原文内容
- *  - free   自由：像直接问 AI，由模型自主判断怎么写最好，并优先遵循用户思路
- * 选择刻意不随「取消」重置——用户下次打开通常还是想用上次那个模式。
- */
-/** 卡片润色只提供这两档；enhance 是「诊断简历」输入框的提示词增强，不在这里选 */
 type ContentPolishMode = 'strict' | 'free'
 const polishMode = ref<ContentPolishMode>('strict')
 
-/** 模式分段胶囊：一句话说明放悬停提示里，界面不占常驻文字 */
 const POLISH_MODES: { key: ContentPolishMode; label: string; hint: string }[] = [
   { key: 'strict', label: '严谨', hint: '只重构表达，保留原句式，不新增任何数据' },
   { key: 'free', label: '自由', hint: '可大幅重写、扩写、补充术语；不勾「补充量化数据」就不会编造数字' },
 ]
 
-/** 预设润色方向（多选药丸）：发送时拼进 <要求> 传给后端，方向逻辑不写死在后端 */
 const POLISH_DIRECTIONS: { key: string; label: string; text: string }[] = [
   { key: 'impact', label: '突出成果', text: '突出成果与业务价值' },
   { key: 'tech', label: '技术深度', text: '突出技术深度与方案设计' },
@@ -346,7 +270,6 @@ const POLISH_DIRECTIONS: { key: string; label: string; text: string }[] = [
   { key: 'quant', label: '补充量化数据', text: '允许补充量化数据（可用具体数值或 XX 占位）' },
 ]
 
-/** 已选方向 key（多选药丸状态；与模式一样保留，不随取消重置） */
 const polishDirs = ref<string[]>([])
 
 function togglePolishDir(key: string) {
@@ -355,21 +278,14 @@ function togglePolishDir(key: string) {
   else polishDirs.value.push(key)
 }
 
-/** 思路输入框的提示语：方向可多选，思路始终可选填 */
 const polishPlaceholder = computed(() =>
   polishDirs.value.length > 0
     ? '可选：补充更具体的润色要求'
     : '可选：写点润色要求，不写则按默认规则处理',
 )
 
-/**
- * 本次要润色的列表项下标（列表文字型专用）。
- * 打开润色面板时默认全选有文字的条目，用户取消勾选就只润色剩下的几条；
- * 发送时按这里的顺序取文字，返回结果再按同一下标写回，未勾选的条目原样不动。
- */
 const polishTargets = ref<number[]>([])
 
-/** 有文字、可以参与润色的条目下标（空条目没有润色的意义） */
 const polishableIndexes = computed(() =>
   listItems.value.reduce<number[]>((acc, it, i) => {
     if (it.text.trim()) acc.push(i)
@@ -377,12 +293,10 @@ const polishableIndexes = computed(() =>
   }, []),
 )
 
-/** 当前真正勾选且仍可润色的条目（条目被清空 / 删除后自动从范围里消失） */
 const selectedIndexes = computed(() =>
   polishTargets.value.filter((i) => polishableIndexes.value.includes(i)),
 )
 
-/** 是否已全选，决定面板上的按钮显示「全选」还是「取消全选」 */
 const allSelected = computed(
   () =>
     polishableIndexes.value.length > 0 &&
@@ -401,65 +315,46 @@ function toggleAllTargets() {
   polishTargets.value = allSelected.value ? [] : [...polishableIndexes.value]
 }
 
-/** 当前内容是否有可润色的文字（一个字没写就别润色了） */
 const polishable = computed(() =>
   props.content.type === 'iconText'
     ? Boolean(textModel.value?.trim())
     : listItems.value.some((it) => it.text.trim()),
 )
 
-/** 点「润色」：展开思路输入区并聚焦输入框（没内容则先提示，不展开） */
 function openPolish() {
   if (!polishable.value) {
     message.warning('先写点内容再润色吧')
     return
   }
-  // 列表型默认全选有文字的条目，用户再按需取消
   if (props.content.type === 'listText') polishTargets.value = [...polishableIndexes.value]
   polishShow.value = true
   nextTick(() => polishInputRef.value?.focus())
 }
 
-/** 取消：收起输入区，清空已填思路，不发请求 */
 function cancelPolish() {
   polishShow.value = false
   polishDescription.value = ''
 }
 
-/**
- * 发送：把「预设方向 + 用户思路」拼成 <要求> 文字交给后端，后端只负责执行。
- * 模式与所选方向保留（下次打开还用上次的），只清空思路输入。
- */
 async function sendPolish() {
   const parts: string[] = []
   const dirs = POLISH_DIRECTIONS.filter((d) => polishDirs.value.includes(d.key))
   if (dirs.length > 0) parts.push(`润色方向：${dirs.map((d) => d.text).join('、')}`)
   const thought = polishDescription.value.trim()
   if (thought) parts.push(`用户思路：${thought}`)
-  // 先取出模式与描述：cancelPolish 会清空描述，但模式/方向要保留
   const mode = polishMode.value
   const description = parts.join('；')
   const isList = props.content.type === 'listText'
-  // 列表型一条都没勾：留在面板里提示，别关掉让用户重新打开
   if (isList && selectedIndexes.value.length === 0) {
     message.warning('先勾选要润色的条目')
     return
   }
-  // 范围在关闭面板前取好，cancelPolish 之后 checkboxes 就没了
   const targets = isList ? [...selectedIndexes.value] : []
   cancelPolish()
-  // 输入区开着期间内容被清空了：静默返回（openPolish 已提示过，不再打扰）
   if (!polishable.value) return
   await runPolish(description, mode, targets)
 }
 
-/**
- * 润色请求只有一条路径：请求、loading、锁列表、错误处理共用，
- * 只有「发哪几段」和「回来后写哪」按内容类型分支。
- *  - iconText：段落就是 text 字段，单进单出；
- *  - listText：只发勾选的条目，按发送顺序回填到原下标，未勾选的条目和缩进原样保留。
- * 模型返回少了 / 空了 / 和原文一样的那些，一律保留原文。
- */
 async function runPolish(description: string, mode: PolishMode, targets: number[]) {
   const isList = props.content.type === 'listText'
   const items = listItems.value
@@ -497,7 +392,6 @@ async function runPolish(description: string, mode: PolishMode, targets: number[
       }
     })
     saveListItems(next)
-    // 只闪真正变了的条目：模型原样返回的那些不闪，别让用户以为改过
     flashList(changed)
     if (changed.length) message.success(`已润色 ${changed.length} 条`)
     else message.info('这几条不用改，内容保持原样')
@@ -508,8 +402,6 @@ async function runPolish(description: string, mode: PolishMode, targets: number[
     loading?.destroy()
   }
 }
-
-/* ---------- 复制 / 删除 / 拖拽排序 ---------- */
 
 function onDuplicate() {
   store.duplicateContent(props.section.id, props.content.id)
@@ -528,13 +420,10 @@ function onRemove() {
     :data-content-id="content.id"
     @click.stop="store.select(content.id)"
   >
-    <!-- 拖拽手柄：按住拖动排序 / 移到其他窗口（vue-draggable-plus） -->
     <span class="content-drag-handle" title="按住拖动排序 / 移到其他窗口">
       ⋮⋮
     </span>
 
-    <!-- 类型标签：图标 + 类型名。点它 = 展开编辑弹窗（悬停提示说明这一点）；
-         卡片被挤窄时只留图标，点击区域仍然覆盖整条标签 -->
     <button
       class="content-label"
       :title="`点击展开编辑 · ${CONTENT_TYPE_NAMES[content.type]}`"
@@ -544,20 +433,17 @@ function onRemove() {
       <span class="content-type-name">{{ CONTENT_TYPE_NAMES[content.type] }}</span>
     </button>
 
-    <!-- ⋯ 更多操作菜单：样式 / 复制 / 删除（收进一个按钮，横向放多块时也不会被挤没） -->
     <div class="content-actions" @click.stop>
       <n-popover v-model:show="moreShow" trigger="click" placement="bottom-end" :width="300">
         <template #trigger>
           <button ref="moreTriggerRef" class="content-more-btn" title="样式 / 复制 / 删除">⋯</button>
         </template>
         <template #default>
-          <!-- 图片组件没有通用样式（字号/颜色/行距等），⋯ 菜单里只显示图片选项 -->
           <template v-if="content.type !== 'image'">
             <StylePopover mode="content" :section-id="section.id" :content-id="content.id" />
             <n-divider style="margin: 10px 0" />
           </template>
           <div class="more-actions">
-            <!-- 图片型专属：形状 + 尺寸（放在菜单里，横向拥挤时也能设置） -->
             <div v-if="content.type === 'image'" class="image-more-options">
               <div class="more-option-row">
                 <span class="more-option-label">形状</span>
@@ -602,7 +488,6 @@ function onRemove() {
     </div>
   </div>
 
-  <!-- 展开编辑弹窗：内容编辑全部在弹窗里进行（空间充足，输入框不会被压扁） -->
   <n-modal
     v-model:show="editShow"
     preset="card"
@@ -611,7 +496,6 @@ function onRemove() {
     style="width: 560px; max-width: 92vw"
   >
     <div class="content-editor">
-      <!-- 图标文字型：图标（点击弹出图标选择器）+ 文字 + 可选标签（跟在文字后面） -->
       <template v-if="content.type === 'iconText'">
         <div class="icontext-toolbar">
           <span class="editor-hint">图标文字内容</span>
@@ -620,7 +504,6 @@ function onRemove() {
             润色
           </n-button>
         </div>
-        <!-- 润色输入区：模式分段胶囊 + 方向多选药丸 + 可选思路（与样式面板同一套视觉语言） -->
         <div v-if="polishShow" class="polish-input">
           <div class="polish-mode">
             <button
@@ -670,14 +553,12 @@ function onRemove() {
                 :class="{ empty: !content.content.icon }"
                 :title="content.content.icon ? '点击更换图标' : '点击添加图标（留空则不显示图标）'"
               >
-                <!-- 图标可能是 emoji，也可能是品牌 SVG（v-html 两种都能渲染） -->
                 <span v-if="content.content.icon" class="icon-trigger-content" v-html="content.content.icon" />
                 <span v-else>＋</span>
               </button>
             </template>
             <template #default>
               <div class="icon-picker">
-                <!-- 按用途分组的常用图标 -->
                 <div v-for="g in ICON_GROUPS" :key="g.name" class="icon-group">
                   <div class="icon-section-name">{{ g.name }}</div>
                   <div class="icon-grid">
@@ -688,12 +569,10 @@ function onRemove() {
                       :class="{ active: content.content.icon === ic }"
                       @click="pickIcon(ic)"
                     >
-                      <!-- emoji / 品牌 SVG 都能渲染 -->
                       <span v-html="ic" />
                     </button>
                   </div>
                 </div>
-                <!-- 也可以手输任意 emoji -->
                 <n-input
                   v-model:value="iconModel"
                   size="small"
@@ -715,7 +594,6 @@ function onRemove() {
         <TagInput v-model="tagsModel" />
       </template>
 
-      <!-- 分栏型：任意多栏 + 分隔符（预览里每栏平均分配宽度） -->
       <template v-else-if="content.type === 'twoColumn'">
         <div class="column-editor">
           <div v-for="(col, i) in columnsModel ?? []" :key="i" class="column-row">
@@ -754,19 +632,16 @@ function onRemove() {
         </div>
       </template>
 
-      <!-- 时间段型 -->
       <template v-else-if="content.type === 'timeRange'">
         <n-input v-model:value="startModel" size="small" placeholder="开始时间，如 2022.07" />
         <span class="editor-divider">-</span>
         <n-input v-model:value="endModel" size="small" placeholder="结束时间，如 至今" />
       </template>
 
-      <!-- 标签型：一个输入框，空格/回车/逗号 一次识别多个标签 -->
       <template v-else-if="content.type === 'tag'">
         <TagInput v-model="tagsModel" />
       </template>
 
-      <!-- 图片型：上传图片（头像等）；尺寸/形状在 ⋯ 菜单里设置 -->
       <template v-else-if="content.type === 'image'">
         <div class="image-editor">
           <img
@@ -800,27 +675,22 @@ function onRemove() {
         </div>
       </template>
 
-      <!-- 占位组件：纯空白（高度 = 正文字号 × 行距，效果只在预览区体现） -->
       <template v-else-if="content.type === 'spacer'">
         <div class="spacer-editor">🫥</div>
       </template>
 
-      <!-- 列表文字型 -->
       <template v-else-if="content.type === 'listText'">
         <div class="list-toolbar">
           <n-radio-group v-model:value="listTypeModel" size="small">
             <n-radio-button value="bullet">圆点列表</n-radio-button>
             <n-radio-button value="ordered">数字列表</n-radio-button>
           </n-radio-group>
-          <!-- 润色按钮：只有列表文字型提供 -->
           <n-button size="tiny" quaternary class="polish-btn" :disabled="polishing" @click.stop="openPolish">
             <IconGlyph name="sparkles" :size="12" />
             润色
           </n-button>
         </div>
-        <!-- 润色输入区：模式分段胶囊 + 方向多选药丸 + 可选思路（与样式面板同一套视觉语言） -->
         <div v-if="polishShow" class="polish-input">
-          <!-- 润色范围：默认全选，取消勾选就只润色剩下的几条 -->
           <div class="polish-scope">
             <span class="polish-scope-label">润色范围</span>
             <span class="polish-scope-count">
@@ -883,7 +753,6 @@ function onRemove() {
             @dragover="onDragOver(i, $event)"
             @drop.prevent="onDrop(i)"
           >
-            <!-- 润色范围勾选框：只在润色面板打开时出现，空条目不可勾 -->
             <n-checkbox
               v-if="polishShow"
               class="list-item-check"
@@ -893,7 +762,6 @@ function onRemove() {
               @update:checked="toggleTarget(i)"
               @click.stop
             />
-            <!-- 拖拽手柄：按住上下拖，松手插到目标行位置 -->
             <span
               class="list-item-drag"
               draggable="true"
@@ -906,7 +774,6 @@ function onRemove() {
             <span class="list-marker">
               {{ content.content.listType === 'ordered' ? `${i + 1}.` : '•' }}
             </span>
-            <!-- 缩进：向左 / 向右各一级（最多两级），实现子条目效果 -->
             <n-button
               size="tiny"
               quaternary
@@ -943,7 +810,6 @@ function onRemove() {
     </div>
     <template #footer>
       <div class="modal-footer">
-        <!-- 加粗只在支持 Markdown 的文本类型里有意义，其它类型不显示提示 -->
         <span
           v-if="content.type === 'iconText' || content.type === 'twoColumn' || content.type === 'listText'"
           class="modal-shortcut-hint"
@@ -965,15 +831,10 @@ function onRemove() {
   padding: 4px 6px;
   border-radius: 6px;
   background: var(--panel-bg);
-  /* 编辑画布是"操作面板"，文字固定小字号，不跟随内容字号放大（放大效果只在预览区体现） */
   font-size: 14px;
-  /* 新插入的内容出现时播放一次淡入动画（按 key 挂载的 DOM 只有新内容会播放） */
   animation: cardAppear 0.25s ease-out;
-  /* 选中/悬停用内阴影画边框，不占布局空间（保证和预览高度一致） */
   box-shadow: inset 0 0 0 1px transparent;
   transition: box-shadow 0.15s;
-  /* 卡片自身作为容器：宽度被挤窄（横排里放多块）时，按自己的真实宽度切换成"只显示图标"。
-     用卡片而不是画布做容器 —— 同一行里每块宽度可能都不一样。 */
   container-type: inline-size;
 }
 @keyframes cardAppear {
@@ -994,7 +855,6 @@ function onRemove() {
   background: var(--primary-faint);
 }
 
-/* 类型标签：卡片的主体（图标 + 类型名，点它打开编辑弹窗） */
 .content-label {
   flex: 1;
   min-width: 0;
@@ -1020,7 +880,6 @@ function onRemove() {
   justify-content: center;
   font-size: 13px;
 }
-/* 内联 SVG 类型图标（如「列表文字」）：与 emoji 同样按字号缩放 */
 .content-type-icon :deep(svg) {
   display: block;
   width: 1em;
@@ -1036,14 +895,6 @@ function onRemove() {
   text-overflow: ellipsis;
 }
 
-/* ============================================================
- * 压缩模式：卡片自身宽度不够时只显示类型图标
- *
- * 阈值的由来：图标 13px + 间距 6 + 「列表文字」4×13 ≈ 71px，
- * 加上左右内边距、⋮⋮ 手柄和 ⋯ 按钮约 61px → 约 132px 才放得下名字。
- * 卡片再窄就只留图标（仍可点击展开编辑，悬停提示会说明类型）。
- * 展开按钮已删除，所以图标就是唯一入口，点击区域撑满剩余宽度。
- * ============================================================ */
 @container (max-width: 140px) {
   .content-label {
     justify-content: center;
@@ -1054,7 +905,6 @@ function onRemove() {
   }
 }
 
-/* 拖拽手柄：默认半透明，悬停卡片时显示 */
 .content-drag-handle {
   flex: none;
   align-self: stretch;
@@ -1084,7 +934,6 @@ function onRemove() {
   gap: 6px;
 }
 
-/* 弹窗底部：左侧快捷键提示，右侧「完成」 */
 .modal-footer {
   display: flex;
   align-items: center;
@@ -1110,7 +959,6 @@ function onRemove() {
   border-radius: 4px;
 }
 
-/* 图标文字型：标志 + 润色按钮 */
 .icontext-toolbar {
   display: flex;
   align-items: center;
@@ -1122,7 +970,6 @@ function onRemove() {
   color: var(--text-secondary);
 }
 
-/* 润色输入区：模式分段胶囊 + 方向多选药丸 + 思路输入，与样式面板同一套视觉语言 */
 .polish-input {
   display: flex;
   flex-direction: column;
@@ -1131,11 +978,9 @@ function onRemove() {
   border: 1px solid var(--border);
   border-radius: 10px;
 }
-/* 润色触发按钮：图标与文字之间留一点间距 */
 .polish-btn :deep(.n-button__content) {
   gap: 5px;
 }
-/* 模式分段胶囊：与工具栏缩放 / 样式选项卡同款分段样式 */
 .polish-mode {
   display: flex;
   gap: 2px;
@@ -1166,7 +1011,6 @@ function onRemove() {
   font-weight: 600;
   box-shadow: 0 1px 2px rgba(28, 33, 48, 0.08);
 }
-/* 预设润色方向：多选药丸（与样式面板的「跟随」药丸同规格） */
 .polish-dirs {
   display: flex;
   flex-wrap: wrap;
@@ -1201,7 +1045,6 @@ function onRemove() {
   justify-content: flex-end;
   gap: 6px;
 }
-/* 润色范围：面板顶部一行，说明这次只会润色勾选的条目 */
 .polish-scope {
   display: flex;
   align-items: center;
@@ -1229,14 +1072,12 @@ function onRemove() {
   text-decoration: underline;
 }
 
-/* 图标文字型：图标按钮 + 文字输入框 */
 .icontext-row {
   display: flex;
   align-items: flex-start;
   gap: 6px;
 }
 
-/* 图片型编辑器 */
 .image-editor {
   display: flex;
   align-items: flex-start;
@@ -1298,13 +1139,11 @@ function onRemove() {
 .icon-trigger:hover {
   border-color: var(--primary);
 }
-/* 品牌 SVG 图标：按按钮尺寸缩放（:deep 才能命中 v-html 插入的 svg） */
 .icon-trigger :deep(svg) {
   width: 16px;
   height: 16px;
   display: block;
 }
-/* 没选图标时的空状态：虚线框 + 浅色 ＋，暗示"可以不填" */
 .icon-trigger.empty {
   border-style: dashed;
   border-color: var(--border-strong);
@@ -1313,14 +1152,12 @@ function onRemove() {
   font-size: 14px;
 }
 
-/* 占位组件编辑区：只有一个小标记，不显示任何文字/放大效果 */
 .spacer-editor {
   font-size: 14px;
   line-height: 1.5;
   color: var(--text-tertiary);
 }
 
-/* 图标选择器弹层 */
 .icon-picker {
   display: flex;
   flex-direction: column;
@@ -1355,7 +1192,6 @@ function onRemove() {
     background 0.12s,
     border-color 0.12s;
 }
-/* 品牌 SVG 图标：按格子尺寸缩放（:deep 才能命中 v-html 插入的 svg） */
 .icon-cell :deep(svg) {
   width: 18px;
   height: 18px;
@@ -1369,14 +1205,12 @@ function onRemove() {
   border-color: var(--primary);
 }
 
-/* 分栏 / 时间段里的分隔符 */
 .editor-divider {
   align-self: center;
   color: var(--text-tertiary);
   padding: 0 2px;
 }
 
-/* 分栏型：多栏编辑 */
 .column-editor {
   display: flex;
   flex-direction: column;
@@ -1411,7 +1245,6 @@ function onRemove() {
   width: 72px;
 }
 
-/* 列表文字型 */
 .list-toolbar {
   display: flex;
   align-items: center;
@@ -1423,7 +1256,6 @@ function onRemove() {
   flex-direction: column;
   gap: 6px;
 }
-/* 润色请求进行中：列表整体锁住（回填会按发送时的快照写回，期间的改动都会被覆盖） */
 .list-items.locked {
   pointer-events: none;
   opacity: 0.6;
@@ -1439,12 +1271,10 @@ function onRemove() {
 .list-item-edit :deep(.n-input) {
   flex: 1;
 }
-/* 勾选参与润色的条目：只靠左侧复选框区分，行本身保持卡片原有底色 */
 .list-item-check {
   flex: none;
   margin-top: 4px;
 }
-/* 润色完成：改写过的条目亮一下再褪去，明确「这几条变了」 */
 @keyframes polishFlash {
   0% {
     background-color: var(--primary-soft);
@@ -1467,7 +1297,6 @@ function onRemove() {
   border-radius: 6px;
   animation: polishFlash 1.4s ease-out;
 }
-/* 拖动中的行变淡；目标位置在行上方画一条主题色指示线 */
 .list-item-edit.dragging {
   opacity: 0.4;
 }
@@ -1501,7 +1330,6 @@ function onRemove() {
   text-align: center;
 }
 
-/* ⋯ 更多操作：默认隐藏，悬停/选中显示；只有一个按钮，窄卡片里也不会被挤没 */
 .content-actions {
   flex: none;
   display: flex;
@@ -1529,13 +1357,11 @@ function onRemove() {
   background: var(--primary-soft);
 }
 
-/* 菜单里的操作按钮组 */
 .more-actions {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
-/* 复制 / 删除：图标 + 文字的菜单项，与「⋯ 菜单」整体风格一致 */
 .more-action-btn {
   display: flex;
   align-items: center;
@@ -1567,7 +1393,6 @@ function onRemove() {
   color: var(--danger);
 }
 
-/* 图片型：⋯ 菜单里的形状/尺寸设置 */
 .image-more-options {
   display: flex;
   flex-direction: column;

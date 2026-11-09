@@ -37,15 +37,12 @@ async def run(
     writer({"type": "agent_start", "agent": "summarize", "label": "摘要 agent"})
     agent = build_agent(llm)
     if patches:
-        # 面向用户的清单不带坐标，避免位置编号泄漏进修改说明
         changes = "\n".join(f"- 「{p['old']}」→「{p['new']}」" for p in patches)
     else:
         changes = "（没有实际改动）"
-    # 总结面向用户，不带坐标；带上审查结果，模型才知道哪些诊断没改以及原因
     diagnosis_text = format_diagnosis(
         diagnosis, include_coords=False, reviews=reviews, locations=locations
     )
-    # 数量由代码算好传给模型：LLM 自己数条目会数错（16 条里改了 8 条却写成 7 条）
     reviews = reviews or []
     total = len(diagnosis)
     changed = len(patches)
@@ -53,7 +50,6 @@ async def run(
     failed = sum(1 for r in reviews if r.get("status") == "failed")
     unpatched = sum(1 for r in reviews if r.get("status") == "change")
     unreviewed = sum(1 for r in reviews if r.get("status") == "pending")
-    # 档位分布：让摘要能区分「未改」背后的原因（无需修改 / 信息不足 / 收益不足）
     _disposition = lambda value: sum(
         1 for d in diagnosis if (d.get("disposition") or "suggest") == value
     )
@@ -83,7 +79,6 @@ async def run(
         if mode == "custom":
             writer(chunk)
             continue
-        # 推理模型的思考在 reasoning_content、答案在 content，分开打 kind 发给前端
         msg = chunk[0]
         kwargs = getattr(msg, "additional_kwargs", {}) or {}
         thinking = kwargs.get("reasoning_content") or kwargs.get("reasoning") or ""
@@ -91,7 +86,6 @@ async def run(
         if thinking:
             writer({"type": "delta", "stage": "summary", "text": thinking, "kind": "thinking"})
         if content:
-            # 只把回答正文作为 summary 返回，思考过程只流式展示、不落进结果
             answer_parts.append(content)
             writer({"type": "delta", "stage": "summary", "text": content, "kind": "answer"})
     summary = "".join(answer_parts).strip()

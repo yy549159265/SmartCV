@@ -15,13 +15,10 @@ from agents.md2json.schemas.resume import Content, LayoutWindow, Section
 
 from ..schemas.models import Block, SectionPlan, ValidationReport
 
-# 去掉空白、标点和下划线，只留下文字/数字，用来做「不改变语义」的包含判断
 _KEY_NOISE = re.compile(r"[^\w]+|_", re.UNICODE)
 _PHONE = re.compile(r"(?<!\d)1[3-9]\d{9}(?!\d)")
 _EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
-# 表格行 / 多字段行：规范化会把字段重排到不同列，必须逐字段比较
 _FIELD_SEP = re.compile(r"[|｜\t]+")
-# 过短的单字（如“男/女”）容易误判，不参与覆盖率统计
 _MIN_KEY = 2
 
 
@@ -65,7 +62,6 @@ def _content_strings(content: Content) -> list[str]:
 def _section_key(sections: list[Section]) -> str:
     parts: list[str] = []
     for section in sections:
-        # 标题本身也是原文的一部分（清洗时保留的标题块），必须计入保真比较
         parts.append(section.title)
         for content in _iter_contents(section.rows):
             parts.extend(_content_strings(content))
@@ -109,7 +105,6 @@ def validate_sections(
     if content_blocks:
         report.coverage = matched / len(content_blocks)
 
-    # 关键联系信息：原文有、结果没有 → 记录 token（仅进程内，用于定位问题）
     source = "\n".join(block.text for block in content_blocks)
     for pattern in (_PHONE, _EMAIL):
         for token in pattern.findall(source):

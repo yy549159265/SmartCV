@@ -1,38 +1,9 @@
-/**
- * "润色"接口
- *
- * 后端：POST /api/polish（见 smartcv-api/routers/agent.py）
- *   入参：{ items: string[], provider: {...}, description?: string, context?: string, mode?: PolishMode }
- *         —— 待处理的列表文字 + 供应商配置 + 用户的润色描述/思路（可不填，空串 = 按默认规则润色）
- *            + 参考材料（JD 等，可不填）+ 处理模式（默认 strict）
- *   出参：统一响应 { code, message, data }，data 为 { items: string[] }
- *         条数与顺序与入参一致，前端按原位置写回列表。
- *   供应商配置未填齐：前端先拦截提示（不发请求）；后端 422 兜底，错误取 message。
- * 后端若改成 SSE 流式返回，可复用 @microsoft/fetch-event-source 逐字渲染。
- */
 import { getProviderSettings, missingProviderFields } from '@/api/provider'
 import { unwrap } from '@/api/error'
 import { apiFetch } from '@/api/http'
 
-/**
- * 润色模式（后端提示词是「模板 + 片段」：system_prompt_base.md 固定分好
- * # 角色 / # 输入格式 / # 可以做 / # 不能做 / # 其他内容 / # 输出格式 / # 示例 七段，
- * 各模式片段 md 只写这七段的内容，后端按模式替换；strict/free 的差别只在「模式规则」）：
- *  - strict  严谨：只重构表达，保留原句式，不新增任何数据
- *  - free    自由：可大幅重写、扩写、补充术语；不主动补量化数据（除非 description 明确要求）
- *  - enhance 提示词增强：把口语化的修改要求改写成明确、可执行的提示词（可参考 JD）
- * 润色方向 / 方式 / 是否补量化数据完全由前端决定：
- * description 里拼好「润色方向：…；用户思路：…」传过去，后端只负责执行。
- */
 export type PolishMode = 'strict' | 'free' | 'enhance'
 
-/**
- * @param texts       待处理的文本（一行一条，返回顺序与之一致）
- * @param description 前端拼好的润色要求（预设方向 + 量化数据许可 + 用户思路），
- *                    可不填（空串时后端只按模式规则润色）
- * @param mode        处理模式，默认 strict（严谨）；enhance = 提示词增强
- * @param context     参考材料（如 JD），可不填；只作上下文，不参与逐条改写
- */
 export async function polishTexts(
   texts: string[],
   description = '',

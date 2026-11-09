@@ -1,12 +1,12 @@
 """优化对话流水线：LangGraph 编排 + SSE 流式入口。
 
-流转过程（每个 agent 是独立模块，见 diagnose_agent / optimize_agent / summarize_agent）：
+流转过程（每个 agent 是独立模块，见 diagnose_agent / review_agent / summarize_agent）：
 
   convert    （代码）    把前端 Section[] 拍平成「每行带位置编号」的标记文本
   diagnose   （诊断 agent）标记文本 + JD(可选) + 用户问题 → 结构化诊断项
              （位置 / 原文片段 / 原因 / 依据 / 修改方向）
-  optimize   （优化 agent）标记文本 + 诊断 → 先 review_diagnosis 逐条审查，再对通过项
-            调用 patch_content(index, text) 就地替换文字；JSON 结构/样式/图片不被破坏
+  review     （审查 agent）标记文本 + 诊断 → 逐条 patch_content 判定改不改，判为 change
+            就就地替换文字；JSON 结构/样式/图片不被破坏
   summarize  （主 agent）诊断 + 改动清单 → 给用户的简短修改说明（逐 token 流式）
 
 事件通道：图内所有事件（status / agent_start / delta / tool_call / tool_result /
@@ -29,10 +29,10 @@ from langgraph.graph import StateGraph
 from langgraph.graph.message import add_messages
 from typing_extensions import TypedDict
 
-from agents.resume.optimize import diagnose_agent, optimize_agent, summarize_agent
+from agents.resume.optimize import diagnose_agent, review_agent, summarize_agent
 from agents.resume.optimize.utils.checkpointer import get_checkpointer
 from agents.resume.optimize.utils.examples import format_reference_examples
-from agents.resume.optimize.tools.optimize_resume import OptimizeStore
+from agents.resume.optimize.tools.patch_resume import ReviewStore
 from agents.utils.choose_llm import choose_llm
 from agents.utils.resume import describe_location, resume_to_marked_text
 from schemas.provider import ProviderConfig
@@ -49,13 +49,10 @@ def _last_summary(messages: list[AnyMessage] | None) -> str:
 
 
 class ChatState(TypedDict):
-    # 跨轮上下文：每轮的「用户问题」和「总结」按序追加（add_messages），不覆盖
     messages: Annotated[list[AnyMessage], add_messages]
     resume_sections: list[dict]
     markdown: str
-    # 结构化诊断项：位置 + 原文片段 + 原因 + 依据 + 修改方向
     diagnosis: list[dict]
-    # 诊断 agent 从优秀示例提炼的写作规范（只描述怎么写，不含事实）
     style_notes: list[str]
     summary: str
     result_json: list[dict]
@@ -76,7 +73,7 @@ async def run_chat_stream(
 
     llm 参数仅供测试注入（None 时用 choose_llm(provider) 构造）。
     references 是用户选中的优秀示例（完整记录），只给诊断 agent 参考；
-    其写作规范由诊断 agent 提炼后，以 style_notes 传给优化 agent。
+    其写作规范由诊断 agent 提炼后，以 style_notes 传给审查 agent。
     rewrite_mode 是本次对话的改写强度：standard（标准）/ bold（大胆）。
     """
     if not resume_sections:
@@ -84,10 +81,8 @@ async def run_chat_stream(
         return {"resume": resume_sections, "summary": "", "diagnosis": []}
 
     llm = llm or choose_llm(provider)
-    # 浅拷贝一层：优化 agent 的 patch 工具在这个副本上就地改，不污染上层入参
-    store = OptimizeStore([dict(s) for s in resume_sections])
+    store = ReviewStore([dict(s) for s in resume_sections])
 
-    # 示例正文只在诊断 agent 的输入里出现；前端只收到方向与描述（便于展示参考来源）
     reference_markdown = format_reference_examples(references or [])
     reference_items = [
         {
@@ -99,7 +94,6 @@ async def run_chat_stream(
     ]
 
     async def convert_node(state: ChatState) -> dict:
-        # convert 是纯代码阶段（非 agent），也发 status 事件让前端展示「正在解析 → 完成」
         writer = get_stream_writer()
         writer({"type": "status", "stage": "convert", "text": "正在解析 JSON 简历，转换为带位置文本…"})
         markdown = resume_to_marked_text(store.resume)
@@ -107,7 +101,6 @@ async def run_chat_stream(
         return {"markdown": markdown}
 
     async def diagnose_node(state: ChatState) -> dict:
-        # 上一轮的总结（改了/没改哪些位置）作为本轮诊断的上下文
         history = _last_summary(state.get("messages"))
         diagnosis, style_notes = await diagnose_agent.run(
             llm,
@@ -123,8 +116,8 @@ async def run_chat_stream(
         )
         return {"diagnosis": diagnosis, "style_notes": style_notes}
 
-    async def optimize_node(state: ChatState) -> dict:
-        await optimize_agent.run(
+    async def review_node(state: ChatState) -> dict:
+        await review_agent.run(
             llm,
             store,
             state["markdown"],
@@ -142,23 +135,21 @@ async def run_chat_stream(
         summary = await summarize_agent.run(
             llm, state["diagnosis"], store.patches, store.reviews, locations, session_id
         )
-        # summary 同时写进 messages，下一轮诊断从这里取
         return {"summary": summary, "messages": [AIMessage(content=summary)]}
 
     graph = StateGraph(ChatState)
     graph.add_node("convert", convert_node)
     graph.add_node("diagnose", diagnose_node)
-    graph.add_node("optimize", optimize_node)
+    graph.add_node("review", review_node)
     graph.add_node("summarize", summarize_node)
     graph.add_edge(START, "convert")
     graph.add_edge("convert", "diagnose")
-    graph.add_edge("diagnose", "optimize")
-    graph.add_edge("optimize", "summarize")
+    graph.add_edge("diagnose", "review")
+    graph.add_edge("review", "summarize")
     graph.add_edge("summarize", END)
     compiled = graph.compile(checkpointer=get_checkpointer())
 
     state: ChatState = {
-        # add_messages 会把本次问题追加到同一 thread 的历史后面，而不是覆盖
         "messages": [HumanMessage(content=question)],
         "resume_sections": resume_sections,
         "markdown": "",
@@ -172,7 +163,6 @@ async def run_chat_stream(
         if mode == "custom":
             await emit(chunk)
         else:
-            # updates 是 {node: patch}，把每个节点产出的字段展开合并进 state
             for node_update in chunk.values():
                 state.update(node_update)
 

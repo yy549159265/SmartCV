@@ -1,13 +1,4 @@
 <script setup lang="ts">
-/**
- * 页面 4 · 高级设置
- *
- * 左侧标签页：
- *   1. OpenAI 设置：配置「诊断简历」对话用的模型供应商（localStorage，useStorage 持久化）；
- *   2. 本地备份：绑定电脑上的文件夹，导出 JSON / PDF 与多份简历切换都落在该文件夹；
- *   3. 提示词预览：只读展示后端 agent 用的提示词（prompts）与技能（skills）md，
- *      按 Markdown 排版渲染（只读，不可更改）。
- */
 import { computed, reactive, ref, watch } from 'vue'
 import { useStorage } from '@vueuse/core'
 import { dialog, message } from '@/utils/feedback'
@@ -28,9 +19,7 @@ watch(
   },
 )
 
-/* ---------- 本地备份文件夹 ---------- */
 const documents = useDocumentsStore()
-/** 浏览器是否支持 File System Access API（Chrome / Edge） */
 const supportsFolder = supportsDirectoryPicker()
 
 const statusText = computed(() => {
@@ -55,7 +44,6 @@ const statusClass = computed(() => ({
   'is-warn': documents.status === 'needs-permission' || documents.status === 'denied',
 }))
 
-/** 换文件夹前确认一句：旧文件夹里的文件不会自动迁移 */
 function confirmSwitchFolder(): Promise<boolean> {
   return new Promise((resolve) => {
     let settled = false
@@ -111,7 +99,6 @@ function onDisconnect() {
   })
 }
 
-/** 供应商配置（useStorage 自动记忆到 localStorage） */
 const settings = useStorage('smartcv-provider-settings', {
   provider: 'openai',
   baseUrl: 'https://api.openai.com/v1',
@@ -119,7 +106,6 @@ const settings = useStorage('smartcv-provider-settings', {
   model: 'gpt-4o-mini',
 })
 
-/** 临时编辑副本（点保存才写回 localStorage） */
 const draft = reactive({ ...settings.value })
 
 function onSave() {
@@ -131,18 +117,15 @@ function onTest() {
   message.info('连接测试功能开发中：接入后端后即可使用')
 }
 
-/* ---------- 提示词预览：拉取后端提示词 + 技能（只读） ---------- */
 const md = ref<AgentMdPayload>({ prompts: [], skills: [] })
 const selected = ref<AgentMdFile | null>(null)
 const mdLoaded = ref(false)
 const loading = ref(false)
 
-/** 技能文档开头常带 YAML 元信息（name / description），只作为文件属性，不参与正文渲染 */
 function stripFrontmatter(src: string): string {
   return src.replace(/^---\r?\n[\s\S]*?\r?\n-{3,}\s*(?:\r?\n|$)/, '')
 }
 
-/** 当前文件的 Markdown 渲染结果（经过 markdown-it 转义，防 XSS） */
 const mdHtml = computed(() =>
   renderMarkdown(stripFrontmatter(selected.value?.content ?? '')),
 )
@@ -167,7 +150,6 @@ async function openMd() {
   <main class="settings-page">
     <div class="settings-shell">
       <div class="settings-grid">
-        <!-- 左侧：设置项导航 -->
         <aside class="settings-nav">
           <div class="nav-caption">配置项</div>
           <button
@@ -201,15 +183,13 @@ async function openMd() {
           </button>
         </aside>
 
-        <!-- 右侧：设置内容（切换标签时轻入场） -->
         <section :key="tab" class="settings-panel">
-          <!-- 标签 1 · OpenAI 设置 -->
           <template v-if="tab === 'provider'">
             <div class="panel-head">
               <div class="panel-head-copy">
                 <h2 class="panel-title">OpenAI 设置</h2>
                 <p class="panel-desc">
-                  支持任何兼容 OpenAI 格式的接口地址与模型名。保存后，诊断对话与提示词增强都会使用这里的配置。
+                  支持任何兼容 OpenAI 格式的接口地址与模型名。保存后，优化对话与提示词增强都会使用这里的配置。
                 </p>
               </div>
               <span class="panel-badge">
@@ -267,7 +247,6 @@ async function openMd() {
             </footer>
           </template>
 
-          <!-- 标签 2 · 本地备份文件夹 -->
           <template v-else-if="tab === 'backup'">
             <div class="panel-head">
               <div class="panel-head-copy">
@@ -361,7 +340,6 @@ async function openMd() {
             </footer>
           </template>
 
-          <!-- 标签 3 · 提示词预览（只读，Markdown 渲染） -->
           <template v-else>
             <div class="panel-head">
               <div class="panel-head-copy">
@@ -377,7 +355,6 @@ async function openMd() {
             </div>
 
             <div class="md-layout">
-              <!-- 文件列表：提示词 / 技能 两组 -->
               <aside class="md-list">
                 <template v-if="loading">
                   <span v-for="i in 5" :key="i" class="sk sk-item"></span>
@@ -415,7 +392,6 @@ async function openMd() {
                 </template>
               </aside>
 
-              <!-- 文档区 -->
               <div class="md-viewer">
                 <div class="md-viewer-head">
                   <span class="md-path">{{ selected?.path || '未选择文件' }}</span>
@@ -445,7 +421,6 @@ async function openMd() {
 </template>
 
 <style scoped>
-/* ---------- 页面骨架 ---------- */
 .settings-page {
   flex: 1;
   min-height: 0;
@@ -458,7 +433,6 @@ async function openMd() {
   padding: 24px 28px 56px;
 }
 
-/* ---------- 两栏：导航 + 内容 ---------- */
 .settings-grid {
   display: flex;
   align-items: flex-start;
@@ -507,7 +481,6 @@ async function openMd() {
 .nav-item.active {
   background: var(--primary-soft);
 }
-/* 选中项左侧一道短竖线：比整块高亮更克制 */
 .nav-item::before {
   content: '';
   position: absolute;
@@ -569,7 +542,6 @@ async function openMd() {
   opacity: 0.66;
 }
 
-/* ---------- 内容面板 ---------- */
 .settings-panel {
   flex: 1;
   min-width: 0;
@@ -627,7 +599,6 @@ async function openMd() {
   background: var(--success);
 }
 
-/* ---------- OpenAI 设置表单：左标签 + 右控件，发丝线分隔 ---------- */
 .form {
   padding: 0 22px;
 }
@@ -701,7 +672,6 @@ async function openMd() {
   flex: none;
 }
 
-/* ---------- 本地备份 ---------- */
 .backup-folder-row {
   display: flex;
   align-items: center;
@@ -796,7 +766,6 @@ async function openMd() {
   color: var(--text-tertiary);
 }
 
-/* ---------- 提示词预览 ---------- */
 .md-layout {
   display: flex;
   height: calc(100vh - 300px);
@@ -921,7 +890,6 @@ async function openMd() {
   margin: 0 auto;
 }
 
-/* Markdown 排版：标题、正文、列表、代码、引用、表格 */
 .md-doc-inner :deep(h1),
 .md-doc-inner :deep(h2),
 .md-doc-inner :deep(h3),
@@ -1078,7 +1046,6 @@ async function openMd() {
   font-size: 12.5px;
 }
 
-/* 加载骨架：列表条目 + 文档行 */
 .sk {
   display: block;
   border-radius: var(--radius-sm);
@@ -1115,7 +1082,6 @@ async function openMd() {
   width: 64%;
 }
 
-/* ---------- 动效 ---------- */
 @keyframes settings-rise {
   from {
     opacity: 0;
@@ -1145,7 +1111,6 @@ async function openMd() {
   }
 }
 
-/* ---------- 窄屏 ---------- */
 @media (max-width: 920px) {
   .settings-shell {
     padding: 20px 16px 44px;

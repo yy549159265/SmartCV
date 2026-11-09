@@ -1,18 +1,6 @@
-/**
- * 简历库（备份文件夹）状态管理。
- *
- * 设计：
- *   - 备份文件夹是「简历库」：一份简历 = 一个 .json 文件，文件名 = 简历名；
- *   - 当前正在编辑的那份简历由 currentFile 指向；
- *   - 文件夹句柄本身存在 IndexedDB（见 utils/fs/directoryHandle），
- *     这里只把文件夹名、文件索引、当前文件名等轻量信息缓存到 localStorage，
- *     没授权时也能先把列表显示出来；
- *   - 所有会读写文件夹的操作走 exclusive 队列，避免「改名」和「切换文档」
- *     同时进行时互相踩到。
- */
 import { defineStore } from 'pinia'
 import { useResumeStore } from '@/stores/resume'
-import { useOptimizeStore } from '@/stores/optimize'
+import { useReviewStore } from '@/stores/review'
 import { resumeName, resumeFilename } from '@/composables/useResumeName'
 import { dialog, message } from '@/utils/feedback'
 import { fileTitle, sanitizeFileTitle } from '@/utils/filename'
@@ -37,13 +25,10 @@ import {
   type BackupFileInfo,
 } from '@/utils/fs/backupFolder'
 
-/** 文件夹状态：不支持 / 未绑定 / 需要授权 / 已连接 / 权限被拒 */
 export type BackupStatus = 'unsupported' | 'unbound' | 'needs-permission' | 'ready' | 'denied'
 
-/** 新建文档的结果（invalid = 数据不是合法简历；cancelled = 用户在重名弹窗里取消） */
 export type CreateDocumentResult = 'ok' | 'invalid' | 'cancelled'
 
-/** 重命名结果：conflict 表示目标文件已存在，由 UI 决定覆盖还是保留两份 */
 export interface RenameDocumentResult {
   ok: boolean
   conflict?: string
@@ -57,28 +42,16 @@ const LS_CURRENT = 'smartcv-resume-current'
 const LS_CURRENT_MTIME = 'smartcv-backup-current-mtime'
 const LS_PENDING = 'smartcv-backup-pending'
 
-/** 文件 mtime 与上次记录之间的容差（毫秒），避免把自家刚写的文件误判成外部修改 */
 const MTIME_TOLERANCE = 2000
 
-/** 文件夹句柄（非响应式；需要持久化的只有它的 IndexedDB 副本） */
 let dir: FileSystemDirectoryHandle | null = null
-/** 自动保存防抖计时器 */
 let saveTimer: ReturnType<typeof setTimeout> | null = null
-/** 写文件的串行队列：同一时间只写一个文件，避免 createWritable 互相覆盖 */
 let writeChain: Promise<unknown> = Promise.resolve()
-/** 文件夹读写操作的串行队列：切换 / 改名 / 新建 / 同步不并发 */
 let opChain: Promise<unknown> = Promise.resolve()
-/** 避免同一条写入错误反复弹 toast */
 let writeErrorShown = false
-/** 避免外部修改提示反复弹 */
 let externalWarnShown = false
-/**
- * 最近一次与文件夹同步（读入或写入）的简历内容序列化。
- * 自动保存只写真正变化过的内容：打开文档、撤销回已保存状态时不会反复写盘。
- */
 let lastSyncedJson: string | null = null
 
-/** 把操作串起来执行（前一个失败也继续执行下一个） */
 function exclusive<T>(fn: () => Promise<T>): Promise<T> {
   const next = opChain.then(fn, fn)
   opChain = next.then(
@@ -92,12 +65,10 @@ function resumeSnapshot(): unknown {
   return JSON.parse(JSON.stringify(useResumeStore().resume))
 }
 
-/** 当前简历内容（含新建时重新生成的 id）的序列化 */
 function currentResumeJson(): string {
   return JSON.stringify(useResumeStore().resume)
 }
 
-/** 替换当前简历，并把「已同步内容」更新为替换后的版本（避免刚打开就触发一次写盘） */
 function replaceResume(data: unknown): boolean {
   const resumeStore = useResumeStore()
   const ok = resumeStore.openResume(data)
@@ -115,7 +86,6 @@ function errorText(err: unknown): string {
   return err instanceof Error ? err.message : String(err)
 }
 
-/** 简单确认框：返回用户是否点了“确定” */
 function confirmAction(options: {
   title: string
   content: string
@@ -142,7 +112,6 @@ function confirmAction(options: {
   })
 }
 
-/** 读取上次缓存的文件索引（未授权时也能先显示列表） */
 function readCachedIndex(): BackupFileInfo[] {
   try {
     const raw = localStorage.getItem(LS_INDEX)
@@ -172,38 +141,25 @@ function readCachedIndex(): BackupFileInfo[] {
 export const useDocumentsStore = defineStore('documents', {
   state: () => ({
     status: 'unbound' as BackupStatus,
-    /** 文件夹显示名（浏览器只给 name，拿不到完整路径） */
     folderName: localStorage.getItem(LS_FOLDER_NAME) ?? '',
-    /** 文件夹里的 JSON 简历列表 */
     files: readCachedIndex(),
-    /** 当前正在编辑的文件名（如 张三-前端.json） */
     currentFile: localStorage.getItem(LS_CURRENT) || null,
-    /** 最近一次同步时间 */
     lastSyncAt: Number(localStorage.getItem(LS_LAST_SYNC) || 0),
-    /** 当前文件上次被本应用读到 / 写入时的 mtime，用于外部修改检测 */
     lastKnownMtime: Number(localStorage.getItem(LS_CURRENT_MTIME) || 0),
-    /** 检测到文件被外部修改（自动保存暂停，等用户点同步处理） */
     externalChanged: false,
-    /** 同步 / 写入进行中 */
     busy: false,
-    /** 正在切换文档：此期间的自动保存要跳过，避免把旧内容写进新文件 */
     switching: false,
     initialized: false,
   }),
 
   getters: {
-    /** 是否选过文件夹（不管当前有没有权限） */
     isBound: (state): boolean => state.folderName !== '',
-    /** 是否能在编辑器里浏览 / 打开文件 */
     canBrowse: (state): boolean => state.status === 'ready' || state.status === 'needs-permission',
-    /** 当前简历名（没有当前文件时为空） */
     currentTitle: (state): string => (state.currentFile ? fileTitle(state.currentFile) : ''),
   },
 
   actions: {
-    /* ==================== 初始化 / 绑定 ==================== */
 
-    /** 应用启动时调用一次：取回句柄、查询权限、恢复当前文件 */
     async init(): Promise<void> {
       if (this.initialized) return
       this.initialized = true
@@ -238,7 +194,6 @@ export const useDocumentsStore = defineStore('documents', {
       await this.restoreCurrentFromFolder()
     },
 
-    /** 选择文件夹：选中即持久化句柄，不需要先点同步 */
     async bindFolder(): Promise<boolean> {
       if (!supportsDirectoryPicker()) {
         this.status = 'unsupported'
@@ -249,7 +204,6 @@ export const useDocumentsStore = defineStore('documents', {
         const handle = await pickDirectory()
         if (!handle) return false
 
-        // 重新选的是不是同一个文件夹（同一个文件夹可以保留当前文件指针）
         const previous = dir
         const sameFolder = previous
           ? await previous.isSameEntry(handle).catch(() => false)
@@ -265,12 +219,10 @@ export const useDocumentsStore = defineStore('documents', {
         this.status =
           permission === 'granted' ? 'ready' : permission === 'denied' ? 'denied' : 'needs-permission'
 
-        // 换成另一个文件夹：当前文件指针作废（内容仍在内存里，下次同步会写入新文件夹）
         if (!sameFolder) this.clearCurrentFile()
 
         if (this.status === 'ready') {
           await this.refreshFiles()
-          // 同一个文件夹里当前文件被删掉 / 改名：也清掉指针
           const currentExists =
             this.currentFile != null &&
             this.files.some((f) => f.name.toLowerCase() === this.currentFile!.toLowerCase())
@@ -284,7 +236,6 @@ export const useDocumentsStore = defineStore('documents', {
       }
     },
 
-    /** 断开备份文件夹：只清句柄和索引，不删除任何文件 */
     async unbindFolder(): Promise<void> {
       await clearDirectoryHandle()
       dir = null
@@ -308,7 +259,6 @@ export const useDocumentsStore = defineStore('documents', {
       localStorage.removeItem(LS_PENDING)
     },
 
-    /** 申请 / 恢复文件夹权限（必须在用户点击里调用） */
     async ensurePermission(): Promise<boolean> {
       if (!dir) {
         dir = await loadDirectoryHandle()
@@ -328,7 +278,6 @@ export const useDocumentsStore = defineStore('documents', {
       return permission === 'granted'
     },
 
-    /** 重新扫描文件夹 */
     async refreshFiles(): Promise<void> {
       if (!dir) return
       try {
@@ -341,12 +290,9 @@ export const useDocumentsStore = defineStore('documents', {
       }
     },
 
-    /** 只有已连接时才刷新（编辑器下拉打开时用，避免未授权时弹错） */
     async refreshIfReady(): Promise<void> {
       if (this.status === 'ready') await this.refreshFiles()
     },
-
-    /* ==================== 当前文件指针 ==================== */
 
     setCurrentFile(name: string, mtime: number): void {
       this.currentFile = name
@@ -363,12 +309,6 @@ export const useDocumentsStore = defineStore('documents', {
       localStorage.removeItem(LS_CURRENT_MTIME)
     },
 
-    /* ==================== 打开 / 新建 / 导入 ==================== */
-
-    /**
-     * 打开文件夹里的一份简历。
-     * 切换前先把当前文档的修改 flush 掉；写不进去时问用户是否仍要切换。
-     */
     openFile(name: string): Promise<boolean> {
       return exclusive(async () => {
         if (!this.isBound) return false
@@ -404,7 +344,6 @@ export const useDocumentsStore = defineStore('documents', {
             return false
           }
 
-          // 先切换指针再替换数据：自动保存只会写向新文件
           this.switching = true
           try {
             this.setCurrentFile(info.name, info.mtime)
@@ -412,7 +351,7 @@ export const useDocumentsStore = defineStore('documents', {
             resumeName.value = fileTitle(info.name)
             this.externalChanged = false
             externalWarnShown = false
-            useOptimizeStore().clearMessages()
+            useReviewStore().clearMessages()
           } finally {
             this.switching = false
           }
@@ -424,11 +363,6 @@ export const useDocumentsStore = defineStore('documents', {
       })
     },
 
-    /**
-     * 删除文件夹里的一份简历（不可恢复，调用方负责二次确认）。
-     * 删除的是当前正在编辑的那份时：只解除文件指针，内容仍留在浏览器里，
-     * 之后对这份内容的修改不会再自动写回文件夹（避免把刚删的文件又建出来）。
-     */
     deleteFile(name: string): Promise<boolean> {
       return exclusive(async () => {
         if (!this.isBound || !name) return false
@@ -439,14 +373,10 @@ export const useDocumentsStore = defineStore('documents', {
 
         const deletingCurrent = this.currentFile?.toLowerCase() === name.toLowerCase()
 
-        // 先停掉防抖中的自动保存，并等排队中的写盘结束，
-        // 否则删除完成后，之前排队的写入会把文件重新创建出来。
         if (saveTimer) {
           clearTimeout(saveTimer)
           saveTimer = null
         }
-        // switching 一直保持到「当前文件指针已解除」为止：否则删除成功、
-        // 指针还没清的这段时间里，一次自动保存就能把文件又写回来。
         this.switching = true
         try {
           await writeChain.catch(() => undefined)
@@ -474,7 +404,6 @@ export const useDocumentsStore = defineStore('documents', {
       })
     },
 
-    /** 新建空白简历；绑定文件夹时立即写一个 新简历.json */
     createBlank(): Promise<CreateDocumentResult> {
       return exclusive<CreateDocumentResult>(async () => {
         if (!this.isBound) {
@@ -486,7 +415,7 @@ export const useDocumentsStore = defineStore('documents', {
           } finally {
             this.switching = false
           }
-          useOptimizeStore().clearMessages()
+          useReviewStore().clearMessages()
           return 'ok'
         }
 
@@ -500,12 +429,11 @@ export const useDocumentsStore = defineStore('documents', {
           } finally {
             this.switching = false
           }
-          useOptimizeStore().clearMessages()
+          useReviewStore().clearMessages()
           message.warning('文件夹未授权，新简历先保存在浏览器；授权后再同步')
           return 'ok'
         }
 
-        // 先把当前这份简历的未保存修改写回旧文件，再切到新简历
         await this.flush()
 
         try {
@@ -517,14 +445,13 @@ export const useDocumentsStore = defineStore('documents', {
             replaceResume([])
             resumeName.value = fileTitle(target)
             this.externalChanged = false
-            useOptimizeStore().clearMessages()
+            useReviewStore().clearMessages()
           } finally {
             this.switching = false
           }
           await this.refreshFiles()
           return 'ok'
         } catch (err) {
-          // 写盘失败仍然让用户先编辑空白简历，修改留在浏览器缓存里
           this.switching = true
           try {
             replaceResume([])
@@ -534,18 +461,13 @@ export const useDocumentsStore = defineStore('documents', {
           } finally {
             this.switching = false
           }
-          useOptimizeStore().clearMessages()
+          useReviewStore().clearMessages()
           message.error(`新建失败：${errorText(err)}（已改为保存在浏览器）`)
           return 'ok'
         }
       })
     },
 
-    /**
-     * 创建一份新文档（导入 PDF/Word、导入 JSON、加载示例共用）。
-     * - 已绑定文件夹：写一个新 JSON 文件并设为当前文档；
-     * - 未绑定 / 未授权：只替换内存里的简历，等授权后同步。
-     */
     createDocument(
       data: unknown,
       suggestedTitle: string,
@@ -566,7 +488,7 @@ export const useDocumentsStore = defineStore('documents', {
           } finally {
             this.switching = false
           }
-          useOptimizeStore().clearMessages()
+          useReviewStore().clearMessages()
           return 'ok'
         }
 
@@ -580,12 +502,11 @@ export const useDocumentsStore = defineStore('documents', {
           } finally {
             this.switching = false
           }
-          useOptimizeStore().clearMessages()
+          useReviewStore().clearMessages()
           message.warning('文件夹未授权，已先保存到浏览器；授权后再同步到文件夹')
           return 'ok'
         }
 
-        // 先把当前这份简历的未保存修改写回旧文件，再创建新文档
         await this.flush()
 
         const target = await this.chooseNewName(title, options.conflict ?? 'unique')
@@ -600,14 +521,13 @@ export const useDocumentsStore = defineStore('documents', {
             resumeName.value = fileTitle(target)
             this.externalChanged = false
             externalWarnShown = false
-            useOptimizeStore().clearMessages()
+            useReviewStore().clearMessages()
           } finally {
             this.switching = false
           }
           await this.refreshFiles()
           return 'ok'
         } catch (err) {
-          // 写盘失败仍然让用户继续编辑，修改会留在 localStorage
           this.switching = true
           try {
             replaceResume(data)
@@ -617,17 +537,13 @@ export const useDocumentsStore = defineStore('documents', {
           } finally {
             this.switching = false
           }
-          useOptimizeStore().clearMessages()
+          useReviewStore().clearMessages()
           message.error(`写入备份文件夹失败：${errorText(err)}（已保存在浏览器）`)
           return 'ok'
         }
       })
     },
 
-    /**
-     * 重命名当前文件。
-     * 名称冲突时默认返回 conflict，由 UI 询问后带 conflict 选项再次调用。
-     */
     renameCurrent(
       newTitle: string,
       options: { conflict?: 'overwrite' | 'unique' } = {},
@@ -644,7 +560,6 @@ export const useDocumentsStore = defineStore('documents', {
         const oldTitle = fileTitle(oldName)
         if (clean === oldTitle) return { ok: true }
 
-        // Windows 文件名大小写不敏感：只改显示名，不做「写新文件 + 删旧文件」
         if (clean.toLowerCase() === oldTitle.toLowerCase()) return { ok: true }
 
         const firstChoice = `${clean}.json`
@@ -661,7 +576,6 @@ export const useDocumentsStore = defineStore('documents', {
       })
     },
 
-    /** 真正执行“写新文件 + 删旧文件 + 切换指针” */
     async performRename(targetName: string): Promise<RenameDocumentResult> {
       if (!dir || !this.currentFile) return { ok: false }
       const oldName = this.currentFile
@@ -689,9 +603,6 @@ export const useDocumentsStore = defineStore('documents', {
       }
     },
 
-    /* ==================== 保存 / 同步 ==================== */
-
-    /** 把当前简历写回文件夹（不弹成功提示；失败时按需提示一次） */
     async saveNow(options: { silent?: boolean; force?: boolean } = {}): Promise<boolean> {
       if (this.switching) return false
       if (!this.isBound) return true
@@ -707,13 +618,11 @@ export const useDocumentsStore = defineStore('documents', {
 
       const run = async (): Promise<boolean> => {
         try {
-          // 内容与上次读入 / 写入完全一致：没有实际改动，不碰文件（打开文档、撤销回已保存状态等）
           if (!options.force && this.currentFile === name && json === lastSyncedJson) {
             localStorage.removeItem(LS_PENDING)
             return true
           }
 
-          // 外部修改检测：除非用户明确选择覆盖，否则暂停自动保存
           if (!options.force && knownMtime > 0) {
             const info = await getFolderFileInfo(dir!, name)
             if (info && info.mtime > knownMtime + MTIME_TOLERANCE) {
@@ -727,7 +636,6 @@ export const useDocumentsStore = defineStore('documents', {
           }
 
           const mtime = await writeResumeJson(dir!, name, snapshot)
-          // 排队写盘期间用户可能已经切换了文档，只有仍指向这个文件时才更新指针
           if (this.currentFile === name) {
             this.setCurrentFile(name, mtime)
             lastSyncedJson = json
@@ -755,11 +663,9 @@ export const useDocumentsStore = defineStore('documents', {
       return task
     },
 
-    /** 自动保存：防抖 1 秒写文件夹 */
     scheduleSave(delay = 1000): void {
       if (!this.initialized || this.switching) return
       if (!dir || this.status !== 'ready' || !this.currentFile) return
-      // 标记「有改动尚未落盘」：若此时刷新/崩溃，下次启动会优先用 localStorage 里的内容
       localStorage.setItem(LS_PENDING, '1')
       if (saveTimer) clearTimeout(saveTimer)
       saveTimer = setTimeout(() => {
@@ -768,10 +674,6 @@ export const useDocumentsStore = defineStore('documents', {
       }, delay)
     },
 
-    /**
-     * 立即把防抖中的修改写盘。
-     * 返回值表示“当前内容是否已经安全落盘”：没有变化 / 没有绑定文件夹也算成功。
-     */
     async flush(): Promise<boolean> {
       if (saveTimer) {
         clearTimeout(saveTimer)
@@ -784,13 +686,6 @@ export const useDocumentsStore = defineStore('documents', {
       return this.saveNow({ silent: true })
     },
 
-    /**
-     * 设置页「立即同步」：
-     *   1. 申请权限、重新扫描列表；
-     *   2. 当前简历还没有对应文件 → 写一个新文件；
-     *   3. 当前文件被外部修改 / 删除 → 让用户选择处理方式。
-     * 不会批量导入、不会删除任何文件。
-     */
     sync(): Promise<boolean> {
       return exclusive(async () => {
         if (!this.isBound) {
@@ -809,7 +704,6 @@ export const useDocumentsStore = defineStore('documents', {
 
           const resumeStore = useResumeStore()
 
-          // 还没有当前文件：把内存里的简历写进文件夹
           if (!this.currentFile) {
             if (resumeStore.resume.length === 0) return true
             const target = await this.chooseNewName(resumeFilename(), 'ask')
@@ -828,7 +722,6 @@ export const useDocumentsStore = defineStore('documents', {
             (f) => f.name.toLowerCase() === currentName.toLowerCase(),
           )
 
-          // 当前文件被外部删除 / 改名
           if (!info) {
             const recreate = await confirmAction({
               title: '当前简历文件不在了',
@@ -866,7 +759,6 @@ export const useDocumentsStore = defineStore('documents', {
       })
     },
 
-    /** 外部修改冲突：载入文件版本 / 用当前内容覆盖 / 稍后处理 */
     async resolveExternalChange(info: BackupFileInfo): Promise<void> {
       let choice: 'load' | 'overwrite' | null = null
       await new Promise<void>((resolve) => {
@@ -896,7 +788,6 @@ export const useDocumentsStore = defineStore('documents', {
       }
     },
 
-    /** 直接从文件夹载入当前文件（不再 flush，避免把本地内容写回文件） */
     async loadCurrentFromFolder(info: BackupFileInfo): Promise<boolean> {
       if (!dir) return false
       try {
@@ -913,7 +804,7 @@ export const useDocumentsStore = defineStore('documents', {
           resumeName.value = fileTitle(info.name)
           this.externalChanged = false
           externalWarnShown = false
-          useOptimizeStore().clearMessages()
+          useReviewStore().clearMessages()
         } finally {
           this.switching = false
         }
@@ -924,11 +815,9 @@ export const useDocumentsStore = defineStore('documents', {
       }
     },
 
-    /** 启动时从文件夹恢复当前文件（有未写盘修改时以本地缓存为准） */
     async restoreCurrentFromFolder(): Promise<void> {
       if (!dir || !this.currentFile) return
 
-      // 上次退出时有修改没写进文件夹：以 localStorage 里的内容为准，补写一次
       if (localStorage.getItem(LS_PENDING) === '1') {
         await this.saveNow({ silent: true })
         return
@@ -936,21 +825,12 @@ export const useDocumentsStore = defineStore('documents', {
 
       const info = await getFolderFileInfo(dir, this.currentFile)
       if (!info) {
-        // 文件被删除 / 改名：内容仍在浏览器缓存里，等用户同步时决定
         this.externalChanged = true
         return
       }
       await this.loadCurrentFromFolder(info)
     },
 
-    /* ==================== 导出 ==================== */
-
-    /**
-     * 导出 JSON：绑定了文件夹就写回当前文件（没有当前文件时新建一个）。
-     * - saved：已写入文件夹
-     * - unavailable：没有文件夹 / 没有权限 / 写入失败，调用方改用浏览器下载
-     * - cancelled：用户在覆盖确认或命名弹窗里取消，不要做任何兜底
-     */
     exportJson(): Promise<'saved' | 'unavailable' | 'cancelled'> {
       return exclusive<'saved' | 'unavailable' | 'cancelled'>(async () => {
         if (!this.isBound) return 'unavailable'
@@ -988,7 +868,6 @@ export const useDocumentsStore = defineStore('documents', {
       })
     },
 
-    /** 把 PDF 写入备份文件夹；失败时返回 false，由调用方降级为浏览器下载 */
     async savePdf(blob: Blob, title: string): Promise<boolean> {
       if (!this.isBound) return false
       if (!(await this.ensurePermission()) || !dir) return false
@@ -1002,13 +881,6 @@ export const useDocumentsStore = defineStore('documents', {
       }
     },
 
-    /* ==================== 内容替换辅助 ==================== */
-
-    /**
-     * 选一个不冲突的文件名。
-     * mode = 'unique' 直接加序号；mode = 'ask' 先问用户“保留两份 / 覆盖原文件”。
-     * 返回 null 表示用户取消。
-     */
     async chooseNewName(baseTitle: string, mode: 'ask' | 'unique'): Promise<string | null> {
       if (!dir) return null
       const base = sanitizeFileTitle(baseTitle)

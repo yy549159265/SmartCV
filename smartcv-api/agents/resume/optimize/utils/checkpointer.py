@@ -13,7 +13,6 @@ from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 logger = logging.getLogger("smartcv")
 
 _saver: AsyncSqliteSaver | None = None
-# from_conn_string 返回异步上下文管理器，手动 __aenter__ 后持有，退出时 __aexit__
 _holder = None
 
 

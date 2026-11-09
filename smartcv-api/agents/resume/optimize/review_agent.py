@@ -1,7 +1,8 @@
-"""优化 agent：先逐条审查诊断（review_diagnosis），再对判为 change 的诊断执行替换。
+"""审查 agent：逐条 patch_content 处理诊断，判为 change 的就地替换文字。
 
-patch_content 只收诊断序号，改哪段文字由诊断决定；因此实际改动严格对应被批准的诊断，
-不会出现「诊断说 A、优化改 B」的错位。跑完直接读 store.resume 就是改好的整份简历 JSON。
+patch_content 只收诊断序号 + 判定 + 新文字，改哪段文字由诊断决定；因此实际改动严格
+对应被批准的诊断，不会出现「诊断说 A、审查改 B」的错位。跑完直接读 store.resume
+就是改好的整份简历 JSON。
 
 所有事件（agent_start / 逐 token delta / 工具 tool_call·tool_result / agent_end）
 都经 get_stream_writer() 发成 LangGraph custom 事件，由外层图转发成 SSE。
@@ -14,16 +15,14 @@ from langchain.agents import create_agent
 from langgraph.config import get_stream_writer
 
 from agents.resume.optimize.utils.diagnosis import format_diagnosis
-from agents.resume.optimize.tools.optimize_resume import OptimizeStore, make_patch_tools
+from agents.resume.optimize.tools.patch_resume import ReviewStore, make_patch_tools
 from agents.utils.resume import locate_unit
 from agents.utils.skillmiddleware import SkillMiddleware
 
 logger = logging.getLogger("smartcv")
 
-_SYSTEM_PROMPT = (Path(__file__).resolve().parent / "system_prompt_optimize.md").read_text(encoding="utf-8")
+_SYSTEM_PROMPT = (Path(__file__).resolve().parent / "system_prompt_review.md").read_text(encoding="utf-8")
 
-# 改写强度只改变「表达可以改多深」，事实 / 结构 / 坐标边界不变。
-# 值会被替换进 system_prompt_optimize.md 的 {rewrite_rules} 占位符。
 _REWRITE_MODE_RULES = {
     "standard": (
         "对判为 change 的诊断，保留作者原有的语气、信息量和事实边界，"
@@ -48,8 +47,8 @@ def _system_prompt(rewrite_mode: str) -> str:
     return _SYSTEM_PROMPT.replace("{rewrite_rules}", rewrite_rules)
 
 
-def _target_texts(store: OptimizeStore, diagnosis: list[dict]) -> list[str]:
-    """按诊断序号取出目标位置的完整原文，给优化 agent 当「原文」看。
+def _target_texts(store: ReviewStore, diagnosis: list[dict]) -> list[str]:
+    """按诊断序号取出目标位置的完整原文，给审查 agent 当「原文」看。
 
     诊断里的 quote 被截到 60 字，而 patch_content 替换的是整个文字单元；
     只给片段时模型会照着片段改写，片段之后的正文被整段丢掉。
@@ -65,18 +64,18 @@ def _target_texts(store: OptimizeStore, diagnosis: list[dict]) -> list[str]:
     return texts
 
 
-def build_agent(llm, store: OptimizeStore):
-    """创建优化 agent：工具闭包绑定本次的 store，改动直接落在 store.resume 上。"""
+def build_agent(llm, store: ReviewStore):
+    """创建审查 agent：工具闭包绑定本次的 store，改动直接落在 store.resume 上。"""
     return create_agent(
         model=llm,
-        middleware=[SkillMiddleware(["coordinate", "optimize"])],
+        middleware=[SkillMiddleware(["coordinate", "review"])],
         tools=make_patch_tools(store),
     )
 
 
 async def run(
     llm,
-    store: OptimizeStore,
+    store: ReviewStore,
     markdown: str,
     jd: str,
     diagnosis: list[dict],
@@ -85,7 +84,7 @@ async def run(
     style_notes: list[str] | None = None,
     rewrite_mode: str = "standard",
 ) -> str:
-    """跑优化 agent（工具会就地改 store.resume）。
+    """跑审查 agent（工具会就地改 store.resume）。
 
     返回 agent 的收尾语（一般为空）；真实结果在 store.resume 里。
     style_notes 是诊断 agent 从优秀示例提炼的写作规范：只约束怎么写，
@@ -93,23 +92,19 @@ async def run(
     rewrite_mode = standard（保留原句式）/ bold（允许整段重写表达）。
     """
     writer = get_stream_writer()
-    writer({"type": "agent_start", "agent": "optimize", "label": "优化 agent"})
+    writer({"type": "agent_start", "agent": "review", "label": "审查 agent"})
 
-    # 诊断项登记到 store：审查状态、坐标、原文核对都以这份只读副本为准
     store.set_diagnoses(diagnosis)
 
     agent = build_agent(llm, store)
     jd_block = f"<JD>\n{jd}\n</JD>\n\n" if (jd or "").strip() else ""
-    # 优化 agent 用 0 起的「诊断 N」编号，和 review_diagnosis / patch_content 的 index 对齐
     diagnosis_text = format_diagnosis(
         diagnosis, include_coords=True, zero_based=True, full_texts=_target_texts(store, diagnosis)
     )
-    # 写作规范来自优秀示例，只描述表达方式；示例原文不进优化环节
     style_block = ""
     if style_notes:
         rules = "\n".join(f"{i}. {note}" for i, note in enumerate(style_notes, 1))
         style_block = f"<写作规范>\n{rules}\n</写作规范>\n\n"
-    # 输入用 <> 标签分隔，和诊断 agent 的输入格式保持一致，避免模型把几段内容混读
     message = (
         f"<简历>\n{markdown}\n</简历>\n\n"
         f"{jd_block}"
@@ -118,9 +113,6 @@ async def run(
         f"<修改要求>\n{question}\n</修改要求>\n\n"
         f"请按诊断逐条修改。"
     )
-    # 用 astream 驱动（工具调用也走事件循环）：messages 模式逐 token 流式发
-    # 思考过程，custom 模式把工具的 tool_call/tool_result 事件转发出去；
-    # 改动都在 patch_content 里完成，跑完直接读 store.resume。
     async for item in agent.astream(
         {"messages": [{"type": "system", "content": _system_prompt(rewrite_mode)}, {"type": "human", "content": message}]},
         stream_mode=["messages", "custom"],
@@ -132,15 +124,14 @@ async def run(
         if mode == "custom":
             writer(chunk)
             continue
-        # 推理模型的思考在 reasoning_content、答案在 content，分开打 kind 发给前端
         msg = chunk[0]
         kwargs = getattr(msg, "additional_kwargs", {}) or {}
         thinking = kwargs.get("reasoning_content") or kwargs.get("reasoning") or ""
         content = getattr(msg, "content", "") or ""
         if thinking:
-            writer({"type": "delta", "stage": "optimize", "text": thinking, "kind": "thinking"})
+            writer({"type": "delta", "stage": "review", "text": thinking, "kind": "thinking"})
         if content:
-            writer({"type": "delta", "stage": "optimize", "text": content, "kind": "answer"})
-    writer({"type": "agent_end", "agent": "optimize", "label": "优化 agent"})
-    logger.info("optimize-agent 完成 %d 处修改", len(store.patches))
+            writer({"type": "delta", "stage": "review", "text": content, "kind": "answer"})
+    writer({"type": "agent_end", "agent": "review", "label": "审查 agent"})
+    logger.info("review-agent 完成 %d 处修改", len(store.patches))
     return ""

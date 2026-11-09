@@ -1,20 +1,4 @@
 <script setup lang="ts">
-/**
- * 顶部 · 组件库（横向展开式面板，位于编辑画布上方）
- *
- * 一级分类三个（Tab 切换）：
- *  - 章节：空白章节 + 命名章节预设（个人简介 / 教育经历 / 工作经历 / 项目经历 / 专业技能…）；
- *  - 布局：空白布局 + 结构预设（2列 / 3列 / 2行 / 3行），卡片带结构示意图；
- *  - 组件：基础组件（通用内容类型）+ 内容预设，两个二级 Tab，支持搜索。
- *
- * 添加方式两种：
- *  - 点击卡片 = 快速添加（章节 → 画布末尾；布局 → 当前选中章节；内容 → 当前选中窗口）；
- *  - 拖拽 = 精确定位（拖到画布指定位置）。
- *
- * 拖拽用 vue-draggable-plus（内部 SortableJS），三个分组名严格分开
- * （smartcv-group / smartcv-row / smartcv-content），与画布各列表一一对应，
- * 拖拽机制与既有实现完全一致，未做任何改动。
- */
 import { computed, ref } from 'vue'
 import { VueDraggable } from 'vue-draggable-plus'
 import {
@@ -36,13 +20,10 @@ import { message } from '@/utils/feedback'
 
 const store = useResumeStore()
 
-/** 内容区展示的内容预设（过滤掉 hidden 的） */
 const visibleContentPresets = CONTENT_PRESETS.filter((p) => !p.hidden)
 
-/** 面板收起状态：收起后画布获得更多空间 */
 const collapsed = ref(false)
 
-/** 一级分类（图标与主页功能介绍区共用同一套 IconGlyph 资源） */
 type TabKey = 'section' | 'layout' | 'content'
 const TABS: { key: TabKey; label: string; icon: 'layout-list' | 'columns-2' | 'shapes' }[] = [
   { key: 'section', label: '章节', icon: 'layout-list' },
@@ -51,17 +32,13 @@ const TABS: { key: TabKey; label: string; icon: 'layout-list' | 'columns-2' | 's
 ]
 const activeTab = ref<TabKey>('section')
 
-/** 组件二级 Tab：基础组件 / 内容预设 */
 const contentSub = ref<'basic' | 'preset'>('basic')
-/** 搜索关键字（匹配名称与说明） */
 const contentQuery = ref('')
 
-/* ---------- 拖拽配置（与画布各列表同组；pull:clone = 拖出去复制一份） ---------- */
 const sectionProps = { group: { name: 'smartcv-group', pull: 'clone' as const, put: false }, sort: false, animation: 150 }
 const rowProps = { group: { name: 'smartcv-row', pull: 'clone' as const, put: false }, sort: false, animation: 150 }
 const contentProps = { group: { name: 'smartcv-content', pull: 'clone' as const, put: false }, sort: false, animation: 150 }
 
-/** 各列表的预设数据（只读，拖拽克隆不会修改它们） */
 const sectionGeneral = ref(GENERIC_SECTION_PRESETS)
 const sectionPresetList = ref(SECTION_PRESETS)
 const rowGeneral = ref(GENERIC_ROW_PRESETS)
@@ -69,22 +46,17 @@ const rowPresetList = ref(ROW_PRESETS)
 const contentGeneral = ref(GENERIC_CONTENT_PRESETS)
 const contentPresetList = ref(visibleContentPresets)
 
-/** 搜索过滤：组件/预设卡片按名称与说明匹配（列表本身不动，拖拽数据不受影响） */
 const matchQuery = (name: string, desc: string) => {
   const q = contentQuery.value.trim().toLowerCase()
   if (!q) return true
   return name.toLowerCase().includes(q) || desc.toLowerCase().includes(q)
 }
 
-/* ---------- 点击添加（拖拽之外的快捷通道，全部走 store 既有 action） ---------- */
-
-/** 章节预设点击：追加到画布末尾并选中 */
 function onSectionClick(p: SectionPreset) {
   store.addSection(p)
   message.success(`已添加「${p.name}」`)
 }
 
-/** 布局预设点击：加到当前选中章节的末尾并选中（选中窗口/内容时用其所属章节） */
 function onRowClick(p: RowPreset) {
   const s = store.selectedSection ?? store.selectedRow?.section ?? store.selectedContent?.section
   if (!s) {
@@ -98,7 +70,6 @@ function onRowClick(p: RowPreset) {
   }
 }
 
-/** 内容预设点击：加到当前选中的布局窗口（没有则用选中章节的最后一片窗口；再没有就新建） */
 function onContentClick(p: ContentPreset) {
   const target = store.selectedContent ?? store.selectedRow
   if (target) {
@@ -108,7 +79,6 @@ function onContentClick(p: ContentPreset) {
   }
   const s = store.selectedSection
   if (s) {
-    // addContent 内部会自动落到容器窗口的最后一片叶子，这里只需要顶层最后一行
     if (s.rows.length > 0) {
       store.addContent(s.id, s.rows[s.rows.length - 1].id, p)
     } else {
@@ -121,20 +91,15 @@ function onContentClick(p: ContentPreset) {
   message.warning('先在画布中选中一个章节或布局窗口，再添加组件')
 }
 
-/**
- * 卡片悬停提示：名称、说明和两种添加方式都必须能从 title 里看到。
- */
 function cardTip(p: { name: string; desc: string }, where: string) {
   return `${p.name} · ${p.desc}｜点击添加；或拖到${where}`
 }
 
-/** 章节预设卡片：统计自带的模块数（含嵌套子窗口里的内容），作为「包含模块」提示 */
 const moduleCount = (p: SectionPreset) =>
   (p.rows ?? []).reduce(function count(n: number, r: LayoutWindowPreset): number {
     return n + (r.contents?.length ?? 0) + (r.rows ?? []).reduce(count, 0)
   }, 0)
 
-/** 布局卡片的结构示意图样式：按列/行数取不同 class */
 const rowDiagramClass = (p: RowPreset) => {
   if (p.columns === 2) return 'd-2col'
   if (p.columns === 3) return 'd-3col'
@@ -146,7 +111,6 @@ const rowDiagramClass = (p: RowPreset) => {
 
 <template>
   <section class="library">
-    <!-- 单行工具栏：与「编辑画布」工具栏同高同格式（图标块 + 粗标题 + 分类 Tab + 提示/收起） -->
     <div class="library-header">
       <span class="library-title-icon"><IconGlyph name="layout-template" :size="15" /></span>
       <h2 class="library-title">组件库</h2>
@@ -173,9 +137,7 @@ const rowDiagramClass = (p: RowPreset) => {
       </button>
     </div>
 
-    <!-- ==================== 面板主体 ==================== -->
     <div v-show="!collapsed" class="library-body">
-      <!-- ---------- 章节 ---------- -->
       <div v-if="activeTab === 'section'" class="lib-pane">
         <VueDraggable v-model="sectionGeneral" v-bind="sectionProps" class="section-grid">
           <button
@@ -211,7 +173,6 @@ const rowDiagramClass = (p: RowPreset) => {
         </VueDraggable>
       </div>
 
-      <!-- ---------- 布局 ---------- -->
       <div v-else-if="activeTab === 'layout'" class="lib-pane">
         <VueDraggable v-model="rowGeneral" v-bind="rowProps" class="layout-grid">
           <button
@@ -237,7 +198,6 @@ const rowDiagramClass = (p: RowPreset) => {
             :title="cardTip(p, '章节内')"
             @click="onRowClick(p)"
           >
-            <!-- 结构示意图：列布局 = 竖条并排，行布局 = 横条堆叠（条数 = 列/行数） -->
             <span class="layout-diagram" :class="rowDiagramClass(p)">
               <i v-for="n in (p.columns ?? p.rows ?? 0)" :key="n" />
             </span>
@@ -249,7 +209,6 @@ const rowDiagramClass = (p: RowPreset) => {
         </VueDraggable>
       </div>
 
-      <!-- ---------- 组件 ---------- -->
       <div v-else class="lib-pane">
         <div class="content-toolbar">
           <div class="content-subtabs">
@@ -314,19 +273,14 @@ const rowDiagramClass = (p: RowPreset) => {
 </template>
 
 <style scoped>
-/* ============================================================
- * 面板骨架：横向条带，位于编辑画布上方
- * ============================================================ */
 .library {
   flex: none;
   display: flex;
   flex-direction: column;
   background: var(--panel-bg);
-  /* 作为容器查询参照：编辑列被拖窄时，头部按实际宽度收缩而不是把文字挤成竖排 */
   container-type: inline-size;
 }
 
-/* 单行工具栏：与画布工具栏同高（40px）、同 padding、同标题/图标规格 */
 .library-header {
   display: flex;
   align-items: center;
@@ -355,14 +309,12 @@ const rowDiagramClass = (p: RowPreset) => {
   white-space: nowrap;
   color: var(--text);
 }
-/* 一级分类 Tab：与主页功能介绍区同款图标 */
 .library-tabs {
   display: flex;
   flex: none;
   gap: 4px;
   margin-left: 12px;
 }
-/* 提示放在标题/Tab 同一侧（与编辑画布工具栏一致），窄列时收缩省略 */
 .library-hint {
   flex: 0 1 auto;
   margin-left: 10px;
@@ -434,9 +386,6 @@ const rowDiagramClass = (p: RowPreset) => {
   opacity: 1;
 }
 
-/* ============================================================
- * 面板主体：横向滚动 + 卡片网格
- * ============================================================ */
 .library-body {
   padding: 12px 14px 14px;
   max-height: 240px;
@@ -447,7 +396,6 @@ const rowDiagramClass = (p: RowPreset) => {
   padding-top: 12px;
 }
 
-/* ---------- 章节：紧凑卡片网格 ---------- */
 .section-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(176px, 1fr));
@@ -484,7 +432,6 @@ const rowDiagramClass = (p: RowPreset) => {
   cursor: grabbing;
   transform: translateY(0);
 }
-/* 空白章节：独立入口，虚线边框 + 加号感 */
 .sec-card-blank {
   border-style: dashed;
   background: var(--primary-faint);
@@ -535,7 +482,6 @@ const rowDiagramClass = (p: RowPreset) => {
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-/* 模块数角标：行内徽标（不用绝对定位，避免压住卡片名称） */
 .sec-modules {
   flex: none;
   padding: 1px 6px;
@@ -547,7 +493,6 @@ const rowDiagramClass = (p: RowPreset) => {
   white-space: nowrap;
 }
 
-/* ---------- 布局：结构示意图卡片 ---------- */
 .layout-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
@@ -584,7 +529,6 @@ const rowDiagramClass = (p: RowPreset) => {
   cursor: grabbing;
   transform: translateY(0);
 }
-/* 空白布局：独立入口，虚线 */
 .layout-card-blank {
   border-style: dashed;
   background: var(--primary-faint);
@@ -613,7 +557,6 @@ const rowDiagramClass = (p: RowPreset) => {
   text-overflow: ellipsis;
 }
 
-/* 结构示意图：白条小盒子组成的微型线框图（竖条 = 列布局，横条 = 行布局） */
 .layout-diagram {
   flex: none;
   display: flex;
@@ -632,7 +575,6 @@ const rowDiagramClass = (p: RowPreset) => {
   border-radius: 3px;
   background: var(--panel-bg);
 }
-/* 第一格用主色淡底强调「结构起点」 */
 .layout-diagram i:first-child {
   border-color: rgba(71, 83, 199, 0.45);
   background: var(--primary-soft);
@@ -645,7 +587,6 @@ const rowDiagramClass = (p: RowPreset) => {
 .d-3row {
   flex-direction: column;
 }
-/* 空白布局：虚线空框，突出「从零开始」 */
 .d-blank {
   border: 1.5px dashed var(--border-strong);
   background: transparent;
@@ -654,7 +595,6 @@ const rowDiagramClass = (p: RowPreset) => {
   display: none;
 }
 
-/* ---------- 组件：二级 Tab + 搜索 + 分组网格 ---------- */
 .content-toolbar {
   display: flex;
   align-items: center;
@@ -795,7 +735,6 @@ const rowDiagramClass = (p: RowPreset) => {
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-/* 类型角标：行内徽标（同模块数角标，不压文字） */
 .content-type {
   flex: none;
   padding: 1px 6px;
@@ -807,9 +746,6 @@ const rowDiagramClass = (p: RowPreset) => {
   white-space: nowrap;
 }
 
-/* ============================================================
- * 编辑列被拖窄：先让提示让位，再收紧 Tab，标题与分类保持单行
- * ============================================================ */
 @container (max-width: 520px) {
   .library-hint {
     display: none;
@@ -823,9 +759,6 @@ const rowDiagramClass = (p: RowPreset) => {
   }
 }
 
-/* ============================================================
- * 窄屏：网格更紧凑
- * ============================================================ */
 @media (max-width: 760px) {
   .library-hint {
     display: none;

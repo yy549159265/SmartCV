@@ -1,11 +1,5 @@
 import type { Section } from '@/types'
 
-/**
- * 首页 Hero 右侧展示用的演示简历（纯展示数据，不进入 store、不参与任何业务）。
- * 结构与真实简历完全一致，直接走预览渲染链（PreviewSection → PreviewContent），
- * 用户看到的缩略图就是产品真实产出的样子。
- * 布局模式沿用 example/ 里真实简历的写法：横向容器左「公司｜职位」右「时间」。
- */
 export const heroResume: Section[] = [
   {
     id: 'hero-header',

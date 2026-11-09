@@ -1,8 +1,4 @@
 <script setup lang="ts">
-/**
- * 品牌标记：一枚苔绿纸片 + 三行文字。
- * 只用于应用外壳（顶部栏、主页），不进入简历预览/导出。
- */
 withDefaults(defineProps<{ size?: number }>(), { size: 22 })
 </script>
 

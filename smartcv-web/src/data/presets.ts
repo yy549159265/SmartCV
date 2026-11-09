@@ -1,47 +1,19 @@
-/**
- * 预设模板配置 —— 组件库的内容全部来自这里
- *
- * 【重要】任务要求的核心概念：
- *   预设模板 = 「内容类型 + 默认内容 + 可选默认样式」的命名组合。
- *   例如"个人介绍"预设 = iconText 类型 + 一段默认文案，仅此而已。
- *   组件渲染时只认 content.type，从来不认预设名 —— 所以：
- *     ✅ 想新增/修改预设 → 只改这个文件，组件代码一行都不用动；
- *     ❌ 预设对象本身不是简历数据，拖进画布后会被"工厂函数"转成真正的内容实例。
- */
 import type { Content, ContentData, Section, LayoutWindow, ContentStyle, SectionLayout, SectionStyle } from '@/types'
 import { uid } from '@/utils/id'
 import { LIST_TEXT_ICON } from '@/data/icons'
 
-/* ==================== 内容预设 ==================== */
-
-/** 内容预设的结构 */
 export interface ContentPreset {
   id: string
-  /** 在组件库里显示的名字（组件代码里永远不会写死这些名字） */
   name: string
-  /** 一句话说明，帮助使用者理解 */
   desc: string
-  /** 组件库里的展示图标（emoji） */
   icon: string
-  /** 该预设属于哪种通用类型 */
   type: Content['type']
-  /** 默认内容 */
   content: ContentData
-  /** 可选的默认样式 */
   style?: ContentStyle
-  /** 可选：该预设默认是否"占整行"（见 types 里 Content.fullRow 的说明） */
   fullRow?: boolean
-  /**
-   * true = 不在组件库里展示（但仍可被章节预设组合引用）。
-   */
   hidden?: boolean
 }
 
-/**
- * 【通用】内容 —— 与具体内容无关的 5 种原始形态。
- * 它们是"空白模板"：只带类型对应的占位内容，拖进章节后再自己填写。
- * （同样用预设结构承载，组件和拖拽逻辑零改动。）
- */
 export const GENERIC_CONTENT_PRESETS: ContentPreset[] = [
   {
     id: 'generic-content-icontext',
@@ -101,11 +73,6 @@ export const GENERIC_CONTENT_PRESETS: ContentPreset[] = [
   },
 ]
 
-/**
- * 【预设】内容 —— 「类型 + 默认内容」的命名组合。
- * 如"联系电话"预设的本质 = iconText 类型 + 一个默认号码。
- * 组件渲染时只认 content.type，从来不认预设名。
- */
 export const CONTENT_PRESETS: ContentPreset[] = [
   {
     id: 'preset-content-phone',
@@ -174,42 +141,28 @@ export const CONTENT_PRESETS: ContentPreset[] = [
   },
 ]
 
-/* ==================== 章节预设 ==================== */
-
-/** 布局窗口预设：一个窗口 = 布局方向 + 若干内容预设（容器窗口还可以嵌套子窗口预设） */
 export interface LayoutWindowPreset {
-  /** 该窗口内内容的排列方式（容器窗口 = 子窗口的排列方向） */
   layout: SectionLayout
-  /** 窗口自带的内容预设（叶子窗口用） */
   contents?: ContentPreset[]
-  /** 窗口自带的子窗口预设（容器窗口用，例如教育经历一行三栏） */
   rows?: LayoutWindowPreset[]
 }
 
-/** 章节预设的结构 */
 export interface SectionPreset {
   id: string
   name: string
   desc: string
   icon: string
-  /** 章节默认标题 */
   title: string
-  /** 可选默认样式 */
   style?: SectionStyle
-  /** 可选：章节自带的布局窗口（一个章节可以放多个窗口，每个独立选横/竖） */
   rows?: LayoutWindowPreset[]
 }
 
-/** 小工具：按 id 找内容预设（避免用数组下标引用，防止改顺序时弄错） */
 const contentById = (id: string): ContentPreset => {
   const found = CONTENT_PRESETS.find((p) => p.id === id)
   if (!found) throw new Error(`未找到内容预设：${id}`)
   return found
 }
 
-/**
- * 【通用】章节—— 空白章节。
- */
 export const GENERIC_SECTION_PRESETS: SectionPreset[] = [
   {
     id: 'preset-section-blank',
@@ -221,25 +174,16 @@ export const GENERIC_SECTION_PRESETS: SectionPreset[] = [
   },
 ]
 
-/**
- * 【通用】布局 —— 窗口布局（直接拖进章节，章节里用 ＋上/下/左/右 或拖拽排列；
- * 左/右并排会自动形成横排，不需要单独的"容器"）。
- * 结构预设（columns / rows）= 横排/竖排 + N 个空白子窗口（2列 / 3列 / 2行 / 3行）。
- */
 export interface RowPreset {
   id: string
   name: string
   desc: string
   icon: string
-  /** 单个窗口时的默认方向 */
   layout: SectionLayout
-  /** 可选：横向容器 + N 个子窗口（如 2 列 / 3 列） */
   columns?: number
-  /** 可选：竖向容器 + N 个子窗口（如 2 行 / 3 行） */
   rows?: number
 }
 
-/** 通用布局：空白布局（空白窗口，从零创建页面结构） */
 export const GENERIC_ROW_PRESETS: RowPreset[] = [
   {
     id: 'preset-row-layout',
@@ -250,7 +194,6 @@ export const GENERIC_ROW_PRESETS: RowPreset[] = [
   },
 ]
 
-/** 预设布局：2列 / 3列 / 2行 / 3行 */
 export const ROW_PRESETS: RowPreset[] = [
   {
     id: 'preset-row-2col',
@@ -286,7 +229,6 @@ export const ROW_PRESETS: RowPreset[] = [
   },
 ]
 
-/** 由布局预设生成真正的布局窗口（结构预设 = 横排/竖排容器 + N 个空白子窗口） */
 export function createRowFromPreset(preset: RowPreset): LayoutWindow {
   const makeLeaf = (): LayoutWindow => ({ id: uid(), layout: 'vertical', contents: [] })
   if (preset.columns) {
@@ -308,10 +250,6 @@ export function createRowFromPreset(preset: RowPreset): LayoutWindow {
   return { id: uid(), layout: preset.layout, contents: [] }
 }
 
-/**
- * 一条教育经历：外框横排三栏（学校 + 标签 ｜ 专业学历 ｜ 在校时间）。
- * 模板自带两条，拖进画布后直接替换文字即可。
- */
 function educationRow(suffix: string): LayoutWindowPreset {
   return {
     layout: 'horizontal',
@@ -359,11 +297,6 @@ function educationRow(suffix: string): LayoutWindowPreset {
   }
 }
 
-/**
- * 工作经历的一段时间段 + 职责列表。
- * 「工作时间段」预设已从组件库移除（与通用「时间段」重复），
- * 好的默认值（2022.07 ～ 至今）直接内联在这里，拖入工作经历章节即可用。
- */
 function workEntry(): LayoutWindowPreset {
   return {
     layout: 'vertical',
@@ -381,10 +314,6 @@ function workEntry(): LayoutWindowPreset {
   }
 }
 
-/**
- * 一组专业技能：居中标题 + 有序列表。
- * 工程技能 / LLM 技能共用同一结构，只有标题与条目不同。
- */
 function skillRow(key: string, title: string, items: string[]): LayoutWindowPreset {
   return {
     layout: 'vertical',
@@ -410,13 +339,6 @@ function skillRow(key: string, title: string, items: string[]): LayoutWindowPres
   }
 }
 
-/**
- * 【预设】章节 —— 带默认标题与布局窗口的章节。
- * 一个章节预设可以组合多个布局窗口：
- *  - 教育经历 = 两条横向三栏（学校 ｜ 专业学历 ｜ 在校时间）；
- *  - 工作经历 = 公司名称 + 两组「时间段 + 职责列表」；
- *  - 专业技能 = 工程技能 / LLM 技能两组「居中标题 + 有序列表」。
- */
 export const SECTION_PRESETS: SectionPreset[] = [
   {
     id: 'preset-section-intro',
@@ -517,17 +439,10 @@ export const SECTION_PRESETS: SectionPreset[] = [
   },
 ]
 
-/* ==================== 类型判断与工厂函数 ==================== */
-
-/** 深拷贝：预设内容都是纯 JSON 数据（字符串/数字/数组），直接序列化拷贝最省心 */
 function deepClone<T>(data: T): T {
   return JSON.parse(JSON.stringify(data)) as T
 }
 
-/**
- * 工厂函数：由内容预设生成一个"真正的内容实例"。
- * 每次拖入都生成全新对象（新 id + 拷贝的默认内容），互不影响。
- */
 export function createContentFromPreset(preset: ContentPreset): Content {
   return {
     id: uid(),
@@ -538,10 +453,6 @@ export function createContentFromPreset(preset: ContentPreset): Content {
   }
 }
 
-/**
- * 工厂函数：由窗口预设生成一个"真正的布局窗口"。
- * 内容与嵌套子窗口都生成全新实例（新 id + 深拷贝的内容）。
- */
 function createWindowFromPreset(preset: LayoutWindowPreset): LayoutWindow {
   const window: LayoutWindow = {
     id: uid(),
@@ -554,10 +465,6 @@ function createWindowFromPreset(preset: LayoutWindowPreset): LayoutWindow {
   return window
 }
 
-/**
- * 工厂函数：由章节预设生成一个"真正的章节实例"。
- * 如果预设自带布局窗口（rows），也一并生成（容器窗口里的子窗口递归生成）。
- */
 export function createSectionFromPreset(preset: SectionPreset): Section {
   return {
     id: uid(),

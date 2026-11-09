@@ -1,127 +1,65 @@
 /**
- * 简历差异比对 + 逐处合并（纯函数，与视图无关）
+ * 简历差异比对 + 逐处合并（纯函数）。
  *
- * 用途：AI 改完简历后，前端不直接覆盖，而是拿"改之前"和"改之后"两份简历比对，
- * 把改动的位置标出来，交给 ResumeDiffDialog 做左右对比展示。
- * 用户可以在对比弹窗里逐处「还原 / 恢复」，最后点确定才写回简历。
- *
- * 为什么能按 id 对齐：后端 smartcv-api/agents/optimize/graph.py 对入参简历只做
- * 一层浅拷贝（OptimizeStore([dict(s) for s in resume_sections])），patch_content
- * 就地改文字、不动结构，所以返回的 JSON 里 id 与前端发出去的完全一致。
- * 也正因为如此，比对时必须用「后端返回的原始 JSON」——
- * 一旦走 stores/resume.ts 的 normalizeResumeData（会重生成全部 uid），
- * 两边 id 就对不上，整份简历会被误判成"全变了"。
- *
- * 标记语义（三种都按"只标改动的那一层"记，子树不重复标注）：
- *   added   —— 只在改后简历里存在（新增）
- *   removed —— 只在改前简历里存在（删除）
- *   changed —— 两边都在，但内容/样式不同（修改）
- *
- * 内容内部的文字再拆一层「文字单元」（与后端坐标 [s r c i] 的 i 对应）：
- * 后端 patch_content 一次只改一个单元，所以"只有文字变了"时只标那一行/那一栏，
- * 不把整个内容块罩住；只有结构/样式也变了才退回整块标。
- *
- * 两份数据都当作只读：mergeResume 只生成新对象，不会改动入参。
+ * 按 id 对齐：后端只浅拷贝并就地改文字，id 不变；因此比对必须用后端返回的原始 JSON，
+ * 一旦走 normalizeResumeData（会重生成 uid），整份简历会被误判成「全变了」。
+ * 文字单元（units）与后端坐标的 i 对应，只标变动的行/栏，不把整个内容块罩住。
  */
+
 import type { Content, ContentData, ContentType, LayoutWindow, ListItem, Section } from '@/types'
 
-/** 一处标记的类型；查不到标记 = 该节点未改动 */
 export type DiffMark = 'added' | 'removed' | 'changed'
 
-/** 改动所在层级：章节 / 布局窗口 / 内容 / 文字单元 */
 export type ChangeLevel = 'section' | 'row' | 'content' | 'unit'
 
-/**
- * 给预览组件用的标记表：节点 id → 标记。
- * 四层分开存，组件各取所需（章节标标题、窗口标整块、内容标内容块、单元标一行文字）。
- *
- * units 与后端的坐标 [s r c i] 对应：后端 patch_content 只替换一个「文字单元」，
- * 所以"内容里只有文字变了"时只标那一行/那一栏，不再把整个内容块罩住。
- */
 export interface DiffMarks {
   sections: Record<string, DiffMark>
   rows: Record<string, DiffMark>
   contents: Record<string, DiffMark>
-  /** 内容 id → 单元序号（i）→ 标记 */
   units: Record<string, Record<number, DiffMark>>
 }
 
-/**
- * 一处可独立切换的改动。
- *
- * key 同时用于「已还原集合」和「操作按钮定位」：
- *   `section:<id>` / `row:<id>` / `content:<id>` / `unit:<contentId>:<i>`
- * 同一节点在不同层级各算一处（例如窗口排版改了、里面的文字也改了）。
- */
 export interface DiffChange {
   key: string
   level: ChangeLevel
   kind: DiffMark
-  /** 所属章节 id（行 / 内容级改动用；章节级改动就是它自己） */
   sectionId: string
-  /** 改动的节点 id（章节 / 窗口 / 内容；单元级 = 它所在的内容 id） */
   nodeId: string
-  /** 单元级改动在内容里的序号（对应后端坐标的 i） */
   unitIndex?: number
-  /** 改动前的文字摘要（内容级才有，给按钮气泡看） */
   beforeText: string
-  /** 改动后的文字摘要 */
   afterText: string
 }
 
-/** 比对结果：左右两栏各用一份标记表 + 本次全部可切换改动 */
 export interface ResumeDiff {
-  /** 左栏（原始简历）要显示的标记：removed + changed */
   before: DiffMarks
-  /** 右栏（修改后简历）要显示的标记：added + changed */
   after: DiffMarks
-  /** 可独立切换的改动处数（= changes.length） */
   changedCount: number
-  /** 按遍历顺序排列的全部改动（逐处还原/恢复用） */
   changes: DiffChange[]
 }
 
-/**
- * 一处改动的渲染态：挂在预览组件上，决定高亮样式和按钮方向。
- * 只给"能操作的那一栏"：
- *   - changed / added → 右栏（结果侧）
- *   - removed         → 左栏（原始侧，内容只在那里）
- */
 export interface ChangeView {
   kind: DiffMark
-  /** true = 用户已把这处还原成修改前 */
   reverted: boolean
-  /** 点击切换：接受 ↔ 还原 */
   toggle: () => void
-  /** 关联的诊断序号（0 起）；有值则显示「查看诊断」入口 */
   diagIndex?: number
-  /** 跳到这条诊断（打开诊断结论弹窗并定位） */
   jumpToDiagnosis?: () => void
 }
 
-/** 四层各自的改动操作表 */
 export interface DiffControls {
   sections: Record<string, ChangeView>
   rows: Record<string, ChangeView>
   contents: Record<string, ChangeView>
-  /** 内容 id → 单元序号（i）→ 操作态 */
   units: Record<string, Record<number, ChangeView>>
 }
 
-/** 建一个空标记表 */
 function emptyMarks(): DiffMarks {
   return { sections: {}, rows: {}, contents: {}, units: {} }
 }
 
-/** 建一个空操作表 */
 function emptyControls(): DiffControls {
   return { sections: {}, rows: {}, contents: {}, units: {} }
 }
 
-/**
- * 按 id 把数组转成索引表。
- * 只用于同一层级内查找"对面有没有这个 id 的节点"，与顺序无关。
- */
 function byId<T extends { id: string }>(list: T[]): Map<string, T> {
   const map = new Map<string, T>()
   for (const item of list) {
@@ -130,7 +68,6 @@ function byId<T extends { id: string }>(list: T[]): Map<string, T> {
   return map
 }
 
-/** 两侧 id 的并集（先左后右，顺序只影响遍历次序，不影响结果） */
 function unionIds<T extends { id: string }>(a: T[], b: T[]): string[] {
   const ids: string[] = []
   const seen = new Set<string>()
@@ -143,7 +80,6 @@ function unionIds<T extends { id: string }>(a: T[], b: T[]): string[] {
   return ids
 }
 
-/** 逐项比字符串数组（columns / tags） */
 function sameStringArray(a?: string[], b?: string[]): boolean {
   const x = a ?? []
   const y = b ?? []
@@ -151,11 +87,6 @@ function sameStringArray(a?: string[], b?: string[]): boolean {
   return x.every((v, i) => v === y[i])
 }
 
-/**
- * 内容的深比较。
- * 不用 JSON.stringify：后端 patch 之后 key 的书写顺序可能与前端不同，
- * stringify 出来的字符串就会不相等，把没改的内容误判成"改了"。
- */
 function sameContentData(a?: ContentData, b?: ContentData): boolean {
   const x = a ?? {}
   const y = b ?? {}
@@ -176,14 +107,12 @@ function sameContentData(a?: ContentData, b?: ContentData): boolean {
   if (!sameStringArray(x.columns, y.columns)) return false
   if (!sameStringArray(x.tags, y.tags)) return false
 
-  // 列表项：text + indent（indent 缺省当 0，避免 undefined 与 0 被当成不同）
   const xi = x.items ?? []
   const yi = y.items ?? []
   if (xi.length !== yi.length) return false
   return xi.every((item, i) => (item?.text ?? '') === (yi[i]?.text ?? '') && (item?.indent ?? 0) === (yi[i]?.indent ?? 0))
 }
 
-/** 样式对象的浅比较（BaseStyle / ContentStyle 都是平铺的原始值字段） */
 function sameStyle(a?: Record<string, unknown>, b?: Record<string, unknown>): boolean {
   const x = a ?? {}
   const y = b ?? {}
@@ -194,10 +123,8 @@ function sameStyle(a?: Record<string, unknown>, b?: Record<string, unknown>): bo
   return true
 }
 
-/** tight 字段缺省 = false，统一成布尔再比 */
 const isTight = (node: { tight?: boolean }) => node.tight === true
 
-/** 内容是否没变：类型、内容数据、样式、紧贴任一不同都算变 */
 function sameContent(a: Content, b: Content): boolean {
   return (
     a.type === b.type &&
@@ -207,12 +134,6 @@ function sameContent(a: Content, b: Content): boolean {
   )
 }
 
-/**
- * 内容里的「文字单元」原文，顺序即后端坐标里的 i。
- * 与 smartcv-api/agents/optimize/utils/markdown.py 的 iter_text_units 一一对应：
- *   iconText → [text]；twoColumn → 每列；timeRange → [起 - 止]；
- *   listText → 每个列表项；tag → 每个标签；image / spacer → 没有文字单元。
- */
 export function unitTexts(content: Content): string[] {
   const d = content.content ?? {}
   switch (content.type) {
@@ -223,7 +144,6 @@ export function unitTexts(content: Content): string[] {
     case 'timeRange':
       return [`${d.start ?? ''} - ${d.end ?? ''}`]
     case 'listText': {
-      // 兼容旧数据里的纯字符串列表项
       const items = (d.items ?? []) as Array<ListItem | string>
       return items.map((item) => (typeof item === 'string' ? item : item?.text ?? ''))
     }
@@ -234,11 +154,6 @@ export function unitTexts(content: Content): string[] {
   }
 }
 
-/**
- * 把文字单元全部清空后的副本。
- * 用来判断"除了文字，还有没有别的变化"（类型/样式/栏数/项数/分隔符…）：
- * 只有完全一样，才敢按单元标记；否则单元之间的对应关系不可靠，退回整块标。
- */
 function withoutUnitTexts(content: Content): Content {
   const data: ContentData = { ...(content.content ?? {}) }
   switch (content.type) {
@@ -266,17 +181,11 @@ function withoutUnitTexts(content: Content): Content {
   return { ...content, content: data }
 }
 
-/** 单元文字摘要（按钮气泡用） */
 function textSummary(text: string): string {
   const value = (text ?? '').replace(/\s+/g, ' ').trim()
   return value.length > 60 ? `${value.slice(0, 60)}…` : value
 }
 
-/* ============================================================
- * 一、比对：产出标记表 + 逐处改动清单
- * ============================================================ */
-
-/** 内容转一行摘要（给按钮提示 / 改动计数用；不参与渲染） */
 function contentSummary(content?: Content): string {
   if (!content) return ''
   const d = content.content ?? {}
@@ -298,7 +207,6 @@ function contentSummary(content?: Content): string {
   return text.length > 60 ? `${text.slice(0, 60)}…` : text
 }
 
-/** 记一处改动；key 由层级 + 节点 id（+ 单元序号）组成，全简历唯一 */
 function addChange(
   diff: ResumeDiff,
   level: ChangeLevel,
@@ -321,22 +229,10 @@ function addChange(
   })
 }
 
-/**
- * 给"整棵子树"打标记（节点是新增/删除时用）。
- *
- * 只标这一层、**不下钻**：窗口的底色会把整个窗口（含里面的内容、子窗口）都罩住，
- * 再往下逐层标只会叠出深浅不一的色块，反而看不清边界。
- */
 function markSubtree(row: LayoutWindow, marks: DiffMarks, mark: DiffMark): void {
   marks.rows[row.id] = mark
 }
 
-/**
- * 比对两边的文字单元：只有"文字变了、其它（类型/样式/结构）完全一样"时，
- * 才把改动落到具体单元上。
- *
- * @returns true = 已按单元标记（调用方不要再标整个内容块）
- */
 function diffUnits(a: Content, b: Content, sectionId: string, diff: ResumeDiff): boolean {
   const oldUnits = unitTexts(a)
   const newUnits = unitTexts(b)
@@ -368,7 +264,6 @@ function diffUnits(a: Content, b: Content, sectionId: string, diff: ResumeDiff):
   return changed
 }
 
-/** 比一行窗口的内容列表 */
 function diffContents(
   oldRow: LayoutWindow,
   newRow: LayoutWindow,
@@ -387,7 +282,6 @@ function diffContents(
       diff.after.contents[id] = 'added'
       addChange(diff, 'content', 'added', id, sectionId, '', contentSummary(b))
     } else if (a && b && !sameContent(a, b)) {
-      // 只改了某一行/某一栏文字 → 只标那一处，不罩住整个内容块
       if (diffUnits(a, b, sectionId, diff)) continue
       diff.before.contents[id] = 'changed'
       diff.after.contents[id] = 'changed'
@@ -396,7 +290,6 @@ function diffContents(
   }
 }
 
-/** 比一个窗口：先比自身字段，再按叶子/容器分别下钻 */
 function diffRow(
   oldRow: LayoutWindow,
   newRow: LayoutWindow,
@@ -415,8 +308,6 @@ function diffRow(
   const oldIsContainer = Array.isArray(oldRow.rows)
   const newIsContainer = Array.isArray(newRow.rows)
 
-  // 容器 ↔ 叶子互换：结构变了，两边各标一层，不再下钻（底下已经没有对应关系）。
-  // 排版也变了的话上面已经记过一处，这里不再重复记（key 相同，重复会出现两个按钮）。
   if (oldIsContainer !== newIsContainer) {
     diff.before.rows[oldRow.id] = 'changed'
     diff.after.rows[newRow.id] = 'changed'
@@ -446,7 +337,6 @@ function diffRow(
   diffContents(oldRow, newRow, sectionId, diff)
 }
 
-/** 比一个章节：先比自身字段，再比窗口 */
 function diffSection(oldSection: Section, newSection: Section, diff: ResumeDiff): void {
   const selfChanged =
     (oldSection.title ?? '') !== (newSection.title ?? '') ||
@@ -487,10 +377,6 @@ function diffSection(oldSection: Section, newSection: Section, diff: ResumeDiff)
   }
 }
 
-/**
- * 比对两份简历，返回左右两栏各自的标记表 + 可逐处切换的改动清单。
- * 章节按 id 对齐（顺序变化不影响结果）；新增/删除的章节整棵标一层。
- */
 export function diffResume(before: Section[], after: Section[]): ResumeDiff {
   const diff: ResumeDiff = {
     before: emptyMarks(),
@@ -506,7 +392,6 @@ export function diffResume(before: Section[], after: Section[]): ResumeDiff {
     const a = oldSections.get(id)
     const b = newSections.get(id)
     if (a && !b) {
-      // 整个章节被删掉：章节标一层，内部的窗口/内容也标上（左栏要整块泛红才看得见）
       diff.before.sections[id] = 'removed'
       for (const row of a.rows ?? []) markSubtree(row, diff.before, 'removed')
       addChange(diff, 'section', 'removed', a.id, a.id, a.title)
@@ -519,17 +404,10 @@ export function diffResume(before: Section[], after: Section[]): ResumeDiff {
     }
   }
 
-  // 改动处数 = 可独立切换的处数（章节增删按一处算，不按内部内容数累加）
   diff.changedCount = diff.changes.length
   return diff
 }
 
-/**
- * 预览组件用的一行标记：被用户还原的改动要换一种颜色。
- * 返回的 'restored' / 'ignored' 是 global.css 里额外定义的两档样式。
- *   restored —— 这处已还原成修改前（绿色）
- *   ignored  —— 这处新增被忽略（灰色 + 删除线，确认时不会写入）
- */
 export type DiffAttr = DiffMark | 'restored' | 'ignored'
 
 export function diffAttr(mark: DiffMark | undefined, view: ChangeView | undefined): DiffAttr | undefined {
@@ -537,35 +415,16 @@ export function diffAttr(mark: DiffMark | undefined, view: ChangeView | undefine
   return mark
 }
 
-/* ============================================================
- * 二、逐处合并：按"已还原集合"算出当前结果
- * ============================================================ */
-
-/**
- * 合并结果。
- * sections 是给右栏渲染的（默认保留被还原的新增节点，让用户还能点 → 恢复）；
- * ignored 是这些"保留但已忽略"的节点 key，确认写回时剔除。
- */
 export interface MergeResult {
   sections: Section[]
   ignored: Set<string>
 }
 
-/** 已还原集合（`section:id` / `row:id` / `content:id`） */
 export type RevertedSet = ReadonlySet<string>
 
 const isReverted = (reverted: RevertedSet, level: ChangeLevel, id: string) =>
   reverted.has(`${level}:${id}`)
 
-/**
- * 按顺序合并两个同层数组。
- *
- * 以「改后」的顺序为骨架：
- *  - 两边都有的节点交给 mergeAfter 递归；
- *  - 只在改后的（新增）由 mergeAfter 决定保留还是丢弃；
- *  - 只在改前的（删除）只有被用户还原时才插回，插入位置按改前顺序
- *    （放在它后面的第一个"改前也存在的节点"之前）。
- */
 function mergeList<T extends { id: string }>(
   beforeList: T[],
   afterList: T[],
@@ -589,12 +448,6 @@ function mergeList<T extends { id: string }>(
   return out
 }
 
-/**
- * 单元级还原：把用户点过 ↺ 的那几个文字单元换回修改前。
- *
- * 只处理"文字被替换"（单元数相同）的情况 —— 结构差异在比对阶段就按内容级
- * 处理了，这里拿到的 key 一定是落在同一位置的替换。
- */
 function restoreUnits(before: Content, after: Content, reverted: RevertedSet): Content {
   const prefix = `unit:${after.id}:`
   let touched = false
@@ -640,7 +493,6 @@ function restoreUnits(before: Content, after: Content, reverted: RevertedSet): C
   return { ...after, content: data }
 }
 
-/** 合并一个叶子窗口的内容列表 */
 function mergeContents(
   beforeContents: Content[],
   afterContents: Content[],
@@ -658,10 +510,8 @@ function mergeContents(
     (b) => {
       const a = beforeMap.get(b.id)
       if (a) {
-        // 两边都有：整块还原 → 换回改前；只还原了某几行文字 → 逐单元换回
         return isReverted(reverted, 'content', b.id) ? a : restoreUnits(a, b, reverted)
       }
-      // 新增内容：还原 = 不采用；预览时保留成"已忽略"占位，方便再点回来
       if (!isReverted(reverted, 'content', b.id)) return b
       if (!keepIgnored) return null
       ignored.add(`content:${b.id}`)
@@ -670,7 +520,6 @@ function mergeContents(
   )
 }
 
-/** 合并一个布局窗口（递归） */
 function mergeWindow(
   beforeRow: LayoutWindow,
   afterRow: LayoutWindow,
@@ -682,7 +531,6 @@ function mergeWindow(
   const beforeIsContainer = Array.isArray(beforeRow.rows)
   const afterIsContainer = Array.isArray(afterRow.rows)
 
-  // 容器 ↔ 叶子互换：结构不同，没有可递归的共同层，整块按选中的一侧取
   if (beforeIsContainer !== afterIsContainer) return selfReverted ? beforeRow : afterRow
 
   const selfFields = selfReverted ? { layout: beforeRow.layout, tight: beforeRow.tight } : {}
@@ -713,7 +561,6 @@ function mergeWindow(
   }
 }
 
-/** 合并一组布局窗口 */
 function mergeWindows(
   beforeRows: LayoutWindow[],
   afterRows: LayoutWindow[],
@@ -739,7 +586,6 @@ function mergeWindows(
   )
 }
 
-/** 合并一个章节（标题/样式 + 内部窗口） */
 function mergeSection(
   beforeSection: Section,
   afterSection: Section,
@@ -768,13 +614,6 @@ function mergeSection(
   }
 }
 
-/**
- * 按"已还原集合"合并出当前结果。
- *
- * @param reverted 用户已还原的改动 key 集合
- * @param options.keepIgnored 是否在结果里保留"被还原的新增"（预览用 true，
- *   这样按钮还在、能点回来；确认写回用 false，直接剔除）。
- */
 export function mergeResume(
   before: Section[],
   after: Section[],
@@ -803,18 +642,12 @@ export function mergeResume(
   return { sections, ignored }
 }
 
-/* ============================================================
- * 三、给对比弹窗拼操作表
- * ============================================================ */
-
-/** 改动层级 → DiffMarks / DiffControls 的键（单数 → 复数）；单元级单独处理 */
 const BUCKET: Record<'section' | 'row' | 'content', 'sections' | 'rows' | 'contents'> = {
   section: 'sections',
   row: 'rows',
   content: 'contents',
 }
 
-/** 某一侧的改动操作表（哪一侧能操作见函数内注释） */
 export function buildControls(
   diff: ResumeDiff,
   side: 'before' | 'after',
@@ -825,9 +658,6 @@ export function buildControls(
 ): DiffControls {
   const controls = emptyControls()
   for (const change of diff.changes) {
-    // 改 / 增：节点只在右栏（结果侧），按钮放右栏。
-    // 删：节点在左栏（原始侧）；被还原后也会插进右栏，所以两栏都挂 ——
-    //    右栏那个按钮只在"已还原"时才会真的渲染出来。
     const onThisSide = change.kind === 'removed' || side === 'after'
     if (!onThisSide) continue
     const view: ChangeView = {
@@ -841,7 +671,6 @@ export function buildControls(
       view.jumpToDiagnosis = () => jumpToDiagnosis?.(diagIndex)
     }
     if (change.level === 'unit') {
-      // 单元级：按钮挂在内容里的第 i 行/栏上
       const index = change.unitIndex ?? 0
       let bucket = controls.units[change.nodeId]
       if (!bucket) controls.units[change.nodeId] = bucket = {}
@@ -853,25 +682,14 @@ export function buildControls(
   return controls
 }
 
-/* ============================================================
- * 四、坐标 ↔ 节点 id 映射 + 内联 diff（对比弹窗附加能力）
- * ============================================================ */
-
-/** 后端坐标里可 patch 的内容类型（与 agents/utils/resume.py 的 _PATCHABLE_TYPES 一致） */
 const PATCHABLE_TYPES = new Set<ContentType>(['iconText', 'twoColumn', 'timeRange', 'listText', 'tag'])
 
-/** 一条诊断的坐标映射到简历里的章节 id + 内容 id + 单元序号 */
 export interface CoordTarget {
   sectionId: string
   contentId: string
   unitIndex: number
 }
 
-/**
- * 把诊断的 [s r c i] 坐标映射成简历节点的 id。
- * 与后端 locate_unit 走同一套遍历：叶子窗口按 DFS 编号（rows 非空才算容器）、
- * 内容只统计可 patch 类型（image/spacer 跳过）、单元序号即 i。
- */
 export function coordToTarget(
   resume: Section[],
   s: number,
@@ -895,7 +713,6 @@ export function coordToTarget(
   return { sectionId: section.id, contentId: patchable[c].id, unitIndex: i }
 }
 
-/** 收集简历里所有内容节点的文字单元（内容 id → 单元文本列表），与 unitTexts 对齐 */
 export function collectContentUnits(resume: Section[]): Map<string, string[]> {
   const map = new Map<string, string[]>()
   const walkRows = (rows: LayoutWindow[]) => {
@@ -910,7 +727,6 @@ export function collectContentUnits(resume: Section[]): Map<string, string[]> {
   return map
 }
 
-/** 内联 diff 的一段：相同 / 删除 / 新增 */
 export interface InlineDiffSeg {
   kind: 'eq' | 'del' | 'ins'
   text: string
@@ -918,10 +734,6 @@ export interface InlineDiffSeg {
 
 const CJK_CHAR = /[一-鿿]/
 
-/**
- * 把文本切成 diff 用的小单元：每个汉字单独一个，连续的非汉字（英文/数字/标点/空格）
- * 合并成一个 —— 这样中文能逐字对齐，英文单词又不会被拆散。
- */
 function tokenize(s: string): string[] {
   const tokens: string[] = []
   let i = 0
@@ -939,7 +751,6 @@ function tokenize(s: string): string[] {
   return tokens
 }
 
-/** 两段文字的最小内联 diff（LCS 回溯 + 相邻同类型合并） */
 export function diffInlineText(a: string, b: string): InlineDiffSeg[] {
   const at = tokenize(a)
   const bt = tokenize(b)
@@ -988,7 +799,6 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
-/** 生成可直接 v-html 的内联 diff HTML：删除线 <del> + 高亮 <ins>，文本已转义 */
 export function inlineDiffHtml(a: string, b: string): string {
   return diffInlineText(a, b)
     .map((seg) => {

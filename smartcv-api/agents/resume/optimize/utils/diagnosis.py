@@ -1,12 +1,11 @@
 """把结构化诊断项格式化成 agent 可读的文本。
 
-优化 agent：需要坐标，且编号必须和 review_diagnosis / patch_content 的 index 对齐（0 起）；
+审查 agent：需要坐标，且编号必须和 patch_content 的 index 对齐（0 起）；
 总结 agent：不需要坐标（避免坐标泄漏到给用户的说明里），编号从 1 开始。
 """
 
 from typing import Any
 
-# 档位中文标签：诊断文本里给优化/总结 agent 看，不直接面向用户。
 _DISPOSITION_LABEL = {
     "must": "必须修改",
     "suggest": "建议修改",
@@ -48,13 +47,13 @@ def format_diagnosis(
 
     Args:
         items: 诊断项列表。
-        include_coords: 是否带上 s/r/c/i 坐标（优化 agent 要，总结不要）。
-        zero_based: 编号是否从 0 开始（优化 agent 的 index 是 0 起）。
+        include_coords: 是否带上 s/r/c/i 坐标（审查 agent 要，总结不要）。
+        zero_based: 编号是否从 0 开始（审查 agent 的 index 是 0 起）。
         reviews: 按 index 对齐的审查结果；传入时每条附一行「处理结果」，
             让总结 agent 能区分哪些改了、哪些没改以及原因。
         full_texts: 按 index 对齐的目标位置完整原文。quote 被截到 60 字，而
             patch_content 替换的是整个文字单元；只给片段时模型容易照着片段改写，
-            把片段之后的正文整段丢掉。优化 agent 必须传，总结 agent 不需要。
+            把片段之后的正文整段丢掉。审查 agent 必须传，总结 agent 不需要。
         locations: 按 index 对齐的位置描述（如「项目实践·第 2 条」）。总结 agent 用它
             写「哪处改了/没改」，这段文字会作为下一轮诊断的上下文，不能只有编号。
     """
@@ -66,7 +65,6 @@ def format_diagnosis(
         number = index if zero_based else index + 1
         prefix = f"诊断 {number}" if zero_based else f"{number}."
 
-        # 坐标不全（正常不会出现）时标注不可定位，避免拼出 [s:None ...]
         if item.get("s") is None:
             head = f"{prefix} [无坐标，不可修改]"
         else:
@@ -78,7 +76,6 @@ def format_diagnosis(
                 )
             quote = item.get("quote") or ""
             if full_texts is not None and index < len(full_texts) and full_texts[index]:
-                # 优先给完整原文：片段只是定位用的引子，替换时要按整段来
                 quote = full_texts[index]
             if quote:
                 head += f" 原文：「{quote}」"

@@ -1,21 +1,4 @@
 <script setup lang="ts">
-/**
- * 样式设置面板（章节 / 内容共用）
- *
- * 注意：本组件只负责渲染"面板内容"，不含弹层外壳 ——
- * 谁用它，谁决定把它放进什么弹层里：
- *  - SectionCard：放在章节工具栏的「样式」n-popover 里；
- *  - ContentCard：放在 ⋯ 菜单的 n-popover 里。
- *
- * 面板形态：Word 功能区式的「属性选项卡」（文字 / 标题 / 间距），
- * 每项属性 = 图标胶囊 + 名称 + 控件（Notion 属性那种逐行排布）。
- *
- * - 章节（mode="section"）：标题字号独立设置；正文字号/颜色/行距/块间距
- *   会"继承"给内部所有内容；
- * - 内容（mode="content"）：每个字段都能选择"跟随章节"（继承）或自己设置。
- *
- * 写入统一走 store.updateSection / store.updateContent（单一数据源）。
- */
 import { computed, ref } from 'vue'
 import { useResumeStore } from '@/stores/resume'
 import IconGlyph from './IconGlyph.vue'
@@ -32,18 +15,14 @@ import {
 import type { Content, LayoutWindow, ContentStyle, SectionStyle, TextAlign } from '@/types'
 
 const props = defineProps<{
-  /** section = 设置章节样式；content = 设置内容样式 */
   mode: 'section' | 'content'
   sectionId: string
-  /** mode="content" 时必传 */
   contentId?: string
 }>()
 
 const store = useResumeStore()
 
-/** 目标章节（两种模式都需要它） */
 const section = computed(() => store.sectionById(props.sectionId))
-/** 目标内容（仅 content 模式；内容可能在嵌套窗口里，递归查找所有窗口） */
 const content = computed(() => {
   const search = (rows: LayoutWindow[]): Content | undefined => {
     for (const row of rows) {
@@ -59,20 +38,14 @@ const content = computed(() => {
   return search(section.value?.rows ?? [])
 })
 
-/** 当前样式对象（section 模式 = 章节样式；content 模式 = 内容样式） */
 const style = computed<SectionStyle | ContentStyle | undefined>(() =>
   props.mode === 'content' ? content.value?.style : section.value?.style,
 )
 
-/** 章节样式（类型固定为 SectionStyle，标题字号等章节专属字段用它读） */
 const sectionStyle = computed<SectionStyle | undefined>(() => section.value?.style)
 
-/** 占位组件：高度由 字号 × 行距 决定，它没有文字，所以不提供「文字颜色」 */
 const isSpacer = computed(() => content.value?.type === 'spacer')
 
-/* ---------- 属性选项卡 ---------- */
-
-/** 选项卡：文字 / 标题 / 间距（标题是章节专属，内容模式不显示） */
 type TabKey = 'text' | 'title' | 'spacing'
 const tab = ref<TabKey>('text')
 
@@ -89,30 +62,19 @@ const tabs = computed<{ key: TabKey; label: string }[]>(() =>
       ],
 )
 
-/* ---------- 通用：把样式字段写回 store ---------- */
-
-/** 更新章节样式字段 */
 function setSectionStyle(patch: Partial<SectionStyle>) {
   if (section.value) store.updateSection(section.value.id, { style: patch })
 }
-/** 更新内容样式字段 */
 function setContentStyle(patch: Partial<ContentStyle>) {
   if (section.value && content.value) {
     store.updateContent(section.value.id, content.value.id, { style: patch })
   }
 }
-/** 按模式分发：写入当前目标对象的样式 */
 function setStyle<K extends keyof SectionStyle>(key: K, value: SectionStyle[K]) {
   if (props.mode === 'section') setSectionStyle({ [key]: value } as Partial<SectionStyle>)
   else setContentStyle({ [key]: value } as Partial<ContentStyle>)
 }
 
-/* ---------- 内容专属：字段"是否跟随章节" ---------- */
-
-/**
- * 内容样式里没有设置某个字段（undefined）→ 该字段跟随章节。
- * 下面 4 个"跟随"开关与字段一一对应。
- */
 const followMap = computed<Record<'fontSize' | 'color' | 'lineHeight' | 'gap' | 'textAlign', boolean>>(() => ({
   fontSize: content.value?.style.fontSize === undefined,
   color: content.value?.style.color === undefined,
@@ -121,7 +83,6 @@ const followMap = computed<Record<'fontSize' | 'color' | 'lineHeight' | 'gap' | 
   textAlign: content.value?.style.textAlign === undefined,
 }))
 
-/** 切换"跟随/自定义"：跟随 = 清除字段（传 undefined 即删除） */
 function setFollow(key: 'fontSize' | 'color' | 'lineHeight' | 'gap' | 'textAlign', follow: boolean) {
   if (!content.value) return
   const defaults: Record<typeof key, number | string> = {
@@ -134,7 +95,6 @@ function setFollow(key: 'fontSize' | 'color' | 'lineHeight' | 'gap' | 'textAlign
   setContentStyle({ [key]: follow ? undefined : defaults[key] } as Partial<ContentStyle>)
 }
 
-/* ---------- 颜色选择器的预设色板 ---------- */
 const colorPresets = [
   '#334155', '#1f2937', '#4f7cff', '#0ea5e9',
   '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
@@ -143,7 +103,6 @@ const colorPresets = [
 
 <template>
   <div class="style-panel">
-    <!-- 属性选项卡：分段式，Word 功能区 / Notion 属性面板那种 -->
     <div class="style-tabs" role="tablist">
       <button
         v-for="t in tabs"
@@ -159,9 +118,7 @@ const colorPresets = [
       </button>
     </div>
 
-    <!-- ── 文字 ── -->
     <div v-show="tab === 'text'" class="style-pane">
-      <!-- 正文字号 -->
       <div class="prop-row">
         <span class="prop-chip"><IconGlyph name="type" :size="13" /></span>
         <span class="prop-label">正文字号</span>
@@ -189,7 +146,6 @@ const colorPresets = [
         </button>
       </div>
 
-      <!-- 文字颜色（占位组件没有文字，不显示这一行） -->
       <div v-if="!isSpacer" class="prop-row">
         <span class="prop-chip"><IconGlyph name="droplet" :size="13" /></span>
         <span class="prop-label">文字颜色</span>
@@ -215,7 +171,6 @@ const colorPresets = [
         </button>
       </div>
 
-      <!-- 文字位置：左 / 中 / 右（占位组件没有文字，不显示） -->
       <div v-if="!isSpacer" class="prop-row">
         <span class="prop-chip"><IconGlyph name="align-left" :size="13" /></span>
         <span class="prop-label">文字位置</span>
@@ -243,7 +198,6 @@ const colorPresets = [
         </button>
       </div>
 
-      <!-- 行距 -->
       <div class="prop-row">
         <span class="prop-chip"><IconGlyph name="stretch-vertical" :size="13" /></span>
         <span class="prop-label">行距</span>
@@ -272,9 +226,7 @@ const colorPresets = [
       </div>
     </div>
 
-    <!-- ── 标题（仅章节）── -->
     <div v-if="mode === 'section'" v-show="tab === 'title'" class="style-pane">
-      <!-- 标题字号：独立设置，不继承 -->
       <div class="prop-row">
         <span class="prop-chip"><IconGlyph name="heading" :size="13" /></span>
         <span class="prop-label">标题字号</span>
@@ -291,7 +243,6 @@ const colorPresets = [
         <span class="prop-value">{{ sectionStyle?.titleSize ?? DEFAULT_TITLE_SIZE }}px</span>
       </div>
 
-      <!-- 标题横线：默认开启；横线恒为满行长度 -->
       <div class="prop-row">
         <span class="prop-chip"><IconGlyph name="underline" :size="13" /></span>
         <span class="prop-label">标题横线</span>
@@ -307,9 +258,7 @@ const colorPresets = [
       </div>
     </div>
 
-    <!-- ── 间距 ── -->
     <div v-show="tab === 'spacing'" class="style-pane">
-      <!-- 块间距（竖向/横向间距） -->
       <div class="prop-row">
         <span class="prop-chip"><IconGlyph name="arrow-up-down" :size="13" /></span>
         <span class="prop-label">块间距</span>
@@ -337,7 +286,6 @@ const colorPresets = [
         </button>
       </div>
 
-      <!-- 章节间距：本章节与上一个章节之间的距离（只有章节有） -->
       <div v-if="mode === 'section'" class="prop-row">
         <span class="prop-chip"><IconGlyph name="arrow-up-down" :size="13" /></span>
         <span class="prop-label">章节间距</span>
@@ -366,7 +314,6 @@ const colorPresets = [
   padding: 2px;
 }
 
-/* ---- 属性选项卡（分段式） ---- */
 .style-tabs {
   display: flex;
   gap: 2px;
@@ -398,7 +345,6 @@ const colorPresets = [
   box-shadow: 0 1px 2px rgba(28, 33, 48, 0.08);
 }
 
-/* ---- 属性行：图标胶囊 + 名称 + 控件 ---- */
 .style-pane {
   display: flex;
   flex-direction: column;
@@ -451,7 +397,6 @@ const colorPresets = [
   color: var(--text);
 }
 
-/* ---- 跟随药丸：内容模式下"跟随/自定义"的切换 ---- */
 .follow-pill {
   flex: none;
   height: 20px;

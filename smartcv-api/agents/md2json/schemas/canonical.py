@@ -86,7 +86,7 @@ class Personal(_Model):
 class EducationItem(_Model):
     start: str = ""
     end: str = ""
-    time: str = ""  # 兼容模型仍输出整段时间的情况
+    time: str = ""
     school: str = ""
     major: str = ""
     degree: str = ""
@@ -269,7 +269,6 @@ class CanonicalResume(_Model):
         )
 
 
-# LLM 偶尔会用近义键名；在进入 Pydantic 之前统一一下，减少无谓的回退。
 _TOP_ALIASES = {
     "personal_info": "personal",
     "personalinfo": "personal",
@@ -294,7 +293,6 @@ _TOP_ALIASES = {
     "certifications": "certificates",
     "campus_experience": "campus",
     "others": "other",
-    # 模型偶尔会把键名翻译成中文；保留这些兜底，避免整份结果作废
     "个人信息": "personal",
     "基本信息": "personal",
     "联系方式": "personal",
@@ -327,7 +325,6 @@ def normalize_payload(data: Any) -> dict:
     """把 LLM 返回的原始 dict 规范成 CanonicalResume 能吃的形状。"""
     if not isinstance(data, dict):
         return {}
-    # 有些模型会包一层 {resume: {...}} / {data: {...}}
     for key in ("resume", "data", "result"):
         nested = data.get(key)
         if isinstance(nested, dict) and not data.get("personal"):

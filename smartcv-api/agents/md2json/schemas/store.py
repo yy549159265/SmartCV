@@ -30,7 +30,6 @@ class Step(IntEnum):
     DONE = 6
 
 
-# 步骤展示名，顺序与 Step 一一对应；前端弹窗显示的就是这些文案，要改只改这里
 STEP_NAMES = [
     "文件上传与校验",
     "正在解析简历为 MarkDown 格式",
@@ -74,10 +73,7 @@ class PDF2ResumeStore(BaseModel):
         self.error = "已中断"
 
 
-# ---- 全局注册表：按 session_id 存一份，供前端轮询状态 ----
-# 用内存级 TTL 缓存（类似 Redis 的 EXPIRE）：每条 10 分钟过期自动删除，
-# 满容量自动逐出最旧，无需手动定时清理。请求结束后还会主动 delete_store。
-_JOB_TTL_SECONDS = 600  # 10 分钟
+_JOB_TTL_SECONDS = 600
 _MAX_JOBS = 200
 _JOBS: TTLCache = TTLCache(maxsize=_MAX_JOBS, ttl=_JOB_TTL_SECONDS)
 

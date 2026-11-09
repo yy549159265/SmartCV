@@ -30,13 +30,8 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from uuid import UUID
 
-# 开启致命错误转储：原生扩展（Playwright / OpenCV 等）发生访问违规（segfault）时
-# Python 不会报错、进程直接没，faulthandler 能把崩溃点堆栈打出来。
 faulthandler.enable()
 
-# 业务日志：uvicorn 默认只配它自己 uvicorn.* 那套 logger，root logger 仍停在
-# WARNING，我们的 INFO（裸 logging.info 和 getLogger("smartcv")）会被静默丢掉。
-# 这里把 root 提到 INFO 并挂上控制台 handler，业务日志就能打出来了。
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logging.getLogger().setLevel(logging.INFO)
 
@@ -53,7 +48,6 @@ from services.html2pdf import close_browser
 
 
 _CHECKPOINT_DB = Path(__file__).resolve().parent / "chat_checkpoints.sqlite"
-# 检查点 sqlite 清理间隔：每 1h 清空一次，防止 langgraph checkpoint 无限膨胀
 _CHECKPOINT_CLEANUP_SECONDS = 60 * 60
 
 
@@ -83,7 +77,6 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="SmartCV API", lifespan=lifespan)
 
-# 前端 dev server 已配 /api 代理（同源），这里 CORS 只是兜底
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -92,11 +85,8 @@ app.add_middleware(
 )
 
 
-# ---------- agent 会话 id：前端每个请求都带 X-Agent-Session-Id（UUID7） ----------
-
 logger = logging.getLogger("smartcv")
 _AGENT_SESSION_HEADER = "x-agent-session-id"
-# 轮询接口每秒打一次会话日志，刷屏，单独静音掉
 _QUIET_SESSION_PATHS = {"/api/resume/parse/status"}
 
 
@@ -143,8 +133,6 @@ class _QuietPathFilter(logging.Filter):
 logging.getLogger("uvicorn.access").addFilter(_QuietPathFilter("/api/resume/parse/status"))
 
 
-# ---------- 统一响应：任何错误都包装成 { code, message, data } ----------
-
 _FIELD_NAMES = {
     "provider": "供应商",
     "baseUrl": "接口地址",
@@ -183,8 +171,6 @@ async def http_exception_handler(request: Request, exc: HTTPException):
     return JSONResponse(status_code=exc.status_code, content=error(exc.status_code, str(exc.detail)))
 
 
-# ---------- 注册路由 ----------
-
 app.include_router(business_router.router)
 app.include_router(agent_router.router)
 
@@ -192,6 +178,5 @@ app.include_router(agent_router.router)
 if __name__ == "__main__":
     import uvicorn
 
-    # PyCharm 调试入口；debug 时别开 reload —— reload 会另起子进程，断点进不去。
     port = int(os.getenv("SMARTCV_API_PORT", "9000"))
     uvicorn.run("main:app", host="127.0.0.1", port=port, reload=False)

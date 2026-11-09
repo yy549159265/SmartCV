@@ -1,46 +1,32 @@
 <script setup lang="ts">
-/**
- * 应用入口：顶部工具条 + 页面
- *   主页（默认）/ 编辑简历 / 诊断简历 / 优秀示例 / 高级设置
- *
- * 简历的"从哪来"统一走主页（导入 PDF / 导入 JSON / 新建），编辑页不再提供导入入口。
- * 所有页面读写同一个 Pinia store（stores/resume.ts）—— 单一数据源。
- */
 import { ref } from 'vue'
 import { siGithub } from 'simple-icons'
 import HomePage from '@/pages/HomePage.vue'
 import EditorPage from '@/pages/EditorPage.vue'
-import OptimizePage from '@/pages/OptimizePage.vue'
+import ReviewPage from '@/pages/ReviewPage.vue'
 import ReferenceExamplesPage from '@/pages/ReferenceExamplesPage.vue'
 import ProviderSettingsPage from '@/pages/ProviderSettingsPage.vue'
 import { brandSvg } from '@/data/icons'
 import { themeOverrides } from '@/styles/naive-theme'
 
-/** GitHub 仓库跳转图标（头部右侧，新标签打开） */
 const githubSvg = brandSvg(siGithub)
 
-/* ---------- 顶部页面栏 ---------- */
-
-type PageKey = 'home' | 'editor' | 'optimize' | 'references' | 'provider'
+type PageKey = 'home' | 'editor' | 'review' | 'references' | 'provider'
 
 const currentPage = ref<PageKey>('home')
 
-/** 高级设置默认打开哪个标签；编辑页的简历库入口可以直接跳到「本地备份」 */
 const settingsTab = ref<'provider' | 'backup' | 'md'>('provider')
 
-/** 顶部导航：点「高级设置」总是回到 OpenAI 设置 */
 function onNav(page: PageKey) {
   if (page === 'provider') settingsTab.value = 'provider'
   currentPage.value = page
 }
 
-/** 编辑页 / 其他页面请求打开备份设置 */
 function openBackupSettings() {
   settingsTab.value = 'backup'
   currentPage.value = 'provider'
 }
 
-/** 「诊断简历 → 转换成优秀示例」带过来的简历 JSON：交给示例库页，消费后清空 */
 const examplePrefillJson = ref('')
 
 function onConvertToExample(json: string) {
@@ -51,7 +37,7 @@ function onConvertToExample(json: string) {
 const PAGES: { key: PageKey; label: string }[] = [
   { key: 'home', label: '主页' },
   { key: 'editor', label: '编辑简历' },
-  { key: 'optimize', label: '诊断简历' },
+  { key: 'review', label: '优化简历' },
   { key: 'references', label: '优秀示例' },
   { key: 'provider', label: '高级设置' },
 ]
@@ -60,14 +46,12 @@ const PAGES: { key: PageKey; label: string }[] = [
 <template>
   <n-config-provider :theme-overrides="themeOverrides">
     <div class="app-shell">
-      <!-- 顶部工具条：品牌 + 页面栏 + GitHub -->
       <header class="app-header">
         <div class="brand">
           <img class="brand-icon" src="/favicon.svg" alt="" width="22" height="22" />
           <span class="brand-name">SmartCV</span>
         </div>
 
-      <!-- 页面栏 -->
       <nav class="page-tabs">
         <button
           v-for="p in PAGES"
@@ -92,14 +76,13 @@ const PAGES: { key: PageKey; label: string }[] = [
       </div>
     </header>
 
-    <!-- 页面主体 -->
     <HomePage v-if="currentPage === 'home'" @enter="currentPage = 'editor'" />
     <EditorPage
       v-else-if="currentPage === 'editor'"
       @open-settings="openBackupSettings"
     />
-    <OptimizePage
-      v-else-if="currentPage === 'optimize'"
+    <ReviewPage
+      v-else-if="currentPage === 'review'"
       @open-library="currentPage = 'references'"
       @convert-to-example="onConvertToExample"
     />
@@ -154,7 +137,6 @@ const PAGES: { key: PageKey; label: string }[] = [
   color: var(--text);
 }
 
-/* 页面栏：下划线式导航，不用胶囊底、不用投影；hover 给一条全高的极浅色带 */
 .page-tabs {
   display: flex;
   align-items: stretch;
@@ -207,7 +189,6 @@ const PAGES: { key: PageKey; label: string }[] = [
   display: flex;
   align-items: center;
 }
-/* GitHub 跳转图标：内联 SVG 1.1em，hover 给一圈浅底，去掉链接下划线 */
 .github-link {
   display: inline-flex;
   align-items: center;
@@ -229,7 +210,6 @@ const PAGES: { key: PageKey; label: string }[] = [
   background: var(--surface-soft);
 }
 
-/* ---------- 窄屏：页面栏可横向滚动，标题与操作保持单行 ---------- */
 @media (max-width: 720px) {
   .app-header {
     gap: 14px;
@@ -258,7 +238,6 @@ const PAGES: { key: PageKey; label: string }[] = [
   .github-link {
     display: none;
   }
-  /* 两行：品牌 + 操作在上，页面栏独占一行（四个入口不再横向裁切） */
   .app-header {
     flex-wrap: wrap;
     height: auto;

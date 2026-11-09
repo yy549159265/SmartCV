@@ -21,7 +21,6 @@ def choose_llm(
     if timeout is not None:
         overrides["timeout"] = timeout
 
-    # DeepSeek 推理模型默认会开思考模式，拖慢工具调用；这里显式关闭思考，并固定 tool_choice
     if "deepseek" in (model or "").lower():
         return ChatOpenAI(
             model=model,

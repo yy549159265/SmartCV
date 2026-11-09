@@ -31,9 +31,6 @@ class SectionStyle(BaseStyle):
     titleSize: Optional[float] = None
     gap: Optional[float] = None
     spaceBefore: Optional[float] = None
-    # 标题下方是否显示横线（前端默认为 true）。
-    # 必须声明：/api/chat 用 Section 解析前端简历，Pydantic 会丢弃未声明字段，
-    # 少这一项会让用户关掉的横线在每次对话后被重置回默认开启。
     titleUnderline: Optional[bool] = None
 
 
@@ -53,19 +50,19 @@ class ListItem(BaseModel):
 class ContentData(BaseModel):
     """内容的内容：所有类型共用一个对象，各类型只读自己需要的字段。"""
 
-    icon: Optional[str] = None  # iconText
-    text: Optional[str] = None  # iconText
-    columns: Optional[list[str]] = None  # twoColumn
-    separator: Optional[str] = None  # twoColumn
-    start: Optional[str] = None  # timeRange
-    end: Optional[str] = None  # timeRange
-    tags: Optional[list[str]] = None  # tag / iconText 附加标签
-    listType: Optional[ListStyle] = None  # listText
-    items: Optional[list[ListItem]] = None  # listText
-    image: Optional[str] = None  # image：完整 dataURL
-    imageSize: Optional[float] = None  # image
-    imageShape: Optional[ImageShape] = None  # image
-    imageAlign: Optional[TextAlign] = None  # image
+    icon: Optional[str] = None
+    text: Optional[str] = None
+    columns: Optional[list[str]] = None
+    separator: Optional[str] = None
+    start: Optional[str] = None
+    end: Optional[str] = None
+    tags: Optional[list[str]] = None
+    listType: Optional[ListStyle] = None
+    items: Optional[list[ListItem]] = None
+    image: Optional[str] = None
+    imageSize: Optional[float] = None
+    imageShape: Optional[ImageShape] = None
+    imageAlign: Optional[TextAlign] = None
 
 
 class Content(BaseModel):
@@ -105,6 +102,5 @@ class Resume(BaseModel):
     转给前端时再剥掉，拿到 Section[]。"""
 
     sections: list[Section]
-
 
 

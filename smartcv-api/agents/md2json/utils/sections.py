@@ -32,7 +32,6 @@ class SectionType(str, Enum):
     other = "other"
 
 
-# 精确别名（归一化后比较）。中英文都覆盖，新增说法往这里加一行即可。
 _ALIASES: dict[str, str] = {}
 
 
@@ -120,7 +119,6 @@ def _heading_level(block: Block) -> int | None:
 def _is_heading(block: Block) -> bool:
     if _heading_level(block) is not None:
         return True
-    # 没有标题层级时，只接受精确别名，不猜
     return len(block.text) <= 20 and match_section_type(block.text) is not None
 
 
@@ -147,8 +145,6 @@ def split_sections(blocks: list[Block]) -> list[SectionPlan]:
             known = match_section_type(title) is not None
             nested = level is not None and top_level is not None and level > top_level
             if nested and not known:
-                # 深层未知标题：当作当前章节里的一行内容，保留原文；
-                # 同时降级为普通文本，后续抽取/校验都按正文处理。
                 block.kind = "text"
                 block.level = None
                 if current is not None:
@@ -167,11 +163,9 @@ def split_sections(blocks: list[Block]) -> list[SectionPlan]:
         else:
             preamble.append(block)
 
-    # 第一个标题之前的内容按个人信息处理（常见于没有“个人信息”标题的简历）
     if preamble:
         plans.insert(0, SectionPlan(type=SectionType.personal_info.value, title="", blocks=preamble))
 
-    # 完全没有任何标题：保留为“其他”，至少不丢内容
     if not plans:
         if blocks:
             plans.append(SectionPlan(type=SectionType.other.value, title="简历内容", blocks=list(blocks)))

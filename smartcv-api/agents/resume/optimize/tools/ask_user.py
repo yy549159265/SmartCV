@@ -60,7 +60,6 @@ def _normalize_ask(title: str, questions: list[AskQuestion]) -> dict:
                     {"label": o.label.strip(), "description": (o.description or "").strip()}
                     for o in q.options
                 ],
-                # 第 4 项由前端固定渲染成「其他（自定义输入）」
                 "allowCustom": True,
             }
         )
@@ -83,10 +82,10 @@ def make_ask_tool():
         ],
         questions: Annotated[
             list[AskQuestion],
-            Field(min_length=1, max_length=4, description="1~4 个问题"),
+            Field(min_length=1, max_length=3, description="1~3 个问题"),
         ],
     ) -> str:
-        """当简历或 JD 缺少关键信息、无法做出可靠诊断时，向用户提出 1~4 个选择题。
+        """当简历或 JD 缺少关键信息、无法做出可靠诊断时，向用户提出 1~3 个选择题。
 
         只在「不问就会猜」的情况下使用：如目标岗位/JD 缺失、经历缺少时间或成果、
         用户要求太笼统、简历里有占位符或事实矛盾。能从简历/JD 推断的不要问。
@@ -96,7 +95,6 @@ def make_ask_tool():
         得到答案后必须把答案作为诊断依据；用户跳过或超时则按信息不足继续诊断。
         """
         payload = _normalize_ask(title, questions)
-        # 暂停：value 会随 SSE 下发前端；恢复时这里直接拿到 Command(resume=...) 的值
         answer = interrupt(payload)
         if not isinstance(answer, dict):
             answer = {}

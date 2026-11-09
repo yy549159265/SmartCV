@@ -1,15 +1,4 @@
 <script setup lang="ts">
-/**
- * 章节的"编辑卡片"（中间画布用）
- *
- * 章节内部是一组"布局行"（LayoutWindowItem 递归渲染）：
- * 行内可以放多个布局窗口并排（横排），也可以再套行。
- *
- * 功能：
- *  - 章节标题直接编辑；⋮⋮ 手柄拖动章节排序（vue-draggable-plus）；
- *  - 强制分页开关、样式设置、复制、删除；
- *  - ▾/▸ 折叠：折叠后只显示标题栏（v-show 保留 DOM，展开后内容不丢）。
- */
 import { computed, nextTick, ref } from 'vue'
 import { VueDraggable } from 'vue-draggable-plus'
 import LayoutWindowItem from './LayoutWindowItem.vue'
@@ -31,66 +20,51 @@ const store = useResumeStore()
 const isSelected = computed(() => store.selectedId === props.section.id)
 const collapsed = computed(() => store.isSectionCollapsed(props.section.id))
 
-/** 顶层窗口列表算出的全局列数（横向容器用来均分格子宽度，实现跨列对齐） */
 const tableCols = computed(() => computeTableCols(props.section.rows))
 
-/** 样式弹层（受控，点外部自动关闭） */
 const { show: styleShow, triggerRef: styleTriggerRef } = useClickPopover()
 
-/** 章节标题图标选择器弹层（受控，点外部自动关闭） */
 const { show: iconPopoverShow, triggerRef: iconTriggerRef } = useClickPopover()
-
-/* ---------- 标题编辑 ---------- */
 
 const titleModel = computed({
   get: () => props.section.title,
   set: (v: string) => store.updateSection(props.section.id, { title: v }),
 })
 
-/** 章节标题前的可选图标（读 = section.icon；写 = 存入 store） */
 const iconModel = computed({
   get: () => props.section.icon ?? '',
   set: (v: string) => store.updateSection(props.section.id, { icon: v }),
 })
 
-/** 从选择器点选一个图标：写入并立即关闭 */
 function pickIcon(icon: string) {
   iconModel.value = icon
   iconPopoverShow.value = false
 }
 
-/** 清除图标（留空 = 标题前不显示图标） */
 function clearIcon() {
   iconModel.value = ''
   iconPopoverShow.value = false
 }
 
-/* ---------- 布局行拖拽（vue-draggable-plus） ---------- */
-
-/** 按 id 找 vue-draggable-plus 插入的占位对象：它插入的是深拷贝（引用不同），indexOf 找不到 */
 function indexOfId<T extends { id?: unknown }>(arr: T[], id: unknown): number {
   if (typeof id !== 'string') return -1
   return arr.findIndex((x) => x && x.id === id)
 }
 
-/** 判断拖进来的数据是不是"预设"（预设才有 name；真实窗口数据没有 name 字段） */
 function isPresetLike(x: unknown): boolean {
   const p = x as { name?: unknown }
   return !!p && typeof p === 'object' && typeof p.name === 'string'
 }
 
-/** 把占位替换/插入到目标数组里（在 nextTick 里调用，此时 vue-draggable-plus 内部已把数据插进数组） */
 function replacePlaceholder<T extends { id?: unknown }>(arr: T[], data: unknown, real: T, newIndex: number | undefined) {
   const existing = indexOfId(arr, (data as { id?: unknown } | null)?.id)
   if (existing >= 0) {
     arr.splice(existing, 1, real)
   } else {
-    // 兜底：克隆体就落在 newIndex 上，原位替换即可（不能"插入"，否则会多一份）
     arr.splice(Math.min(newIndex ?? arr.length, arr.length), 1, real)
   }
 }
 
-/** 移除错误的占位（拖进来的类型不对） */
 function removePlaceholder<T extends { id?: unknown }>(arr: T[], data: unknown, newIndex: number | undefined) {
   const existing = indexOfId(arr, (data as { id?: unknown } | null)?.id)
   if (existing >= 0) {
@@ -100,18 +74,12 @@ function removePlaceholder<T extends { id?: unknown }>(arr: T[], data: unknown, 
   }
 }
 
-/**
- * vue-draggable-plus 在触发 add 前已把克隆同步插进数组（onAdd 里先内部插入、再派发事件），
- * 所以这里可以【同步】把占位替换成真实数据 —— 占位永远不会被渲染成组件（渲染崩溃的根源）。
- * 只有极少数找不到占位的边缘情况才退回 nextTick 兜底。
- */
 function syncReplace<T extends { id?: unknown }>(arr: T[], data: unknown, real: T, newIndex: number | undefined) {
   const existing = indexOfId(arr, (data as { id?: unknown } | null)?.id)
   if (existing >= 0) arr.splice(existing, 1, real)
   else nextTick(() => replacePlaceholder(arr, data, real, newIndex))
 }
 
-/** 布局行列表：从组件库「布局」拖入 → 生成布局行；真实窗口跨章节移动 → 原样放入 */
 function onRowAdd(evt: { data?: unknown; newIndex?: number }) {
   const data = evt.data as { id?: unknown; name?: string; type?: unknown; title?: unknown } | undefined
   const arr = props.section.rows
@@ -120,7 +88,6 @@ function onRowAdd(evt: { data?: unknown; newIndex?: number }) {
     return
   }
   if (isPresetLike(data)) {
-    // 预设：只接受"布局预设"（有 name、没有 type/title）
     if (data.type !== undefined || data.title !== undefined) {
       removePlaceholder(arr, data, evt.newIndex)
       message.warning('这里只能放布局（从组件库「布局」分组拖入）')
@@ -129,12 +96,9 @@ function onRowAdd(evt: { data?: unknown; newIndex?: number }) {
     const real = createRowFromPreset(data as never)
     syncReplace(arr, data, real, evt.newIndex)
   } else {
-    // 真实布局窗口从别的章节/列表拖过来 → 原样放入
     syncReplace(arr, data, data as unknown as LayoutWindow, evt.newIndex)
   }
 }
-
-/* ---------- 操作 ---------- */
 
 function togglePageBreak() {
   store.updateSection(props.section.id, { pageBreakBefore: !props.section.pageBreakBefore })
@@ -158,12 +122,10 @@ function onRemove() {
     :data-section-id="section.id"
     @click.stop="store.select(section.id)"
   >
-    <!-- 强制分页角标 -->
     <span v-if="section.pageBreakBefore" class="forced-badge" title="该章节从下一页开头开始">
       ⤒ 强制分页
     </span>
 
-    <!-- 章节头部 -->
     <div class="section-header" :class="{ collapsed }">
       <button
         class="collapse-btn"
@@ -175,7 +137,6 @@ function onRemove() {
       <span class="section-drag-handle" title="按住拖动章节排序">
         ⋮⋮
       </span>
-      <!-- 章节标题前的图标：点它打开图标选择器（与内容"图标文字"同款选择器） -->
       <n-popover
         v-model:show="iconPopoverShow"
         trigger="click"
@@ -190,7 +151,6 @@ function onRemove() {
             title="章节标题前的图标（留空则不显示）"
             @click.stop
           >
-            <!-- 图标可能是 emoji，也可能是品牌 SVG（v-html 两种都能渲染） -->
             <span v-if="section.icon" class="section-icon-content" v-html="section.icon" />
             <span v-else>＋</span>
           </button>
@@ -275,7 +235,6 @@ function onRemove() {
       </div>
     </div>
 
-    <!-- 布局行列表（折叠时隐藏，DOM 保留）：按住 ⋮⋮ 手柄排序；从组件库「布局」分组拖入 = 生成布局行 -->
     <div v-show="!collapsed" class="section-rows">
       <VueDraggable
         v-model="section.rows"
@@ -295,7 +254,6 @@ function onRemove() {
         />
       </VueDraggable>
 
-      <!-- 无窗口提示：铺满整个落点区并居中，pointer-events:none 不挡拖放（空白章节也能承接拖入） -->
       <div v-if="section.rows.length === 0" class="section-empty">
         从上方组件库拖入布局或内容
       </div>
@@ -405,7 +363,6 @@ function onRemove() {
   background: var(--primary-faint);
 }
 
-/* 标题前的图标触发按钮：点它打开图标选择器（始终可见，便于一眼看到可加图标） */
 .section-icon-trigger {
   flex: none;
   display: inline-flex;
@@ -441,7 +398,6 @@ function onRemove() {
   height: 16px;
   display: block;
 }
-/* 图标选择器：与"图标文字"内容的图标选择器同款 */
 .section-icon-picker {
   display: flex;
   flex-direction: column;
@@ -504,11 +460,9 @@ function onRemove() {
   opacity: 0;
   transition: opacity 0.15s;
 }
-/* 触发器包装：给 ref 一个原生元素（n-button 的实例没有 contains） */
 .trigger-wrap {
   display: inline-flex;
 }
-/* 工具栏图标按钮：悬浮/选中章节时出现，悬停提示说明用途 */
 .section-tool-btn {
   flex: none;
   display: flex;
@@ -530,12 +484,10 @@ function onRemove() {
   background: var(--surface-soft);
   color: var(--text);
 }
-/* 强制分页已开启：常亮提醒色 */
 .section-tool-btn.is-on {
   background: var(--warning-soft);
   color: var(--warning);
 }
-/* 样式弹层展开：点亮主色 */
 .section-tool-btn.is-open {
   background: var(--primary-soft);
   color: var(--primary);
@@ -562,14 +514,12 @@ function onRemove() {
   background: var(--table-line);
   border: 1px solid var(--table-line);
   border-radius: 8px;
-  /* 空章节也能把「窗口布局」拖进来（空列表要有足够大的落点面积） */
   min-height: 96px;
 }
 .section-rows-inner > * {
   background: var(--panel-bg);
 }
 
-/* 无窗口提示：绝对定位铺满落点区并居中；pointer-events:none 让它不拦截拖放 */
 .section-empty {
   position: absolute;
   inset: 0;

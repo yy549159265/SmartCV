@@ -1,16 +1,4 @@
 <script setup lang="ts">
-/**
- * 主页：简历的唯一入口。
- * 四种方式开始编辑：
- *   1. 导入 PDF / Word —— 后端解析成简历 JSON（api/document.ts）；
- *   2. 导入 JSON —— 读取本地 .json 简历文件；
- *   3. 新建 —— 空白简历；
- *   4. 加载示例 —— 从仓库 example/ 目录挑一份现成的（见 ExampleGallery.vue）。
- * 任一种完成后 emit('enter')，由 App.vue 切到编辑页展示/编辑。
- *
- * 页面结构：Hero（左文案 + 右真实渲染的 A4 演示简历）→ 三步流程 → 继续编辑 → 页脚。
- * Hero 右侧的演示简历是纯展示数据（data/heroResume.ts），直接走预览渲染链。
- */
 import { computed, onMounted, ref, watch } from 'vue'
 import { useElementSize, useStorage, useWindowSize } from '@vueuse/core'
 import { useResumeStore } from '@/stores/resume'
@@ -29,31 +17,23 @@ import { heroResume } from '@/data/heroResume'
 const store = useResumeStore()
 const statsStore = useStatsStore()
 const documents = useDocumentsStore()
-/** 浏览器是否支持选择文件夹（Chrome / Edge） */
 const supportsFolder = supportsDirectoryPicker()
 
-/** 打开主页时拉一次导出统计（失败静默，不打扰） */
 onMounted(() => {
   statsStore.load()
 })
 const emit = defineEmits<{ enter: [] }>()
 
-/** 当前是否已有简历（用于提示可直接继续编辑） */
 const hasResume = () => store.resume.length > 0
 
-/* ---------- Hero 右侧：A4 演示简历 ---------- */
-
-/** 视口宽度（setup 作用域只创建一次，computed 里只读它的值） */
 const { width: viewportWidth } = useWindowSize()
 
-/** 视口宽度 → 演示简历的缩放档（纸宽 794px，缩到右栏能舒服地放下） */
 const heroZoom = computed(() => {
   if (viewportWidth.value >= 1100) return 0.55
   if (viewportWidth.value >= 900) return 0.47
   return 0.42
 })
 
-/** A4 纸张样式：固定 A4 尺寸 + 页边距 + 缩放（与预览/画廊同一套技术） */
 const paperStyle = computed(() => ({
   width: `${PAGE_WIDTH}px`,
   minHeight: `${PAGE_HEIGHT}px`,
@@ -61,29 +41,21 @@ const paperStyle = computed(() => ({
   zoom: heroZoom.value,
 }))
 
-/** 裁切容器高度：只露到一页的 78%，底部渐变暗示「下面还有内容」 */
 const paperWrapStyle = computed(() => ({
   height: `${Math.round(PAGE_HEIGHT * heroZoom.value * 0.78)}px`,
 }))
 
-/* ---------- 组件库功能介绍：编辑器缩略图（固定设计尺寸 + 等比缩放） ---------- */
-
-/** 缩略图设计尺寸：mock 按 560 × 400 绘制，标注用像素级锚点。
- * 宽度取 560 是为了在两栏布局（视觉列约 550px）下标签也能以接近原尺寸显示 */
 const FEATURE_STAGE_W = 560
 const FEATURE_STAGE_H = 400
 
 const featureVisualEl = ref<HTMLElement | null>(null)
-// 初始宽度按设计尺寸算，避免挂载前缩放为 0 闪一下
 const { width: featureVisualW } = useElementSize(featureVisualEl, {
   width: FEATURE_STAGE_W,
   height: 0,
 })
 
-/** 缩放到容器宽度（容器比设计尺寸窄时等比缩小，标注与标签跟着一起缩） */
 const featureScale = computed(() => Math.min(1, featureVisualW.value / FEATURE_STAGE_W))
 
-/** 舞台占位高度 = 设计高度 × 缩放（transform 不占布局空间，高度手动补上） */
 const featureStageStyle = computed(() => ({
   height: `${Math.round(FEATURE_STAGE_H * featureScale.value)}px`,
 }))
@@ -92,22 +64,15 @@ const featureStageInnerStyle = computed(() => ({
   transform: `scale(${featureScale.value})`,
 }))
 
-/* ---------- 导入 PDF / Word ---------- */
 const docInputEl = ref<HTMLInputElement | null>(null)
-/** 导入对话框：点「导入 PDF / Word」先在这里选解析引擎，再选文件 */
 const showImportDialog = ref(false)
-/** 默认 mineru（云解析）；docling 本地解析太耗服务器资源，前端已停用 */
 const parser = ref<'docling' | 'mineru'>('mineru')
-/** MinerU token，useStorage 记忆到 localStorage，下次免填 */
 const mineruToken = useStorage('smartcv-mineru-token', '')
 
-/* ---------- 解析进度弹窗 ---------- */
-/** 阻塞进度弹窗是否显示（解析期间不让用户干别的） */
 const showProgress = ref(false)
 const progressState = ref<ParseProgress['state']>('pending')
 const progressSteps = ref<ParseProgress['steps']>([])
 const progressError = ref('')
-/** 取消按钮持有的 AbortController：abort 掉 POST，服务端检测断开 → cancelled */
 const progressAbort = ref<AbortController | null>(null)
 
 const stepIcon = (s: ParseStep['status']) =>
@@ -121,7 +86,6 @@ function pickDoc() {
   showImportDialog.value = true
 }
 
-/** 对话框里点「选择文件」：关掉对话框，再唤起系统文件选择 */
 function confirmImport() {
   showImportDialog.value = false
   docInputEl.value?.click()
@@ -130,10 +94,9 @@ function confirmImport() {
 async function onDocChange(e: Event) {
   const input = e.target as HTMLInputElement
   const file = input.files?.[0]
-  input.value = '' // 允许重复导入同一个文件
+  input.value = ''
   if (!file) return
 
-  // 弹阻塞进度窗，解析期间轮询 status 更新各步骤状态（步骤列表由后端返回）
   const abort = new AbortController()
   progressAbort.value = abort
   showProgress.value = true
@@ -152,8 +115,6 @@ async function onDocChange(e: Event) {
       },
       abort.signal,
     )
-    // 绑定备份文件夹时，解析结果会写成一个新的 JSON 文件；
-    // 未绑定时只替换内存里的简历（和以前一样）
     const title = file.name.replace(/\.[^.]+$/, '')
     const result = await documents.createDocument(data, title)
     if (result === 'ok') {
@@ -163,7 +124,6 @@ async function onDocChange(e: Event) {
       message.error('导入失败：解析结果不是合法的简历数据')
     }
   } catch (err) {
-    // 用户点「取消」触发 abort：静默关闭，不弹错误提示
     if (!(err instanceof DOMException && err.name === 'AbortError')) {
       message.error(err instanceof Error ? err.message : '文档解析失败，请重试')
     }
@@ -173,11 +133,8 @@ async function onDocChange(e: Event) {
   }
 }
 
-/* ---------- 导入 JSON ---------- */
 const jsonInputEl = ref<HTMLInputElement | null>(null)
-/** 「导入 JSON」下拉：绑定了备份文件夹时多一个「从备份文件夹打开」 */
 const jsonMenuShow = ref(false)
-/** 备份文件夹文件列表弹窗 */
 const showLibrary = ref(false)
 
 function pickJson() {
@@ -188,7 +145,7 @@ function pickJson() {
 async function onJsonChange(e: Event) {
   const input = e.target as HTMLInputElement
   const file = input.files?.[0]
-  input.value = '' // 允许重复导入同一个文件
+  input.value = ''
   if (!file) return
   try {
     const data = JSON.parse(await file.text())
@@ -204,8 +161,6 @@ async function onJsonChange(e: Event) {
     message.error('导入失败：文件不是合法的 JSON')
   }
 }
-
-/* ---------- 从备份文件夹打开 ---------- */
 
 const libraryStatusText = computed(() => {
   switch (documents.status) {
@@ -253,7 +208,6 @@ async function onOpenLibraryFile(name: string) {
   }
 }
 
-/** 删除确认框：明确告诉用户文件会从文件夹里永久删掉 */
 function confirmDeleteLibraryFile(name: string, title: string): Promise<boolean> {
   return new Promise((resolve) => {
     let settled = false
@@ -282,24 +236,19 @@ async function onDeleteLibraryFile(file: { name: string; title: string }) {
   message.success(`已删除「${file.title}」`)
 }
 
-/* ---------- 新建 ---------- */
 async function onNew() {
   const result = await documents.createBlank()
   if (result === 'ok') emit('enter')
 }
 
-/* ---------- 加载示例 ---------- */
-/** 示例画廊弹层（清单与缩略图都在子组件里按需加载） */
 const showGallery = ref(false)
 </script>
 
 <template>
   <div class="home-page">
     <div class="home-container">
-      <!-- Hero：左文案与操作 / 右真实渲染的 A4 演示简历 -->
       <section class="home-hero">
         <div class="hero-copy">
-          <!-- 品牌眉标：应用图标 + 产品定位，署名单独占一行、右对齐 -->
           <div class="hero-eyebrow">
             <img class="hero-eyebrow-icon" src="/favicon.svg" alt="" width="48" height="48" />
             <div class="hero-eyebrow-copy">
@@ -328,7 +277,6 @@ const showGallery = ref(false)
           </div>
 
           <div class="hero-quiet">
-            <!-- 绑定了备份文件夹：点「导入 JSON」先选来源 -->
             <n-popover
               v-if="documents.isBound && supportsFolder"
               v-model:show="jsonMenuShow"
@@ -383,7 +331,6 @@ const showGallery = ref(false)
           </ul>
         </div>
 
-        <!-- 演示简历：PreviewSection 真实渲染，所见即所得 -->
         <div class="hero-visual" aria-hidden="true">
           <div class="hero-visual-panel">
             <div class="hero-paper-wrap" :style="paperWrapStyle">
@@ -409,7 +356,6 @@ const showGallery = ref(false)
         </div>
       </section>
 
-      <!-- 三步流程：单面板 + 发丝分隔线，编号对应真实的操作顺序 -->
       <section class="home-steps">
         <div class="steps-head">
           <h2 class="steps-title">三步，把旧简历变成新机会</h2>
@@ -443,7 +389,6 @@ const showGallery = ref(false)
         </div>
       </section>
 
-      <!-- 组件库功能介绍：自由组合章节/布局/组件，右侧为编辑器缩略图 + 三点标注 -->
       <section class="home-feature">
         <div class="feature-copy">
           <h2 class="feature-title">自由组合，打造专属简历</h2>
@@ -479,18 +424,15 @@ const showGallery = ref(false)
           </button>
         </div>
 
-        <!-- 编辑器缩略图：组件库在上、画布在下（真实编辑器的上下结构）；标注直接圈在简历内容上 -->
         <div ref="featureVisualEl" class="feature-visual" aria-hidden="true">
           <div class="feature-stage" :style="featureStageStyle">
             <div class="feature-stage-inner" :style="featureStageInnerStyle">
               <div class="editor-mock">
-                <!-- 顶部工具栏 -->
                 <div class="mock-toolbar">
                   <span class="mock-dots"><i /><i /><i /></span>
                   <span class="mock-title">简历编辑器</span>
                 </div>
 
-                <!-- 组件库：位于画布上方的三个分类入口 -->
                 <div class="mock-library">
                   <span class="lib-label">组件库</span>
                   <span class="lib-tab lib-tab-active"><IconGlyph name="layout-list" :size="11" />章节</span>
@@ -498,7 +440,6 @@ const showGallery = ref(false)
                   <span class="lib-tab"><IconGlyph name="shapes" :size="11" />组件</span>
                 </div>
 
-                <!-- 画布：简历内容 + 三处圈注（① 章节模块 ② 章节内左右布局 ③ 标签组件） -->
                 <div class="mock-canvas">
                   <div class="mock-paper">
                     <span class="pk pk-name">林知远</span>
@@ -508,7 +449,6 @@ const showGallery = ref(false)
                     <span class="pk pk-bar" style="width: 100%" />
                     <span class="pk pk-bar" style="width: 76%" />
 
-                    <!-- ① 章节：圈出整个「教育经历」模块 -->
                     <span class="pk-wrap">
                       <span class="pk-sec">教育经历</span>
                       <span class="pk-row">
@@ -525,7 +465,6 @@ const showGallery = ref(false)
                       </span>
                     </span>
 
-                    <!-- ② 布局：圈出章节内部的左右分布（左内容块 + 虚线分隔 + 右内容块） -->
                     <span class="pk-sec">工作经历</span>
                     <span class="pk-wrap">
                       <span class="layout-split">
@@ -554,7 +493,6 @@ const showGallery = ref(false)
                       <span class="pk-bullet"><i class="bullet-dot" /><span class="pk-bar" style="width: 80%" /></span>
                     </span>
 
-                    <!-- ③ 组件：圈出标签行 -->
                     <span class="pk-sec">专业技能</span>
                     <span class="pk-wrap">
                       <span class="pk-tags"><span class="pk-tag" /><span class="pk-tag" /><span class="pk-tag" /><span class="pk-tag" /></span>
@@ -573,7 +511,6 @@ const showGallery = ref(false)
             </div>
           </div>
 
-          <!-- 窄屏替代：标签改成普通列表（不随缩略图缩放，保证可读） -->
           <div class="feature-annot-list">
             <p class="annot-row"><span class="annot-row-dot">1</span><span><b>章节</b> · 添加和管理简历内容模块</span></p>
             <p class="annot-row"><span class="annot-row-dot">2</span><span><b>布局</b> · 自由调整单列、双列等页面结构</span></p>
@@ -582,7 +519,6 @@ const showGallery = ref(false)
         </div>
       </section>
 
-      <!-- 已有简历：直接继续编辑 -->
       <section v-if="hasResume()" class="home-continue">
         <div class="continue-card">
           <span class="continue-icon"><IconGlyph name="pen-line" :size="16" /></span>
@@ -597,7 +533,6 @@ const showGallery = ref(false)
         </div>
       </section>
 
-      <!-- 页脚：隐私说明 + 导出统计 -->
       <footer class="home-footer">
         <p class="home-privacy">
           你的简历只存在本机浏览器里，不收集任何数据；仅在使用 AI 功能时，内容才会发送到你配置的模型服务商（仅匿名统计导出次数，不涉及简历内容）
@@ -609,10 +544,8 @@ const showGallery = ref(false)
       </footer>
     </div>
 
-    <!-- 示例模板画廊；载入成功后直接进编辑器 -->
     <ExampleGallery v-model:show="showGallery" @enter="emit('enter')" />
 
-    <!-- 从备份文件夹打开：列出文件夹里的每份简历 JSON -->
     <n-modal
       v-model:show="showLibrary"
       preset="card"
@@ -687,7 +620,6 @@ const showGallery = ref(false)
       </template>
     </n-modal>
 
-    <!-- 导入 PDF / Word 对话框：选解析引擎 → 选文件 -->
     <n-modal
       v-model:show="showImportDialog"
       :mask-closable="false"
@@ -719,7 +651,6 @@ const showGallery = ref(false)
       </div>
     </n-modal>
 
-    <!-- 解析进度弹窗：阻塞，直到解析完成/失败/取消 -->
     <n-modal
       v-model:show="showProgress"
       :mask-closable="false"
@@ -754,7 +685,6 @@ const showGallery = ref(false)
       </div>
     </n-modal>
 
-    <!-- 隐藏的文件输入框 -->
     <input
       ref="docInputEl"
       type="file"
@@ -767,9 +697,6 @@ const showGallery = ref(false)
 </template>
 
 <style scoped>
-/* ============================================================
- * 主页整体：居中内容容器，页面本身可滚动
- * ============================================================ */
 .home-page {
   height: 100%;
   overflow: auto;
@@ -780,9 +707,6 @@ const showGallery = ref(false)
   padding: 56px 28px 0;
 }
 
-/* ============================================================
- * Hero：左文案 / 右演示简历
- * ============================================================ */
 .home-hero {
   display: grid;
   grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
@@ -790,8 +714,6 @@ const showGallery = ref(false)
   gap: 40px;
 }
 
-/* ---------- 左侧文案 ---------- */
-/* 品牌眉标：图标 + 两行文案（定位句 / 右对齐署名） */
 .hero-eyebrow {
   display: flex;
   align-items: center;
@@ -909,7 +831,6 @@ const showGallery = ref(false)
   box-shadow: 0 4px 12px -8px rgba(28, 33, 48, 0.18);
 }
 
-/* ---------- 次要入口：比主按钮小一号的描边图标按钮 ---------- */
 .hero-quiet {
   display: flex;
   flex-wrap: wrap;
@@ -954,7 +875,6 @@ const showGallery = ref(false)
   color: var(--primary-hover);
 }
 
-/* ---------- 导入 JSON 下拉 ---------- */
 .json-menu {
   display: flex;
   flex-direction: column;
@@ -999,7 +919,6 @@ const showGallery = ref(false)
   color: var(--text-tertiary);
 }
 
-/* ---------- 从备份文件夹打开（弹窗） ---------- */
 .library-dialog {
   display: flex;
   flex-direction: column;
@@ -1055,7 +974,6 @@ const showGallery = ref(false)
 .library-dialog-item.active {
   background: var(--primary-faint);
 }
-/* 打开这份简历：占满整行，删除按钮独立在外，避免按钮嵌套 */
 .library-dialog-item-open {
   display: flex;
   align-items: center;
@@ -1069,7 +987,6 @@ const showGallery = ref(false)
   text-align: left;
   cursor: pointer;
 }
-/* 删除按钮：常驻可见（用户反馈「找不到删除入口」），悬停整行时加深 */
 .library-dialog-item-delete {
   display: inline-flex;
   align-items: center;
@@ -1183,7 +1100,6 @@ const showGallery = ref(false)
   justify-content: flex-end;
 }
 
-/* ---------- 信任行：格式支持 + 本地存储 ---------- */
 .hero-trust {
   display: flex;
   flex-wrap: wrap;
@@ -1205,7 +1121,6 @@ const showGallery = ref(false)
   opacity: 0.75;
 }
 
-/* ---------- 右侧：演示简历 ---------- */
 .hero-visual {
   animation: rise-in 0.7s 0.16s var(--ease) both;
 }
@@ -1218,7 +1133,6 @@ const showGallery = ref(false)
   border: 1px solid var(--border);
   border-radius: 20px;
 }
-/* 裁切容器：只露一页的 78%，底部渐变暗示「下面还有内容」 */
 .hero-paper-wrap {
   position: relative;
   overflow: hidden;
@@ -1238,7 +1152,6 @@ const showGallery = ref(false)
   box-shadow: var(--shadow-paper);
 }
 
-/* ---------- 浮动芯片：AI 解析 / AI 优化 ---------- */
 .hero-chip {
   position: absolute;
   display: flex;
@@ -1284,7 +1197,6 @@ const showGallery = ref(false)
   color: var(--text-tertiary);
 }
 
-/* ---------- 入场动画：一次性的上浮显现 ---------- */
 @keyframes rise-in {
   from {
     opacity: 0;
@@ -1296,9 +1208,6 @@ const showGallery = ref(false)
   }
 }
 
-/* ============================================================
- * 三步流程：单面板 + 发丝分隔线（编号对应真实顺序）
- * ============================================================ */
 .home-steps {
   margin-top: 64px;
 }
@@ -1372,19 +1281,14 @@ const showGallery = ref(false)
   color: var(--text-secondary);
 }
 
-/* ============================================================
- * 组件库功能介绍：左文案 / 右编辑器缩略图 + 三点标注
- * ============================================================ */
 .home-feature {
   display: grid;
-  /* 右侧缩略图需要约 550px 才不用缩小，视觉列多分一点 */
   grid-template-columns: minmax(0, 4.5fr) minmax(0, 6.5fr);
   align-items: center;
   gap: 48px;
   margin-top: 64px;
 }
 
-/* ---------- 左侧文案 ---------- */
 .feature-title {
   margin: 0;
   font-size: 22px;
@@ -1471,7 +1375,6 @@ const showGallery = ref(false)
   transform: translateY(0);
 }
 
-/* ---------- 右侧缩略图舞台：固定设计尺寸 + 等比缩放 ---------- */
 .feature-visual {
   position: relative;
   min-width: 0;
@@ -1484,13 +1387,12 @@ const showGallery = ref(false)
   position: absolute;
   top: 0;
   left: 50%;
-  margin-left: -280px; /* 560 设计宽的一半：缩放后仍水平居中 */
+  margin-left: -280px;
   width: 560px;
   height: 400px;
   transform-origin: top center;
 }
 
-/* ---------- 编辑器缩略图本体 ---------- */
 .editor-mock {
   width: 560px;
   background: var(--panel-bg);
@@ -1500,7 +1402,6 @@ const showGallery = ref(false)
   box-shadow: var(--shadow-raised);
 }
 
-/* 顶部工具栏 */
 .mock-toolbar {
   display: flex;
   align-items: center;
@@ -1525,7 +1426,6 @@ const showGallery = ref(false)
   color: var(--text-secondary);
 }
 
-/* 组件库：画布上方的三个分类入口（上下结构，对应真实编辑器） */
 .mock-library {
   display: flex;
   align-items: center;
@@ -1563,7 +1463,6 @@ const showGallery = ref(false)
   opacity: 1;
 }
 
-/* 画布：凹面灰底，纸面靠左、说明标签在右侧 */
 .mock-canvas {
   position: relative;
   height: 300px;
@@ -1582,7 +1481,6 @@ const showGallery = ref(false)
   box-shadow: var(--shadow-paper);
 }
 
-/* ---------- 纸面骨架 ---------- */
 .pk {
   display: block;
   flex: none;
@@ -1674,7 +1572,6 @@ const showGallery = ref(false)
   background: #eef0f7;
 }
 
-/* ---------- ② 布局演示：章节内部的左右分布 ---------- */
 .layout-split {
   display: flex;
   align-items: stretch;
@@ -1713,9 +1610,6 @@ const showGallery = ref(false)
   background: #e2e6f5;
 }
 
-/* ---------- 圈注：描边圈 + 编号圆点 + 引导线 + 说明标签 ----------
- * 标签锚定在圈注环上（top 50% 相对环居中），与内容块的实际高度解耦，
- * 内容怎么改标签都始终和圈注中心对齐，不需要任何像素级手工坐标。 */
 .annot-ring {
   position: absolute;
   inset: -6px;
@@ -1755,7 +1649,6 @@ const showGallery = ref(false)
   background: rgba(71, 83, 199, 0.5);
 }
 
-/* ---------- 说明标签：挂在圈注右侧，垂直方向与圈注中心对齐 ---------- */
 .annot-label {
   position: absolute;
   top: 50%;
@@ -1782,7 +1675,6 @@ const showGallery = ref(false)
   color: var(--text-tertiary);
 }
 
-/* 窄屏替代：标注改普通列表，文字不随缩略图缩放 */
 .feature-annot-list {
   display: none;
 }
@@ -1814,9 +1706,6 @@ const showGallery = ref(false)
   box-shadow: 0 0 0 3px rgba(71, 83, 199, 0.16);
 }
 
-/* ============================================================
- * 继续编辑：已有简历时的快捷入口
- * ============================================================ */
 .home-continue {
   margin-top: 16px;
 }
@@ -1883,9 +1772,6 @@ const showGallery = ref(false)
   transform: translateY(0);
 }
 
-/* ============================================================
- * 页脚：隐私说明 + 导出统计
- * ============================================================ */
 .home-footer {
   display: flex;
   align-items: flex-start;
@@ -1913,7 +1799,6 @@ const showGallery = ref(false)
   font-variant-numeric: tabular-nums;
 }
 
-/* ---------- 导入对话框 ---------- */
 .import-dialog-body {
   display: flex;
   flex-direction: column;
@@ -1946,7 +1831,6 @@ const showGallery = ref(false)
   color: var(--text-tertiary);
 }
 
-/* ---------- 解析进度 ---------- */
 .progress-body {
   display: flex;
   flex-direction: column;
@@ -2016,10 +1900,6 @@ const showGallery = ref(false)
   display: none;
 }
 
-/* ============================================================
- * 响应式
- * ============================================================ */
-/* 组件库功能介绍：两栏下视觉列不足 550px 时整体改上下结构（缩略图全宽展示） */
 @media (max-width: 1024px) {
   .home-feature {
     grid-template-columns: 1fr;
@@ -2030,7 +1910,6 @@ const showGallery = ref(false)
   }
 }
 
-/* 窄屏：缩略图里的说明标签会缩得太小，改显示缩略图下方的普通标注列表 */
 @media (max-width: 640px) {
   .annot-label,
   .ring-line {
@@ -2045,7 +1924,6 @@ const showGallery = ref(false)
   }
 }
 
-/* 双栏但文案列较窄（约 900–1080px）时眉标收一档，避免定位句被拆开 */
 @media (min-width: 901px) and (max-width: 1080px) {
   .hero-eyebrow-icon {
     width: 44px;

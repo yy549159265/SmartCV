@@ -1,10 +1,3 @@
-/**
- * Naive UI 主题覆盖
- *
- * 只影响外观：把组件库默认的亮绿主色、较硬的阴影和圆角，
- * 统一到应用的「冷灰 + 靛蓝」色板上，让 n-button / n-input / 弹窗
- * 与自绘界面看起来是同一套东西。所有业务逻辑、尺寸逻辑都不在这里改。
- */
 import type { GlobalThemeOverrides } from 'naive-ui'
 
 const FONT_SANS =
@@ -173,9 +166,6 @@ export const themeOverrides: GlobalThemeOverrides = {
 
   Popover: {
     borderRadius: '12px',
-    // 不要在这里设 color：NTooltip 内部会把自己的 Popover 主题覆盖传给 NPopover，
-    // 这里的白色会压过 Tooltip 的深色底，出现「白色浮层 + 白字」的空白提示框。
-    // 弹层默认就是白色（common.popoverColor），无需重复声明。
     boxShadow: '0 18px 44px -24px rgba(28, 33, 48, 0.28)',
   },
 

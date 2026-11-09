@@ -28,7 +28,6 @@ _HEADING_MD = re.compile(r"^(#{1,6})\s+(.+)$")
 _BULLET_MD = re.compile(r"^\s*(?:[-*+•●·▪◦–—]|\d{1,2}[.、)])\s+(.+)$")
 _TABLE_MD = re.compile(r"^\s*\|.*\|\s*$")
 
-# 明确的页码/页脚写法；不把孤立的年份、数字当页码（交给重复频率规则判断）
 _PAGE_LINE = re.compile(
     r"^\s*(?:第\s*\d{1,4}\s*页(?:\s*[/／]?\s*共\s*\d{1,4}\s*页)?"
     r"|共\s*\d{1,4}\s*页"
@@ -38,21 +37,16 @@ _PAGE_LINE = re.compile(
     re.I,
 )
 _WATERMARK = re.compile(
-    # 注意：不要用泛化的 www.xxx.com 判断水印，否则会把个人的网站/作品集误删；
-    # 图片 URL 由 _IMAGE_URL 单独处理。
     r"(简历模板|模板下载|模板编号|扫码关注|二维码)",
     re.I,
 )
-# 浏览器/阅读器打印时带的页脚时间，如 2026/10/24 01:15
 _PRINT_TIME = re.compile(
     r"^\s*\d{4}[/-]\d{1,2}[/-]\d{1,2}\s+\d{1,2}:\d{2}(?::\d{2})?\s*$"
 )
-# 图片文件名 + 尺寸，如 f054a265-....jpg (1587×2245)
 _IMAGE_FILE = re.compile(
     r"^[\w.\-]+\.(?:jpe?g|png|gif|bmp|webp|tiff?)\s*[（(]\s*\d+\s*[×xX*]\s*\d+\s*[）)]\s*$",
     re.I,
 )
-# 指向图片的裸 URL（简历网站/作品集链接不是图片，不会被这条命中）
 _IMAGE_URL = re.compile(
     r"^https?://\S+\.(?:jpe?g|png|gif|bmp|webp|tiff?)(?:\?\S*)?\s*$",
     re.I,
@@ -112,7 +106,6 @@ def table_html_to_text(raw: str) -> str:
         parser.feed(raw or "")
         parser.close()
     except Exception:
-        # HTMLParser 对畸形 HTML 很宽容，走到这里基本是空内容
         return ""
     return "\n".join(" | ".join(row) for row in parser.rows if row)
 
@@ -163,13 +156,10 @@ def blocks_from_content_list(items: list[dict]) -> list[Block]:
             continue
         kind = str(item.get("type") or "text").lower()
         if kind in ("image", "figure"):
-            # 简历里的图片只可能是头像/装饰，正文解析不需要；头像不在此阶段处理
             continue
 
         raw_text = item.get("text") or item.get("content") or ""
         if kind in ("table", "table_body"):
-            # 表格必须优先用 table_body 还原单元格边界。MinerU 的 text 字段
-            # 有时是把整张表拼成一行，按它解析会把学校/学位/专业/时间粘在一起。
             table_html = item.get("table_body") or item.get("html") or ""
             if isinstance(table_html, str) and table_html.strip():
                 converted = table_html_to_text(table_html)
@@ -317,7 +307,6 @@ def clean_blocks(blocks: list[Block]) -> CleanResult:
     kept: list[Block] = []
     dropped: list[DroppedBlock] = []
 
-    # 1) 明显噪声
     for block in blocks:
         text = normalize_text(block.text)
         if not text:
@@ -330,7 +319,6 @@ def clean_blocks(blocks: list[Block]) -> CleanResult:
         block.text = text
         kept.append(block)
 
-    # 2) 页眉页脚：优先 bbox + 页码，其次全篇重复频率
     page_numbers = {b.page for b in kept if b.page is not None}
     page_count = len(page_numbers)
     drop_ids: set[str] = set()
@@ -369,7 +357,6 @@ def clean_blocks(blocks: list[Block]) -> CleanResult:
             if len(pages) < threshold:
                 continue
             first = first_block[key]
-            # 页码/水印全删；重复的姓名/联系方式/页眉只保留第一次出现
             reason = "page_number" if _PAGE_LINE.match(first.text) else "repeated_header_footer"
             for b in kept:
                 if b is not first and _text_key(b.text) == key:
@@ -377,7 +364,6 @@ def clean_blocks(blocks: list[Block]) -> CleanResult:
                     dropped.append(DroppedBlock(b.id, reason))
 
     elif page_count >= 2:
-        # 没有 bbox（full.md 兜底）：同一短文本出现 3 次以上视为页眉/页脚
         short_counts: dict[str, list[Block]] = {}
         for b in kept:
             if b.kind == "heading":
@@ -392,7 +378,6 @@ def clean_blocks(blocks: list[Block]) -> CleanResult:
                 drop_ids.add(b.id)
                 dropped.append(DroppedBlock(b.id, "repeated_header_footer"))
 
-    # 3) 精确重复的长块（同一段内容被解析了两遍）
     seen_text: set[str] = set()
     for b in kept:
         if b.id in drop_ids:

@@ -1,13 +1,4 @@
 <script setup lang="ts">
-/**
- * 页面 · 优秀示例库
- *
- * 诊断简历时最多挑 3 份作为写作参考（见 OptimizePage 的 ReferenceExamplePicker）。
- * 示例库全局共享、没有用户区分，因此这里：
- *   - 只有上传，没有编辑 / 删除；
- *   - 上传分两步：填三个字段 → 预览确认 → 才真正提交；
- *   - 缩略图是真实渲染（与示例模板画廊同一套预览渲染链，只吃 props）。
- */
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useWindowSize } from '@vueuse/core'
 import IconGlyph from '@/components/IconGlyph.vue'
@@ -24,14 +15,11 @@ import {
 import { PAGE_HEIGHT, PAGE_PADDING, PAGE_WIDTH } from '@/utils/constants'
 import type { Section } from '@/types'
 
-/** 「诊断简历 → 转换成优秀示例」带过来的简历 JSON：挂载时自动填入上传表单 */
 const props = withDefaults(defineProps<{ prefillJson?: string }>(), { prefillJson: '' })
 const emit = defineEmits<{ 'prefill-consumed': [] }>()
 
-/** 缩略图缩放比：卡片内容宽约 250px ÷ 纸宽（随 PAGE_WIDTH 自动算，纸变宽缩略图不变宽） */
 const THUMB_ZOOM = 250 / PAGE_WIDTH
 
-/** 画廊卡片：一份示例 + 它的缩略图加载状态 */
 interface Card {
   meta: ReferenceExampleMeta
   state: 'pending' | 'loading' | 'ready' | 'error'
@@ -43,11 +31,9 @@ const cards = ref<Card[]>([])
 const listState = ref<'loading' | 'ready' | 'error'>('loading')
 const listError = ref('')
 
-/** 页面滚动容器：既是列表滚动区，也是缩略图懒加载的 IntersectionObserver root */
 const pageEl = ref<HTMLElement | null>(null)
 let observer: IntersectionObserver | null = null
 
-/** 缩略图内层样式：铺满 A4 宽度，靠 zoom 缩到卡片大小 */
 const thumbStyle = {
   width: `${PAGE_WIDTH}px`,
   minHeight: `${PAGE_HEIGHT}px`,
@@ -67,13 +53,11 @@ function ensureObserver(): IntersectionObserver | null {
         void loadCard(index)
       }
     },
-    // 提前 300px 触发，往下滚的时候下一张已经在加载了
     { root: pageEl.value, rootMargin: '300px' },
   )
   return observer
 }
 
-/** 卡片挂载时登记下标，交给 observer 盯着 */
 function observeCard(el: unknown, index: number) {
   if (!(el instanceof HTMLElement)) return
   el.dataset.index = String(index)
@@ -81,7 +65,6 @@ function observeCard(el: unknown, index: number) {
   ensureObserver()?.observe(el)
 }
 
-/** 下载并渲染某张卡片的缩略图 */
 async function loadCard(index: number) {
   const card = cards.value[index]
   if (!card || card.state !== 'pending') return
@@ -108,7 +91,7 @@ async function refresh() {
     const list = await listReferenceExamples()
     cards.value = list.map((meta) => ({ meta, state: 'pending', sections: [] }))
     listState.value = 'ready'
-    await nextTick() // 等卡片渲染出来，ref 回调才会把懒加载挂上
+    await nextTick()
   } catch (err) {
     listError.value = err instanceof Error ? err.message : '示例列表加载失败'
     listState.value = 'error'
@@ -117,7 +100,6 @@ async function refresh() {
 
 onMounted(() => {
   void refresh()
-  // 「转换成优秀示例」跳转：打开上传弹窗，当前简历 JSON 直接填入粘贴框
   if (props.prefillJson) {
     form.jsonText = props.prefillJson
     validateJson()
@@ -127,7 +109,6 @@ onMounted(() => {
 })
 onBeforeUnmount(() => observer?.disconnect())
 
-/** 上传时间只展示日期（后端是 UTC ISO，转成本地日期） */
 function formatDate(iso: string): string {
   const date = new Date(iso)
   if (Number.isNaN(date.getTime())) return ''
@@ -136,13 +117,10 @@ function formatDate(iso: string): string {
   return `${date.getFullYear()}-${month}-${day}`
 }
 
-/* ---------- 详情弹窗（只读） ---------- */
-
 const detailShow = ref(false)
 const detailIndex = ref(-1)
 const detailCard = computed(() => cards.value[detailIndex.value] ?? null)
 
-/** 视口越窄，纸面缩得越小；弹窗内容区放得下 A4 纸 */
 const { width: viewportWidth } = useWindowSize()
 const detailZoom = computed(() =>
   Math.min(1, Math.max(0.5, (viewportWidth.value - 150) / PAGE_WIDTH)),
@@ -168,27 +146,16 @@ function retry(card: Card) {
   void loadCard(cards.value.indexOf(card))
 }
 
-/* ---------- 上传：三个字段 ---------- */
-
 const uploadShow = ref(false)
 const jsonInputEl = ref<HTMLInputElement | null>(null)
 const form = reactive({ direction: '', description: '', jsonText: '' })
-/** 解析成功后的章节数组（预览 / 提交都用它，不用再解析一次） */
 const parsedSections = ref<Section[] | null>(null)
 const parseError = ref('')
 
-/* ---------- AI 分析：职业名称 + 可借鉴的写法 ---------- */
-
 const analyzing = ref(false)
 
-/** JSON 解析成功后才能分析：按钮置灰，避免把空内容发给模型 */
 const canAnalyze = computed(() => !!parsedSections.value && !analyzing.value)
 
-/**
- * 分析上传的 JSON：后端把它转成不带坐标的简历交给模型，
- * 返回固定 2 条 —— 第 1 条回填「职业名称」，第 2 条回填「可借鉴的写法」。
- * 用户点按钮是明确动作，所以两条都按结果覆盖，之后仍可手动修改。
- */
 async function runAnalyze() {
   if (!canAnalyze.value) {
     message.warning(parsedSections.value ? '正在分析，请稍候' : '请先上传有效的简历 JSON')
@@ -232,7 +199,7 @@ function pickJson() {
 function onJsonFile(e: Event) {
   const input = e.target as HTMLInputElement
   const file = input.files?.[0]
-  input.value = '' // 允许重复选择同一个文件
+  input.value = ''
   if (!file) return
   const reader = new FileReader()
   reader.onload = () => {
@@ -243,13 +210,11 @@ function onJsonFile(e: Event) {
   reader.readAsText(file)
 }
 
-/** 文本被手动修改后，之前解析成功的结果作废，等下次校验 */
 function onJsonTextInput() {
   parsedSections.value = null
   parseError.value = ''
 }
 
-/** 解析并校验 JSON：顶层必须是非空章节数组，每个章节有 rows 数组 */
 function validateJson(): boolean {
   const text = form.jsonText.trim()
   if (!text) {
@@ -269,8 +234,6 @@ function validateJson(): boolean {
     return false
   }
 }
-
-/* ---------- 上传：预览 + 二次确认 ---------- */
 
 const previewShow = ref(false)
 const previewSections = ref<Section[]>([])
@@ -329,7 +292,7 @@ async function confirmUpload() {
         <div class="ref-head-copy">
           <h1 class="ref-title">优秀示例库</h1>
           <p class="ref-desc">
-            诊断时最多挑选 3 份参考；AI 只借鉴写作方式与结构，不借用其中的事实。
+            优化时最多挑选 3 份参考；AI 只借鉴写作方式与结构，不借用其中的事实。
           </p>
         </div>
         <div class="ref-head-actions">
@@ -346,30 +309,26 @@ async function confirmUpload() {
         <span>示例库全局共享；提交后不可编辑、不可删除。</span>
       </div>
 
-      <!-- 列表加载中 -->
       <div v-if="listState === 'loading'" class="ref-status">
         <n-spin size="small" />
         <span>正在读取示例库…</span>
       </div>
 
-      <!-- 列表加载失败 -->
       <div v-else-if="listState === 'error'" class="ref-status">
         <span>{{ listError }}</span>
         <n-button size="small" @click="refresh">重试</n-button>
       </div>
 
-      <!-- 空库 -->
       <div v-else-if="cards.length === 0" class="ref-empty">
         <span class="ref-empty-icon"><IconGlyph name="layout-template" :size="22" /></span>
         <p class="ref-empty-title">示例库还是空的</p>
-        <p class="ref-empty-desc">上传第一份优秀简历，之后诊断时可以把它选为写作参考。</p>
+        <p class="ref-empty-desc">上传第一份优秀简历，之后优化时可以把它选为写作参考。</p>
         <button type="button" class="ref-upload-btn" @click="openUpload">
           <IconGlyph name="file-plus-2" :size="15" />
           上传示例
         </button>
       </div>
 
-      <!-- 缩略图网格：真实渲染，auto-fill 自动折行 -->
       <div v-else class="ref-grid">
         <button
           v-for="(card, i) in cards"
@@ -410,7 +369,6 @@ async function confirmUpload() {
       </div>
     </div>
 
-    <!-- 详情弹窗：完整内容只读展示 -->
     <n-modal
       v-model:show="detailShow"
       display-directive="if"
@@ -446,13 +404,12 @@ async function confirmUpload() {
 
       <template #footer>
         <div class="ref-modal-footer">
-          <span class="ref-modal-hint">示例内容仅供诊断参考，不可编辑或删除</span>
+          <span class="ref-modal-hint">示例内容仅供优化参考，不可编辑或删除</span>
           <n-button size="small" type="primary" @click="detailShow = false">关闭</n-button>
         </div>
       </template>
     </n-modal>
 
-    <!-- 上传第 1 步：三个字段 -->
     <n-modal
       v-model:show="uploadShow"
       display-directive="if"
@@ -497,7 +454,7 @@ async function confirmUpload() {
                   <IconGlyph name="info" :size="13" />
                 </span>
               </template>
-              这份示例的可迁移写作规范（最多 2000 字）；诊断时会作为示例说明交给 AI
+              这份示例的可迁移写作规范（最多 2000 字）；优化时会作为示例说明交给 AI
             </n-tooltip>
           </span>
           <n-input
@@ -567,7 +524,6 @@ async function confirmUpload() {
       </template>
     </n-modal>
 
-    <!-- 上传第 2 步：预览 + 二次确认（提交后不可编辑 / 删除） -->
     <n-modal
       v-model:show="previewShow"
       display-directive="if"
@@ -630,7 +586,6 @@ async function confirmUpload() {
   padding: 36px 28px 56px;
 }
 
-/* ---------- 页头 ---------- */
 .ref-head {
   display: flex;
   align-items: flex-end;
@@ -693,7 +648,6 @@ async function confirmUpload() {
   transform: translateY(0);
 }
 
-/* 共享说明：一行安静的提示，不抢缩略图的注意力 */
 .ref-note {
   display: flex;
   align-items: center;
@@ -711,7 +665,6 @@ async function confirmUpload() {
   color: var(--text-tertiary);
 }
 
-/* ---------- 状态提示 ---------- */
 .ref-status {
   display: flex;
   align-items: center;
@@ -723,7 +676,6 @@ async function confirmUpload() {
   text-align: center;
 }
 
-/* ---------- 空库 ---------- */
 .ref-empty {
   display: flex;
   flex-direction: column;
@@ -761,7 +713,6 @@ async function confirmUpload() {
   color: var(--text-secondary);
 }
 
-/* ---------- 缩略图网格 ---------- */
 .ref-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
@@ -796,7 +747,6 @@ async function confirmUpload() {
   justify-content: center;
   background: var(--surface-soft);
 }
-/* 底部渐隐：暗示纸面下面还有内容 */
 .ref-thumb::after {
   content: '';
   position: absolute;
@@ -891,7 +841,6 @@ async function confirmUpload() {
   color: var(--text-tertiary);
 }
 
-/* ---------- 弹窗通用 ---------- */
 .ref-modal-head {
   display: flex;
   align-items: center;
@@ -927,7 +876,6 @@ async function confirmUpload() {
   gap: 8px;
 }
 
-/* ---------- 详情（只读） ---------- */
 .ref-detail {
   display: flex;
   flex-direction: column;
@@ -956,7 +904,6 @@ async function confirmUpload() {
   background: var(--doc-workspace);
 }
 
-/* ---------- 上传表单 ---------- */
 .ref-form {
   display: flex;
   flex-direction: column;
@@ -1026,7 +973,6 @@ async function confirmUpload() {
   color: var(--text-tertiary);
 }
 
-/* ---------- 预览确认 ---------- */
 .ref-preview {
   display: flex;
   flex-direction: column;
@@ -1067,7 +1013,6 @@ async function confirmUpload() {
   display: none;
 }
 
-/* ---------- 响应式 ---------- */
 @media (max-width: 720px) {
   .ref-container {
     padding: 28px 18px 44px;

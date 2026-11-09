@@ -1,14 +1,4 @@
 <script setup lang="ts">
-/**
- * 页面 1 · 编辑简历：顶部工具栏 + 两栏布局（宽度可拖动调整）
- *   左：组件库（ComponentLibrary，横向面板）+ 编辑画布（EditCanvas）
- *   右：实时预览（ResumePreview）
- *
- * 顶部工具栏：简历名字、撤销/重做、预览缩放、纸面宽度。
- * 列宽：两栏之间有一条分隔条（ColumnDivider），按住左右拖动改变列宽；
- * 双击恢复默认，宽度用 VueUse 的 useStorage 记忆在浏览器本地。
- * 两栏读写的是同一个 Pinia store（stores/resume.ts）—— 单一数据源。
- */
 import { computed, ref, watch, watchEffect } from 'vue'
 import { useStorage, useWindowSize } from '@vueuse/core'
 import ComponentLibrary from '@/components/ComponentLibrary.vue'
@@ -36,17 +26,13 @@ const emit = defineEmits<{ 'open-settings': [] }>()
 
 const store = useResumeStore()
 const documents = useDocumentsStore()
-/** 浏览器是否支持选择文件夹（Chrome / Edge） */
 const supportsFolder = supportsDirectoryPicker()
-
-/* ---------- 左列宽度（useStorage：自动记忆到 localStorage） ---------- */
 
 const DEFAULTS = { editor: 640 }
 const LIMITS = { editor: { min: 440, max: 1200 } }
 
 const editorWidth = useStorage('smartcv-layout-editor', DEFAULTS.editor)
 
-/** 把宽度变化限制在合理范围内 */
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max)
 }
@@ -58,38 +44,26 @@ function onResetEditor() {
   editorWidth.value = DEFAULTS.editor
 }
 
-/* ---------- 窗口变窄时自动收缩编辑列（只缩不放，用户拖过的宽度永远优先） ---------- */
-
 const { width: viewportWidth } = useWindowSize()
 
 watchEffect(() => {
-  // 给预览至少留 480px；窗口更窄时按最小编辑列宽处理
   const max = viewportWidth.value - 480
   if (max < editorWidth.value) {
     editorWidth.value = Math.max(LIMITS.editor.min, max)
   }
 })
 
-/** 两栏布局样式：左列固定宽度，预览弹性占满剩余空间 */
 const mainStyle = computed(() => ({
   gridTemplateColumns: `${editorWidth.value}px 8px minmax(0, 1fr)`,
 }))
 
-/* ---------- 顶部工具栏 ---------- */
-
-/** 撤销/重做是否可用（看两个历史栈） */
 const canUndo = computed(() => store.undoStack.length > 0)
 const canRedo = computed(() => store.redoStack.length > 0)
 
-/** 纸面宽度弹层是否展开 */
 const widthMenuShow = ref(false)
 
-/* ---------- 简历库（备份文件夹） ---------- */
-
-/** 简历库弹层是否展开 */
 const libraryShow = ref(false)
 
-/** 简历名字输入框的本地草稿：失焦 / 回车时才提交，避免每敲一个字就改文件名 */
 const nameDraft = ref(resumeName.value)
 watch(resumeName, (value) => {
   nameDraft.value = value
@@ -112,7 +86,6 @@ const librarySubtitle = computed(() => {
   }
 })
 
-/** 列表里的文件是否是当前正在编辑的那份 */
 function isCurrentFile(name: string): boolean {
   return documents.currentFile?.toLowerCase() === name.toLowerCase()
 }
@@ -125,7 +98,6 @@ function onNameEnter(event: KeyboardEvent) {
   ;(event.target as HTMLInputElement).blur()
 }
 
-/** 重名时问用户：保留两份 / 覆盖 / 取消 */
 function askRenameConflict(conflict: string): Promise<'unique' | 'overwrite' | 'cancel'> {
   return new Promise((resolve) => {
     let settled = false
@@ -147,7 +119,6 @@ function askRenameConflict(conflict: string): Promise<'unique' | 'overwrite' | '
   })
 }
 
-/** 提交简历名字：改名会同步重命名备份文件夹里的 JSON */
 async function commitResumeName() {
   const clean = sanitizeFileTitle(nameDraft.value, '我的简历')
   nameDraft.value = clean
@@ -155,7 +126,6 @@ async function commitResumeName() {
 
   const previous = resumeName.value
 
-  // 文件已存在但权限过期：先在用户的这次操作里申请权限，否则改名只会改显示名
   if (documents.isBound && documents.currentFile && documents.status !== 'ready') {
     const granted = await documents.ensurePermission()
     if (!granted) {
@@ -177,7 +147,6 @@ async function commitResumeName() {
 
   const choice = await askRenameConflict(result.conflict)
   if (choice === 'cancel') {
-    // renameCurrent 已经把显示名改成新名字了，这里恢复旧名字（旧文件本身没动）
     await documents.renameCurrent(previous)
     nameDraft.value = resumeName.value
     return
@@ -216,7 +185,6 @@ async function onRefreshLibrary() {
   if (documents.status === 'ready') message.success('列表已刷新')
 }
 
-/** 删除确认框：默认焦点在「取消」上，避免回车误删 */
 function confirmDeleteFile(name: string, title: string): Promise<boolean> {
   return new Promise((resolve) => {
     let settled = false
@@ -238,7 +206,6 @@ function confirmDeleteFile(name: string, title: string): Promise<boolean> {
   })
 }
 
-/** 点删除图标：二次确认后真删；删当前这份只解除文件指针，内容仍留在浏览器里 */
 async function onDeleteFile(file: { name: string; title: string }) {
   if (!(await confirmDeleteFile(file.name, file.title))) return
 
@@ -277,7 +244,6 @@ function openBackupSettings() {
 
 <template>
   <main class="editor-page">
-    <!-- 顶部工具栏：简历名字 + 撤销/重做 + 预览缩放 + 纸面宽度 -->
     <header class="editor-toolbar">
       <div class="editor-name-box">
         <span class="editor-name-label">简历名字：</span>
@@ -290,7 +256,6 @@ function openBackupSettings() {
           @blur="commitResumeName"
           @keydown.enter="onNameEnter"
         />
-        <!-- 简历库：列出备份文件夹里的所有 JSON，点一下切换编辑 -->
         <n-popover
           v-model:show="libraryShow"
           trigger="click"
@@ -329,7 +294,6 @@ function openBackupSettings() {
               </button>
             </div>
 
-            <!-- 还没选文件夹 -->
             <div v-if="!documents.isBound" class="library-empty">
               <span class="library-empty-icon"><IconGlyph name="folder-open" :size="18" /></span>
               <p class="library-empty-title">把简历存进电脑文件夹</p>
@@ -342,7 +306,6 @@ function openBackupSettings() {
               <p v-else class="library-empty-text">请使用 Chrome 或 Edge 浏览器。</p>
             </div>
 
-            <!-- 选过文件夹但权限过期 -->
             <div v-else-if="documents.status !== 'ready'" class="library-empty">
               <span class="library-empty-icon"><IconGlyph name="folder" :size="18" /></span>
               <p class="library-empty-title">
@@ -356,7 +319,6 @@ function openBackupSettings() {
               </n-button>
             </div>
 
-            <!-- 文件列表 -->
             <template v-else>
               <div class="library-list">
                 <div
@@ -424,7 +386,6 @@ function openBackupSettings() {
 
       <span class="editor-toolbar-divider" />
 
-      <!-- 预览缩放（与诊断页共用 previewZoom，两边始终一致） -->
       <div class="editor-zoom">
         <button
           v-for="z in ZOOM_LEVELS"
@@ -439,7 +400,6 @@ function openBackupSettings() {
 
       <span class="editor-toolbar-divider" />
 
-      <!-- 纸面宽度：简历成品的页面宽度（快捷档 + 滑块），预览与导出 PDF 同步生效 -->
       <n-popover v-model:show="widthMenuShow" trigger="click" placement="bottom-end" :width="272">
         <template #trigger>
           <button
@@ -484,7 +444,6 @@ function openBackupSettings() {
       </n-popover>
     </header>
 
-    <!-- 两栏：左（组件库 + 画布）｜ 分隔条 ｜ 右（实时预览） -->
     <div class="editor-columns" :style="mainStyle">
       <div class="editor-left">
         <ComponentLibrary />
@@ -504,9 +463,6 @@ function openBackupSettings() {
   flex-direction: column;
 }
 
-/* ============================================================
- * 顶部工具栏
- * ============================================================ */
 .editor-toolbar {
   flex: none;
   display: flex;
@@ -518,7 +474,6 @@ function openBackupSettings() {
   border-bottom: 1px solid var(--border);
 }
 
-/* 简历名字：固定标签 + 输入框，空的时候也不会显得"空白一块" */
 .editor-name-box {
   display: inline-flex;
   align-items: center;
@@ -554,7 +509,6 @@ function openBackupSettings() {
   box-shadow: 0 0 0 2px rgba(71, 83, 199, 0.12);
 }
 
-/* 简历库入口：文件夹图标 + 文件数，紧跟在名字输入框后面 */
 .editor-library-btn {
   display: inline-flex;
   align-items: center;
@@ -594,7 +548,6 @@ function openBackupSettings() {
   color: var(--primary-hover);
 }
 
-/* ---- 简历库弹层 ---- */
 .library-menu {
   display: flex;
   flex-direction: column;
@@ -668,7 +621,6 @@ function openBackupSettings() {
 .library-item.active {
   background: var(--primary-faint);
 }
-/* 打开这份简历：占满整行，删除按钮独立在外，避免嵌套按钮 */
 .library-item-open {
   display: flex;
   align-items: center;
@@ -682,7 +634,6 @@ function openBackupSettings() {
   text-align: left;
   cursor: pointer;
 }
-/* 删除按钮：常驻可见（用户反馈「找不到删除入口」），悬停整行时加深 */
 .library-item-delete {
   display: inline-flex;
   align-items: center;
@@ -889,7 +840,6 @@ function openBackupSettings() {
   box-shadow: 0 1px 2px rgba(28, 33, 48, 0.08);
 }
 
-/* ---- 纸面宽度：触发按钮 ---- */
 .editor-width-btn {
   display: inline-flex;
   align-items: center;
@@ -922,7 +872,6 @@ function openBackupSettings() {
   color: var(--text-secondary);
 }
 
-/* ---- 纸面宽度：弹层 ---- */
 .width-menu {
   display: flex;
   flex-direction: column;
@@ -991,14 +940,10 @@ function openBackupSettings() {
   color: var(--text-secondary);
 }
 
-/* ============================================================
- * 两栏布局
- * ============================================================ */
 .editor-columns {
   flex: 1;
   min-height: 0;
   display: grid;
-  /* 列：编辑区 | 分隔条 | 预览 —— 宽度由 JS 控制 */
   grid-template-columns: 640px 8px minmax(0, 1fr);
 }
 .editor-columns > * {
@@ -1006,7 +951,6 @@ function openBackupSettings() {
   min-height: 0;
 }
 
-/* 左列：组件库在上、画布在下 */
 .editor-left {
   display: flex;
   flex-direction: column;
@@ -1015,7 +959,6 @@ function openBackupSettings() {
   border-right: 1px solid var(--border);
 }
 
-/* 窄屏：工具栏压缩名称宽度 */
 @media (max-width: 760px) {
   .editor-name {
     width: 100px;

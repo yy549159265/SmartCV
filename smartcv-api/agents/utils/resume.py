@@ -25,9 +25,6 @@ write_text_unit / describe_location / norm_text），不在业务代码里重复
 import re
 
 
-# ==================== 主函数：JSON → 文本 ====================
-
-
 def resume_to_marked_text(resume: list[dict], *, title_with_coord: bool = False) -> str:
     """带坐标简历：把 Section[] 拍平成「每行一个可替换文字单元」的标记文本。
 
@@ -55,7 +52,6 @@ def resume_to_plain_text(resume: list[dict]) -> str:
     """
     lines: list[str] = []
     for section in resume:
-        # 顶部信息块常常没有标题：不硬造标题，直接列内容
         title = _plain_text(section.get("title"))
         if title:
             lines.append(f"## {title}")
@@ -63,9 +59,6 @@ def resume_to_plain_text(resume: list[dict]) -> str:
             lines.extend(_plain_window_lines(window, 0))
         lines.append("")
     return "\n".join(lines).strip() + "\n"
-
-
-# ==================== 坐标 → 文字单元 ====================
 
 
 def locate_unit(resume: list[dict], s: int, r: int, c: int, i: int):
@@ -175,15 +168,10 @@ def norm_text(text: str) -> str:
     「原文核对失败」而不执行。两侧都走同一个函数，所以是安全的。
     """
     value = re.sub(r"\s+", "", text or "")
-    # 强调 / 代码 / 删除线符号：原文里没有，纯装饰
     value = re.sub(r"[*`~]", "", value)
-    # 成对的下划线强调（__加粗__ / _斜体_）：只去掉包裹符号，单词里的下划线（user_id）不动
     value = re.sub(r"_{1,2}([^_\s]+?)_{1,2}", r"\1", value)
-    # 行首列表符号（"- xxx" / "• xxx"）
     return re.sub(r"^[-+•·]+", "", value)
 
-
-# ==================== 结构遍历（内部） ====================
 
 _PATCHABLE_TYPES = {"iconText", "twoColumn", "timeRange", "listText", "tag"}
 
@@ -237,11 +225,6 @@ def _numbered_unit_lines(section: dict, s: int) -> list[str]:
                 lines.append(f"[s:{s} r:{r} c:{c} i:{i}] {text}")
     return lines
 
-
-# ---------- 纯结构 Markdown 的内部实现 ----------
-
-# 优秀示例是「别人的简历」，不能带 [s:r:c:i]（那套坐标属于用户自己的简历），
-# 所以单独走一套不带编号的渲染。
 
 _HTML_TAG = re.compile(r"<[^>]+>")
 
@@ -297,13 +280,11 @@ def _plain_content_lines(content: dict, depth: int) -> list[str]:
             text = _plain_text((item or {}).get("text"))
             if not text:
                 continue
-            # 列表项自带缩进（0~2）叠加在窗口层级上，保留原文的层级感
             item_indent = "  " * min(int((item or {}).get("indent") or 0), 2)
             marker = f"{number}." if ordered else "-"
             lines.append(f"{indent}{item_indent}{marker} {text}")
         return lines
 
-    # image / spacer 没有可参考的文字结构，跳过
     return []
 
 

@@ -15,13 +15,10 @@ from typing import Any
 
 from cachetools import TTLCache
 
-# SSE 事件队列容量：生产端（LLM 流式）与消费端（HTTP 响应）之间缓冲的条数。
-# 满了就让生产端 await put 阻塞 = 背压，避免 LLM 疯狂吐 token 把内存/响应打爆。
 _QUEUE_MAXSIZE = 64
-# deque 缓存的最近事件条数（SSE 事件 id 缓存，供 Last-Event-ID 重放）。
 _EVENT_CACHE_MAXLEN = 256
 
-_JOB_TTL_SECONDS = 600  # 10 分钟
+_JOB_TTL_SECONDS = 600
 _MAX_JOBS = 200
 
 
@@ -37,15 +34,14 @@ class ChatTask:
     def __init__(self, task_id: str, session_id: str | None = None) -> None:
         self.task_id = task_id
         self.session_id = session_id
-        self.status: str = "running"  # running / done / failed / cancelled
+        self.status: str = "running"
         self.error: str | None = None
-        self.resume: Any = None          # 最终改好的 Section[]（dict 列表）
-        self.summary: str | None = None  # 主 agent 生成的修改说明
-        self.diagnosis: list[dict] | None = None  # 结构化诊断项
-        self.events: deque = deque(maxlen=_EVENT_CACHE_MAXLEN)  # (event_id, sse文本)
+        self.resume: Any = None
+        self.summary: str | None = None
+        self.diagnosis: list[dict] | None = None
+        self.events: deque = deque(maxlen=_EVENT_CACHE_MAXLEN)
         self.queue: asyncio.Queue = asyncio.Queue(maxsize=_QUEUE_MAXSIZE)
         self._seq = itertools.count(1)
-        # 反问答对：agent 暂停时登记问题 id + future，前端 POST 答案后 resolve
         self._question_id: str | None = None
         self._answer_future: asyncio.Future | None = None
 
@@ -56,7 +52,6 @@ class ChatTask:
         self.events.append((event_id, text))
         await self.queue.put(text)
 
-    # ---- 反问：暂停 → 等前端提交答案 ----
 
     def open_question(self, question_id: str) -> asyncio.Future:
         """登记一个待回答的问题，返回答案 future（由 submit_answer resolve）。"""
@@ -95,11 +90,9 @@ class ChatTask:
 
     def cancel(self) -> None:
         self.status = "cancelled"
-        # 生产任务被取消时，正在等答案的 future 也要取消，否则协程会一直挂着
         self.clear_question()
 
 
-# ---- 全局注册表：按 session_id 存一份 ChatTask，10 分钟过期自动删除 ----
 _TASKS: TTLCache = TTLCache(maxsize=_MAX_JOBS, ttl=_JOB_TTL_SECONDS)
 
 

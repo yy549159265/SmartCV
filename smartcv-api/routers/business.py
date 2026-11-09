@@ -31,18 +31,12 @@ from services.stats import increment_stats, load_stats
 router = APIRouter(prefix="/api", tags=["business"])
 
 
-# ---------- 请求模型 ----------
-
-
 class PdfRequest(BaseModel):
     html: str
 
 
 class StatsIncRequest(BaseModel):
     kind: Literal["pdf", "json"]
-
-
-# ---------- 接口 ----------
 
 
 @router.post("/resume/parse")
@@ -54,15 +48,11 @@ async def resume_parse(
     provider: ProviderConfig = Depends(provider_config),
     session_id: str | None = Depends(get_agent_session),
 ):
-    # 提前按 Content-Length 拒掉大文件：不读 body 就返回 413，省内存。
-    # （余量给 multipart 边界和 provider 表单字段留空间；没带该头的请求走 service 里的兜底检查。）
     MAX_UPLOAD = 5 * 1024 * 1024 + 128 * 1024
     content_length = request.headers.get("content-length")
     if content_length and content_length.isdigit() and int(content_length) > MAX_UPLOAD:
         raise HTTPException(status_code=413, detail="文件超过 5MB，请压缩后再上传")
 
-    # 进度状态存进全局注册表（按 session_id 索引），前端轮询 /api/resume/parse/status。
-    # 前端总会带 X-Agent-Session-Id；没带时兜底生成一个 key，状态仍可追踪。
     key = session_id or uuid.uuid4().hex
     store = create_store(key)
     try:
@@ -73,14 +63,11 @@ async def resume_parse(
         store.complete()
         return ok([s.model_dump(exclude_none=True) for s in sections])
     except asyncio.CancelledError:
-        # 客户端刷新/断开：标记取消，不再往下跑。
         store.cancel()
         raise
     except HTTPException:
-        # 校验/解析失败：store 里已把对应步骤标 failed，错误通过响应回前端。
         raise
     finally:
-        # 隐私约束：结果已经发给前端，服务端立即删除这次解析的全部状态。
         delete_store(key, store)
 
 
@@ -117,9 +104,6 @@ async def resume_pdf(req: PdfRequest):
     )
 
 
-# ---------- /api/stats：导出统计（PDF / JSON 次数，存后端文件） ----------
-
-
 @router.get("/stats")
 async def stats_get():
     """读取累计导出次数：{pdf, json}。"""
@@ -132,9 +116,6 @@ async def stats_inc(req: StatsIncRequest):
     return ok(await asyncio.to_thread(increment_stats, req.kind))
 
 
-# ---------- /api/examples：示例简历（本地 example/ 目录，不走 GitHub） ----------
-
-# 示例目录就在后端仓库根下（example/ 已从仓库根移到 smartcv-api/）
 _EXAMPLE_DIR = Path(__file__).resolve().parent.parent / "example"
 _EXAMPLE_INDEX = _EXAMPLE_DIR / "index.json"
 
@@ -169,9 +150,6 @@ async def examples_item(name: str):
         return ok(json.loads(path.read_text(encoding="utf-8")))
     except json.JSONDecodeError:
         raise HTTPException(status_code=500, detail="示例文件不是合法的 JSON")
-
-
-# ---------- /api/reference-examples：优秀示例库（诊断时参考，全局共享、只读） ----------
 
 
 class ReferenceExampleCreate(BaseModel):

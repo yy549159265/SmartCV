@@ -1,6 +1,6 @@
 """全文纠错 agent：一次结构化调用 → 代码校验 → 按坐标就地写回。
 
-和 optimize 的区别：
+和 review 的区别：
 - 不需要诊断/审查/总结多 agent 协作，纠错规则是确定的；
 - 模型只返回「坐标 + 完整改后文字」，不返回整份简历；
 - 代码负责核对坐标、原文片段、是否新增数字等，校验不过的进 skipped，
@@ -34,14 +34,11 @@ logger = logging.getLogger("smartcv")
 
 _SYSTEM_PROMPT = (Path(__file__).resolve().parent / "system_prompt_grammar.md").read_text(encoding="utf-8")
 
-# 系统提示词要求不要代码围栏，个别模型仍会加，解析前先剥掉
 _FENCE = re.compile(r"```(?:json)?\s*(.*?)```", re.S)
 _NUMBER = re.compile(r"\d+(?:[.,]\d+)*%?")
 _MARKDOWN_MARKS = re.compile(r"[*`~]")
-# 纯日期 / 时间范围行（listText 里的时间不算 range 单元，需要按文本兜底识别）
 _DATE_RANGE_CHARS = re.compile(r"[0-9./年月日\-–—~至至今现在()（）]+")
 _DATE_SEPARATOR = re.compile(r"[-–—~至]")
-# 只去掉空白，用于识别日期 / 时间范围（核对 quote 统一走 utils/resume.py 的 norm_text）
 _WHITESPACE = re.compile(r"\s+")
 
 
@@ -81,7 +78,6 @@ def _guard_change(old: str, corrected: str, *, title: bool = False) -> str:
     if "\n" in corrected or "\r" in corrected:
         return "纠错结果不能包含换行"
 
-    # 原文没有 Markdown 装饰时，不允许模型加回来；这些符号会原样显示在简历里
     if _MARKDOWN_MARKS.search(corrected) and not _MARKDOWN_MARKS.search(old):
         return "纠错结果不能包含 Markdown 标记"
 
@@ -96,12 +92,10 @@ def _guard_change(old: str, corrected: str, *, title: bool = False) -> str:
     compact_old = norm_text(old)
     compact_new = norm_text(corrected)
     if compact_old == compact_new:
-        # 只改了空白（例如中英文之间补空格），这是允许的
         return ""
     if not compact_new:
         return "修正结果为空"
 
-    # 长度和相似度兜底：防止模型借纠错之名整段重写 / 删掉后半段
     if len(compact_new) > len(compact_old) * 2 + 20:
         return "改动幅度超出纠错范围"
     if title:

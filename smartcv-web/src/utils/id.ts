@@ -1,8 +1,3 @@
-/**
- * 生成全局唯一的内容 id
- * 用「时间戳 + 自增序号 + 随机串」拼出来，保证拖拽复制时不会重复。
- */
-
 let seq = 0
 
 export function uid(): string {

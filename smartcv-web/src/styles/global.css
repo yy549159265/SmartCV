@@ -1,25 +1,14 @@
-/* ============================================================
- * 全局样式
- * 这里只放"全应用通用"的样式：底色、字体、滚动条、
- * 以及 Markdown 渲染内容的通用样式（.md-body）。
- * 各组件自己的样式写在各自的 <style scoped> 里。
- *
- * 视觉基调：冷灰底 + 靛蓝主色。扁平、少阴影，用极细的线
- * 和极浅的色阶区分层级，让 A4 纸面成为页面上唯一"有厚度"的东西。
- * ============================================================ */
-
 :root {
-  /* ---------- 色板 ---------- */
-  --app-bg: #f6f7f9; /* 冷灰白，偏蓝一点，不是暖奶油色 */
-  --panel-bg: #ffffff; /* 纸面 */
-  --surface-soft: #f4f5f8; /* 次级面：工具条、卡片内衬 */
-  --surface-sunken: #eceef3; /* 凹陷面：画布、胶片底 */
-  --border: #e4e6ec; /* 发丝线 */
+  --app-bg: #f6f7f9;
+  --panel-bg: #ffffff;
+  --surface-soft: #f4f5f8;
+  --surface-sunken: #eceef3;
+  --border: #e4e6ec;
   --border-strong: #d3d6df;
-  --text: #1c2130; /* 蓝墨黑，不用纯黑 */
+  --text: #1c2130;
   --text-secondary: #596175;
   --text-tertiary: #8a91a6;
-  --primary: #4753c7; /* 靛蓝：低饱和、偏深 */
+  --primary: #4753c7;
   --primary-hover: #3c46b2;
   --primary-soft: #eceffb;
   --primary-faint: #f4f5fc;
@@ -27,42 +16,32 @@
   --danger-soft: #f7eae9;
   --warning: #a6763f;
   --warning-soft: #f6efe4;
-  --success: #3f8f5a; /* 完成 / 通过：与对比标记的新增绿保持一致 */
+  --success: #3f8f5a;
   --success-soft: #edf4ef;
   --focus-ring: rgba(71, 83, 199, 0.35);
 
-  /* ---------- 形状 ---------- */
   --radius-lg: 14px;
   --radius-md: 10px;
   --radius-sm: 7px;
-  /* 只有纸面配得上阴影：极浅的接触影 + 很长很淡的环境影 */
   --shadow-paper:
     0 1px 2px rgba(28, 33, 48, 0.04),
     0 18px 40px -24px rgba(28, 33, 48, 0.2);
   --shadow-raised: 0 10px 30px -18px rgba(28, 33, 48, 0.22);
   --ease: cubic-bezier(0.2, 0.7, 0.3, 1);
 
-  /* ---------- 简历纸张展示区（「当前简历」与「实时预览」共用） ----------
-     中性浅灰工作区 + 纯白 A4 纸。两个页面的背景、纸张、留白、
-     多页间距全部走这几个变量，避免各写一套导致观感不一致。 */
-  --doc-workspace: #e9ecf1; /* 工作区底色：均匀纯色，不用渐变 */
-  --doc-workspace-pad: 28px 24px 64px; /* 纸张四周留白（顶部略小、底部多留） */
-  --doc-page-gap: 32px; /* 多页之间的垂直间距 */
-  --doc-paper: #ffffff; /* 纸张始终纯白 */
-  /* 发丝环（边界）+ 接触影 + 中距影 + 环境影：只画在纸外，不占布局、不进导出。
-     用户要求阴影更有存在感：加一层中距影，并抬高各层透明度。 */
+  --doc-workspace: #e9ecf1;
+  --doc-workspace-pad: 28px 24px 64px;
+  --doc-page-gap: 32px;
+  --doc-paper: #ffffff;
   --doc-paper-shadow:
     0 0 0 1px rgba(28, 33, 48, 0.07),
     0 2px 6px rgba(28, 33, 48, 0.08),
     0 10px 20px -8px rgba(28, 33, 48, 0.16),
     0 24px 48px -16px rgba(28, 33, 48, 0.24);
 
-  /* ---------- 字体 ---------- */
-  /* 正文沿用系统字体：预览/PDF 也继承它，不能随意更换 */
   --font-sans:
     -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
     'Microsoft YaHei', sans-serif;
-  /* 展示字体只用于品牌字标与主页大标题，不进入简历内容 */
   --font-display:
     'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, 'Songti SC', 'Noto Serif SC',
     serif;
@@ -86,14 +65,12 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* 表单控件继承页面字体（避免输入框变成浏览器默认字体） */
 input,
 textarea,
 button {
   font-family: inherit;
 }
 
-/* 键盘焦点：统一一圈柔和的靛蓝光晕，不改变任何盒子尺寸 */
 :where(a, button, [role='button'], [tabindex]):focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
@@ -103,18 +80,12 @@ button {
   background: rgba(71, 83, 199, 0.16);
 }
 
-/* 用户气泡是深色靛蓝底，上面那层半透明蓝选区与底色几乎重合、看不出选中范围，
-   这里换成白底深字（气泡里的文字一律白色，选中后反而更清楚） */
 .from-user .bubble::selection,
 .from-user .bubble *::selection {
   background: #fff;
   color: var(--primary);
 }
 
-/* ============================================================
- * Markdown 渲染内容的通用样式（预览里的内容文字都用 .md-body）
- * 注意：这里只改颜色，不改字号 / 行高 / 间距 —— 预览与 PDF 共用这套样式。
- * ============================================================ */
 .md-body p {
   margin: 0 0 6px;
 }
@@ -155,12 +126,6 @@ button {
   color: var(--text-secondary);
 }
 
-/* ============================================================
- * naive-ui 弹层过渡修正
- * 部分浏览器环境下弹层的进入/离开 CSS 过渡会卡死（永远停在
- * leave-active 状态，导致"点外部关不掉"）。这里直接禁用弹层动画，
- * 弹层开合瞬时完成 —— 牺牲一点动画效果，换取交互可靠性。
- * ============================================================ */
 .popover-transition-enter-from,
 .popover-transition-enter-to,
 .popover-transition-leave-from,
@@ -170,7 +135,6 @@ button {
   transition: none !important;
 }
 
-/* 弹窗（n-modal）的过渡同样禁用：否则点「完成/遮罩」后可能卡在关闭动画里 */
 .fade-in-transition-enter-active,
 .fade-in-transition-leave-active,
 .fade-in-scale-up-transition-enter-active,
@@ -180,9 +144,6 @@ button {
   transition: none !important;
 }
 
-/* ============================================================
- * 滚动条美化（WebKit 内核）：细窄、无轨道、悬停才明显
- * ============================================================ */
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
@@ -202,25 +163,12 @@ button {
   background: transparent;
 }
 
-/* ============================================================
- * 「诊断简历」对比弹窗的改动标记
- *
- * 标记是 data-diff 属性，由预览的三个组件（PreviewSection / PreviewLayoutWindow /
- * PreviewContent）挂在各自已有的元素上；三处要命中同一套配色，所以放全局，
- * 各组件只负责把属性挂上去、不重复写样式。
- *
- * 【关键】下面只用"不影响布局"的属性：background / box-shadow / 绝对定位的伪元素。
- * 这些元素同时被分页测量层量 offsetHeight，也可能进 PDF 导出模板 ——
- * 一旦用了 border / padding / margin，页数和导出结果就会跟着变。
- * ============================================================ */
 [data-diff] {
-  /* 默认档 = 修改（哑光赭石）；新增/删除在下面各自覆盖这两个变量 */
   --diff-color: #a6763f;
   --diff-bg: rgba(166, 118, 63, 0.13);
   position: relative;
   border-radius: 3px;
   background: var(--diff-bg);
-  /* 左侧色条：负向偏移画在盒子外面，不占空间、不挤压文字 */
   box-shadow: -3px 0 0 0 var(--diff-color);
 }
 [data-diff='added'] {
@@ -230,22 +178,16 @@ button {
 [data-diff='removed'] {
   --diff-color: #a94f4a;
   --diff-bg: rgba(169, 79, 74, 0.11);
-  /* 删除再多一道删除线：颜色之外多个形状通道，色盲用户也能分辨。
-     text-decoration 会向流内后代传播，所以整块被删时里面的文字都会划掉，
-     且它不改变任何盒子的尺寸（只影响绘制）。 */
   text-decoration: line-through;
   text-decoration-color: var(--diff-color);
 }
 
-/* 用户在对比弹窗里点了 ←「还原」：这处已经用回修改前的内容（绿色） */
 [data-diff='restored'] {
   --diff-color: #3f8f5a;
   --diff-bg: rgba(63, 143, 90, 0.1);
   text-decoration: none;
 }
 
-/* 新增被用户忽略：灰色虚线框 + 删除线。预览里保留占位（按钮还在、能点回来），
-   确认写回时这处不会进入简历。不用 opacity：那会把里面的切换按钮一起变淡。 */
 [data-diff='ignored'] {
   --diff-color: #8a9199;
   --diff-bg: rgba(138, 145, 153, 0.1);
@@ -255,7 +197,6 @@ button {
   outline-offset: 2px;
 }
 
-/* 角标：＋ 新增 / － 删除 / ✎ 修改。绝对定位，不占布局、不挡正文 */
 [data-diff]::after {
   position: absolute;
   top: -2px;
@@ -276,15 +217,6 @@ button {
   content: '✎';
 }
 
-/* ============================================================
- * 对比弹窗：内联词级 diff（只出现在「修改后」一栏）
- *
- * <del>/<ins> 只由 resumeDiff.inlineDiffHtml 生成（原文改动用删除线标红、
- * 新增用高亮标绿），不经过 Markdown —— Markdown 的删除线是 <s>，所以
- * 这两个标签可以直接全局命中、不影响普通预览。这里用的都是不影响盒子尺寸
- * 的绘制属性（background / text-decoration / box-shadow），进 PDF 导出时
- * 也不会有 <del>/<ins>（导出不传 unitDiffs），因此不影响分页与排版。
- * ============================================================ */
 .md-body del,
 .md-body ins {
   text-decoration: none;
@@ -301,10 +233,6 @@ button {
   box-shadow: 0 0 0 1px rgba(63, 143, 90, 0.26);
 }
 
-/* ============================================================
- * 预览选中高亮：画布点了章节/内容后，预览里对应渲染块持续闪烁
- * （类名是动态加在预览组件元素上的，必须全局生效，不能写在 scoped 里）
- * ============================================================ */
 .preview-flash {
   outline: 3px solid var(--primary);
   outline-offset: 2px;
@@ -321,9 +249,6 @@ button {
   }
 }
 
-/* 对比弹窗从诊断页跳回来时，目标改动红框闪烁几下（类名由 ResumeDiffDialog
- * 动态加在带 data-diff-key 的元素上，必须全局生效，不能写在 scoped 里）。
- * 只用 outline（绘制属性，不改盒子尺寸），不影响两栏排版与滚动高度。 */
 .diff-flash {
   outline: 3px solid var(--danger);
   outline-offset: 2px;
@@ -340,10 +265,6 @@ button {
   }
 }
 
-/* ============================================================
- * 无障碍：系统开启「减少动态效果」时，停掉装饰性动画与过渡
- * （预览闪烁的选中提示也一并静止，但不影响任何布局）
- * ============================================================ */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

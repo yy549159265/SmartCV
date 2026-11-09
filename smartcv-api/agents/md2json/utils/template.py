@@ -46,8 +46,6 @@ class Template:
         return self.sections.get(section_type) or self.sections.get("other") or {}
 
     def title_for(self, section_type: str, fallback: str) -> str:
-        # personal_info 的标题按模板留空（示例模板也是空标题）；
-        # other 保留简历里的原标题，避免把未知章节改名。
         if section_type == "other":
             return fallback
         return str(self.spec(section_type).get("title", fallback))

@@ -18,7 +18,7 @@ class Block:
     page: int | None = None
     bbox: tuple[float, float, float, float] | None = None
     level: int | None = None
-    kind: str = "text"  # text | heading | list | table
+    kind: str = "text"
     meta: dict = field(default_factory=dict)
 
 

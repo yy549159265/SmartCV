@@ -26,42 +26,24 @@ router = APIRouter(prefix="/api", tags=["agent"])
 _AGENTS_DIR = Path(__file__).resolve().parent.parent / "agents"
 
 
-# ---------- 请求模型 ----------
-
-
 class PolishRequest(BaseModel):
     items: list[str] = Field(min_length=1)
     provider: ProviderConfig
-    # 用户的润色描述/思路（前端可选填）：空字符串 = 没填，按默认规则润色。
-    # 与前端 api/polish.ts 的字段名保持一致。
     description: str = ""
-    # 参考材料（可选）：JD、简历、对话历史等。只作为上下文，不参与改写。
-    # 用通用字段而不是 jd，同一个接口就能服务润色 / 问答增强等多种场景。
     context: str = ""
-    # 润色模式：strict = 严谨（规则锁死，只重构表达），free = 自由（像直接问 AI，
-    # 由模型自主判断怎么写最好，并优先遵循用户思路），enhance = 提示词增强
-    # （把口语化修改需求改写成可执行的提示词，参考材料通常放 JD）。默认 strict，
-    # 老前端不带该字段时行为与加模式之前完全一致。
     mode: Literal["strict", "free", "enhance"] = "strict"
 
 
 class ChatRequest(BaseModel):
-    # resume 直接收前端整份章节数组（Section[]，即前端 store.resume），
-    # 后端 agent 拿它当对话上下文，不用再包一层 Resume
     resume: list[Section]
     message: str
     jd: str = ""
-    # 可选：本次诊断参考的优秀示例 id（最多 3 个，前端同样限制）
     referenceIds: list[str] = Field(default_factory=list, max_length=3)
-    # 改写强度：standard = 标准（保留原句式，稳妥改写）；bold = 大胆
-    # （允许整段重写表达，但仍不得新增事实、不得改结构）。老前端不带该字段时
-    # 行为与加模式之前一致。
     rewriteMode: Literal["standard", "bold"] = "standard"
     provider: ProviderConfig
 
 
 class GrammarRequest(BaseModel):
-    # 待纠错的整份简历；后端按坐标就地改文字，不重排结构
     resume: list[Section]
     provider: ProviderConfig
 
@@ -75,13 +57,8 @@ class ChatAnswerItem(BaseModel):
 
 
 class ChatAnswerRequest(BaseModel):
-    # 与 ask_question 事件里的 questionId 对应；过期/重复提交会被拒绝
     questionId: str
-    # 空数组 = 用户点了「跳过」，诊断按现有信息继续
     answers: list[ChatAnswerItem] = Field(default_factory=list)
-
-
-# ---------- 接口 ----------
 
 
 @router.post("/polish")
@@ -101,7 +78,6 @@ async def polish(
 
 
 class AnalyzeRequest(BaseModel):
-    # 要分析的简历（优秀示例库上传的那份 JSON）；为空时前端已拦截，后端再兜底 422
     resume: list[Section] = Field(min_length=1)
     provider: ProviderConfig
 
@@ -138,7 +114,7 @@ async def grammar(
 ):
     """全文纠错：一次结构化 LLM 调用 + 代码校验，返回改好的简历与改动清单。
 
-    与 /api/chat 不同，这里不是对话：不写会话历史、不跑诊断/优化 agent，
+    与 /api/chat 不同，这里不是对话：不写会话历史、不跑诊断/审查 agent，
     前端拿到 { resume, changes, skipped, stats } 后复用修改对比弹窗让用户确认。
     """
     try:
@@ -152,9 +128,6 @@ async def grammar(
         logger.exception("全文纠错失败")
         return JSONResponse(status_code=500, content=error(500, f"全文纠错失败：{e}"))
     return ok(result)
-
-
-# ---------- /api/agent/md：展示后端 agent 的提示词与技能（只读，供「Agent 设置 → md预览」） ----------
 
 
 def _agent_md_payload() -> dict:
@@ -199,17 +172,11 @@ async def agent_md():
     return ok(_agent_md_payload())
 
 
-# ---------- /api/chat：优化对话（SSE 流式） ----------
-
-# SSE 响应头：不要被代理/浏览器缓冲，逐事件下发；X-Accel-Buffering 是给 nginx 的
 _SSE_HEADERS = {
     "Cache-Control": "no-cache",
     "X-Accel-Buffering": "no",
 }
 
-# SSE 心跳间隔：空闲超过该时长推一条注释行（: keepalive）保活。
-# 浏览器 fetch 流本身没有空闲超时，风险主要在 nginx（默认 proxy_read_timeout
-# 60s）和公司网关/代理；agent 长时间思考、工具执行时不发数据，需要心跳续命。
 _HEARTBEAT_SECONDS = 15
 
 
@@ -264,11 +231,8 @@ async def chat(
     流水线，把改好的简历 JSON 发成 resume 事件，前端据此重绘，格式不被打乱。
     """
     resume_sections = [s.model_dump(exclude_none=True) for s in req.resume]
-    # 选中的优秀示例：不存在的 id 跳过（示例库只增不删，正常不会出现，兜底容错）
     references = resolve_examples(req.referenceIds)
     task = create_chat_task(session_id)
-    # 生产任务与消费（SSE 响应）通过 task 的 queue 解耦：queue 满时生产端 await put
-    # 阻塞 = 背压，反过来压住 LLM 流式；deque 缓存事件 id 供断线重放。
     producer = asyncio.create_task(
         _run_chat_task(
             task,
@@ -285,7 +249,6 @@ async def chat(
     async def event_stream():
         last_id = _last_event_id(request)
         try:
-            # 重连：先从 deque 缓存重放比 Last-Event-ID 新的事件，再接 live 队列
             if last_id is not None:
                 for event_id, text in task.events:
                     if event_id > last_id:
@@ -294,9 +257,6 @@ async def chat(
                 try:
                     item = await asyncio.wait_for(task.queue.get(), timeout=_HEARTBEAT_SECONDS)
                 except asyncio.TimeoutError:
-                    # 心跳：空档期（agent 思考 / 工具执行不发数据）超过阈值就推一条
-                    # 注释行，避免网关按空闲时间掐断长连接。前端解析时没有 data: 行
-                    # 会直接跳过，不进任务事件缓存，断线重连也不受影响。
                     yield ": keepalive\n\n"
                     continue
                 if item is None:

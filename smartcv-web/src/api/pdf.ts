@@ -1,28 +1,15 @@
 /**
- * 导出 PDF（后端生成）
- *
- * 流程：前端把"渲染好的整份简历 HTML"POST 给后端 /api/resume/pdf，
- * 后端用无头 Chromium（Playwright）打 PDF 直接返回 .pdf 文件，前端触发下载。
- *
- * 为什么发给后端的是 HTML 而不是简历 JSON：
- * 简历排版是前端这套 Vue 组件渲染的（flexbox / markdown / 缩进 / 标签），
- * 直接发渲染好的 HTML，后端只负责"打 PDF"，不存在排版复刻不一致的问题。
- * 图片已是 base64 内联在简历数据里，跟着 HTML 一起走，后端无需联网取图。
+ * 导出 PDF：把渲染好的 HTML 发给后端，由 Playwright 打印成 PDF。
  */
+
 import { apiErrorMessage } from '@/api/error'
 import { apiFetch } from '@/api/http'
 import { pageHeight, pageWidth } from '@/composables/usePageSize'
 import { downloadBlob } from '@/utils/download'
 
-/**
- * 把简历流元素序列化成一份完整 HTML（内联全部样式表）。
- * 入参 flowEl：和预览同宽同边距的连续流容器（OptimizePage 的 .export-flow）。
- */
 export function buildResumeHtml(flowEl: HTMLElement): string {
   const contentHtml = flowEl.outerHTML
 
-  // 复制主文档所有样式表：全局样式、Vue 的 scoped 样式都带过去，
-  // 后端打印的排版才和预览一致。（部分外部样式表读不了 cssRules，跳过）
   const sheetCss = Array.from(document.styleSheets)
     .map((sheet) => {
       try {
@@ -70,10 +57,6 @@ export function buildResumeHtml(flowEl: HTMLElement): string {
 </html>`
 }
 
-/**
- * 调后端生成 PDF，返回 Blob（不直接下载）。
- * 调用方拿到 Blob 后可以写入备份文件夹，或在没有文件夹时用 downloadBlob 兜底。
- */
 export async function fetchResumePdf(flowEl: HTMLElement): Promise<Blob> {
   const html = buildResumeHtml(flowEl)
 
@@ -86,10 +69,6 @@ export async function fetchResumePdf(flowEl: HTMLElement): Promise<Blob> {
   return res.blob()
 }
 
-/**
- * 调后端生成 PDF 并直接触发浏览器下载（未绑定备份文件夹时的兜底）。
- * filename 只传文件名主干（不带 .pdf 后缀），必须是调用方清洗过的安全字符串。
- */
 export async function exportResumePdf(flowEl: HTMLElement, filename = 'smartcv-resume'): Promise<void> {
   const blob = await fetchResumePdf(flowEl)
   downloadBlob(blob, `${filename}.pdf`)

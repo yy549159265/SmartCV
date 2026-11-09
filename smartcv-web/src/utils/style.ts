@@ -1,13 +1,3 @@
-/**
- * 样式计算工具
- *
- * 实现任务要求的"样式继承规则"：
- *   章节的 字号 / 颜色 / 行距 / 块间距 会同步应用到内部所有内容；
- *   内容自己的设置优先于继承值；
- *   谁都没设置时，使用全局默认值。
- *
- * 优先级：内容自己的 > 章节的 > 全局默认
- */
 import {
   DEFAULT_CHAPTER_GAP,
   DEFAULT_COLOR,
@@ -20,7 +10,6 @@ import {
 } from './constants'
 import type { Content, Section, LayoutWindow, ContentStyle, SectionStyle, TextAlign } from '@/types'
 
-/** 计算出的"最终样式"：所有字段都有值，可以直接拿来绑定 CSS */
 export interface EffectiveContentStyle {
   fontSize: number
   color: string
@@ -31,13 +20,10 @@ export interface EffectiveContentStyle {
 
 export interface EffectiveSectionStyle extends EffectiveContentStyle {
   titleSize: number
-  /** 本章节与上一个章节之间的间距（px） */
   spaceBefore: number
-  /** 标题下方是否显示横线（恒为满行长度） */
   titleUnderline: boolean
 }
 
-/** 计算章节的最终样式（标题字号独立，其余字段用于继承） */
 export function effectiveSectionStyle(section: Section): EffectiveSectionStyle {
   const s = section.style ?? {}
   return {
@@ -52,10 +38,6 @@ export function effectiveSectionStyle(section: Section): EffectiveSectionStyle {
   }
 }
 
-/**
- * 计算内容的最终样式：内容自己的 > 章节的 > 默认。
- * row = 该内容所在的布局窗口（决定它是横向还是竖向排列）。
- */
 export function effectiveContentStyle(row: LayoutWindow, section: Section, content: Content): EffectiveContentStyle {
   const gs = section.style ?? {}
   const bs = content.style ?? {}
@@ -68,12 +50,6 @@ export function effectiveContentStyle(row: LayoutWindow, section: Section, conte
   }
 }
 
-/**
- * 把一组样式补丁合并进目标样式对象。
- * 约定：补丁里值为 undefined 的字段 = "删除该字段"（恢复继承/默认值）。
- * 例子：mergeStyle(content.style, { fontSize: undefined }) 之后，
- *       content.style 里不再有 fontSize，effectiveContentStyle 会自动用章节的继承值。
- */
 export function mergeStyle<T extends object>(target: T, patch: Partial<T> | undefined): void {
   if (!patch) return
   const record = target as Record<string, unknown>
@@ -87,7 +63,6 @@ export function mergeStyle<T extends object>(target: T, patch: Partial<T> | unde
   }
 }
 
-/** 供样式面板判断：内容的某个样式字段当前是否"跟随章节"（即自己没设置） */
 export function isFollowing(key: keyof ContentStyle, style: ContentStyle): boolean {
   return style[key] === undefined
 }

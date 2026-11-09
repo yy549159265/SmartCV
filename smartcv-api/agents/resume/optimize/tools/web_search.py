@@ -28,13 +28,9 @@ from pydantic import Field
 logger = logging.getLogger("smartcv")
 
 _SEARXNG_URL = os.getenv("SEARXNG_URL", "http://127.0.0.1:8080").rstrip("/")
-# 单次最多返回给模型的结果条数：够用且不让搜索结果撑爆上下文
 _MAX_RESULTS = int(os.getenv("WEB_SEARCH_MAX_RESULTS", "5"))
-# 搜索超时：SearXNG 会并发查多个引擎，8 秒足够；超时按失败处理，不拖住整条流水线
 _TIMEOUT_SECONDS = float(os.getenv("WEB_SEARCH_TIMEOUT", "8"))
-# 单次诊断最多搜几次：和提示词里的「最多 3 次」一致，超了直接拒绝，避免模型反复换关键词
 _MAX_CALLS = int(os.getenv("WEB_SEARCH_MAX_CALLS", "3"))
-# 同一 query 的结果缓存 10 分钟（诊断里经常重复查同一个名词）
 _cache: TTLCache = TTLCache(maxsize=256, ttl=600)
 
 
@@ -52,7 +48,6 @@ def _parse_results(payload: dict) -> list[dict]:
         if not isinstance(item, dict):
             continue
         url = str(item.get("url") or "").strip()
-        # 同一 URL 可能在多个引擎里出现，按 URL 去重
         if not url or url in seen:
             continue
         seen.add(url)
@@ -78,9 +73,6 @@ def _search(query: str) -> list[dict]:
         f"{_SEARXNG_URL}/search",
         params={"q": query, "format": "json", "language": "zh-CN"},
         timeout=_TIMEOUT_SECONDS,
-        # SearXNG 一定是内网/本机地址：不走系统代理。
-        # 否则 Windows 注册表里配的代理（如 Clash 的 127.0.0.1:7897）会把请求
-        # 也转给代理，内网地址解析不到就是 502。
         trust_env=False,
     )
     resp.raise_for_status()
@@ -104,7 +96,6 @@ def _error_text(exc: Exception) -> str:
     if isinstance(exc, httpx.HTTPStatusError):
         code = exc.response.status_code
         if code == 403:
-            # SearXNG 未开启 json 输出时，/search?format=json 直接 403
             return (
                 "搜索失败：SearXNG 返回 403，通常是没开启 JSON 输出。"
                 "确认容器内 /etc/searxng/settings.yml 的 search.formats 包含 json，重启 searxng 后重试。"
@@ -137,7 +128,6 @@ def make_web_search_tool():
         """
         nonlocal calls
         writer = get_stream_writer()
-        # 超限时不发 tool_call/web_search 事件：模型收到说明后直接继续诊断
         if calls >= _MAX_CALLS:
             message = f"本次诊断最多搜索 {_MAX_CALLS} 次，已用完；请按简历、JD 和现有回答继续诊断。"
             writer({"type": "tool_result", "tool": "web_search", "result": message, "ok": False})

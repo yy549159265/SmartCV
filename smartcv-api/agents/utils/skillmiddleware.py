@@ -10,7 +10,6 @@ from langchain_core.tools import BaseTool, tool
 from langgraph.prebuilt import ToolRuntime
 from langgraph.runtime import Runtime
 
-# 技能根目录 agents/skill/：相对本文件推导，不依赖进程启动时的 CWD。
 SKILL_ROOT = Path(__file__).resolve().parent.parent / "skill"
 
 
@@ -45,7 +44,6 @@ def _make_load_skill_tool(allowed_names: Sequence[str]) -> BaseTool:
 
         target_file = skill_dir / file_path
 
-        # 路径安全验证，防止 ../../../etc/passwd
         if not str(target_file.resolve()).startswith(str(skill_dir.resolve())):
             return "非法路径访问：file_path 必须是技能目录内的相对路径"
 

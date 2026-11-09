@@ -1,9 +1,4 @@
 <script setup lang="ts">
-/**
- * 标签输入：一次输入多个标签，用 空格 / 回车 / 逗号 / 分号 / 、 分隔，
- * 输完自动切成一个个标签芯片，每个都能单独删掉。
- * 给「标签」「图标文字」两种内容的编辑弹窗共用（v-model 绑定内容数组）。
- */
 import { ref } from 'vue'
 
 const props = defineProps<{ modelValue?: string[] }>()
@@ -11,7 +6,6 @@ const emit = defineEmits<{ (e: 'update:modelValue', v: string[]): void }>()
 
 const input = ref('')
 
-/** 把输入框里当前内容拆成标签并追加（去空、去重） */
 function commit() {
   const parts = input.value
     .split(/[\s,，;；、]+/)
@@ -23,7 +17,6 @@ function commit() {
   input.value = ''
 }
 
-/** 空格 / 回车 / 逗号 / 分号 都当作分隔符，按下即生成标签（不留在输入框里） */
 function onKeydown(e: KeyboardEvent) {
   if (e.key === 'Enter' || e.key === ' ' || e.key === ',' || e.key === ';') {
     e.preventDefault()
@@ -31,7 +24,6 @@ function onKeydown(e: KeyboardEvent) {
   }
 }
 
-/** 按值删除（标签已去重，不会有重名，用值比用下标更稳） */
 function remove(tag: string) {
   emit('update:modelValue', (props.modelValue ?? []).filter((t) => t !== tag))
 }

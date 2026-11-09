@@ -1,20 +1,7 @@
 <script setup lang="ts">
-/**
- * 诊断 agent 的反问卡片（类似 Claude Code 的 AskUserQuestion）
- *
- * 后端在诊断中途 interrupt，SSE 推来 ask_question 事件；这里把问题渲染成
- * 单选 / 多选，每题固定追加第 4 项「其他（自定义输入）」。
- *
- * 多个问题时按「一次一题」的向导展示：上一个 / 下一个 / 跳过本题，
- * 最后一题点「提交回答」才一次性提交全部答案（跳过的题以空答案提交）。
- * 提交走 POST /api/chat/answer，后端拿到答案后原 SSE 流继续跑。
- *
- * 卡片自己维护草稿选择；提交成功后由 store 把 status 改成 answered，
- * 这里自动切成只读的答案摘要。
- */
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import type { AskQuestion, ChatAnswer } from '@/api/chat'
-import type { QuestionItem } from '@/stores/optimize'
+import type { QuestionItem } from '@/stores/review'
 
 const props = defineProps<{ item: QuestionItem }>()
 
@@ -22,13 +9,9 @@ const emit = defineEmits<{
   submit: [questionId: string, answers: ChatAnswer[]]
 }>()
 
-/** 每题选中的预设选项（label 数组；单选也用它，长度 0/1） */
 const selected = reactive<Record<string, string[]>>({})
-/** 每题是否选了「其他（自定义输入）」 */
 const customOn = reactive<Record<string, boolean>>({})
-/** 自定义输入内容 */
 const customText = reactive<Record<string, string>>({})
-/** 用户主动跳过的题（为空且没选自定义 = 未作答；skipped = 明确跳过） */
 const skipped = reactive(new Set<string>())
 
 for (const q of props.item.questions) {
@@ -37,15 +20,11 @@ for (const q of props.item.questions) {
   customText[q.id] = ''
 }
 
-/** 当前展示第几题（0 起） */
 const current = ref(0)
 const currentQ = computed(() => props.item.questions[current.value] as AskQuestion)
 
 const submitting = computed(() => props.item.status === 'submitting')
 
-/* ---------- 倒计时 ---------- */
-
-/** 兜底：老状态（HMR 保留）可能没有 expiresAt */
 const fallbackExpiresAt = Date.now() + (props.item.timeoutSeconds || 300) * 1000
 const expiresAt = computed(() => props.item.expiresAt || fallbackExpiresAt)
 const now = ref(Date.now())
@@ -85,9 +64,6 @@ watch(
 
 onBeforeUnmount(stopTimer)
 
-/* ---------- 作答与导航 ---------- */
-
-/** 某题是否已给出答案（选了预设项或填了自定义文字） */
 function answered(q: AskQuestion): boolean {
   return (
     (selected[q.id]?.length ?? 0) > 0 ||
@@ -95,7 +71,6 @@ function answered(q: AskQuestion): boolean {
   )
 }
 
-/** 已处理 = 已回答或明确跳过；所有题都处理完才允许提交 */
 function resolved(q: AskQuestion): boolean {
   return answered(q) || skipped.has(q.id)
 }
@@ -111,7 +86,6 @@ function goNext() {
   if (!isLast.value) current.value += 1
 }
 
-/** 跳过当前题：清掉已选内容，然后自动走到下一题（最后一题则停在原地等提交） */
 function skipCurrent() {
   const q = currentQ.value
   if (submitting.value) return
@@ -122,7 +96,6 @@ function skipCurrent() {
   goNext()
 }
 
-/** 单选：点预设选项 = 取消自定义；点自定义 = 清空预设 */
 function pick(q: AskQuestion, label: string) {
   if (submitting.value) return
   selected[q.id] = [label]
@@ -137,7 +110,6 @@ function pickCustom(q: AskQuestion) {
   skipped.delete(q.id)
 }
 
-/** 多选：切换一个预设选项（不影响自定义） */
 function toggle(q: AskQuestion, label: string) {
   if (submitting.value) return
   const list = selected[q.id] ?? (selected[q.id] = [])
@@ -157,7 +129,6 @@ function isChecked(q: AskQuestion, label: string): boolean {
   return (selected[q.id] ?? []).includes(label)
 }
 
-/** 自定义输入编辑时，把该题从「已跳过」里移出来 */
 function onCustomInput(q: AskQuestion) {
   skipped.delete(q.id)
 }
@@ -175,13 +146,11 @@ function onSubmit() {
   emit('submit', props.item.questionId, buildAnswers())
 }
 
-/** 全部跳过：提交空答案，后端按「用户未作答」继续诊断 */
 function onSkipAll() {
   if (submitting.value) return
   emit('submit', props.item.questionId, [])
 }
 
-/** 已答状态下，把一题的答案拼成一行文字 */
 function answerText(q: AskQuestion): string {
   const answers = props.item.answers ?? []
   if (answers.length === 0) return '已跳过'
@@ -195,7 +164,6 @@ function answerText(q: AskQuestion): string {
 
 <template>
   <div class="ask-card" :class="item.status">
-    <!-- 头部：总标题 + 倒计时 + 状态 -->
     <div class="ask-head">
       <span class="ask-icon" aria-hidden="true">?</span>
       <span class="ask-title">{{ item.title || '需要确认几个信息' }}</span>
@@ -220,7 +188,6 @@ function answerText(q: AskQuestion): string {
       </span>
     </div>
 
-    <!-- 已回答：只读摘要 -->
     <div v-if="item.status === 'answered'" class="ask-summary">
       <div v-for="q in item.questions" :key="q.id" class="sum-row">
         <span class="sum-q">{{ q.header || q.question }}</span>
@@ -228,7 +195,6 @@ function answerText(q: AskQuestion): string {
       </div>
     </div>
 
-    <!-- 已失效：超时或对话已结束 -->
     <div
       v-else-if="item.status === 'expired' || (item.status === 'pending' && timeUp)"
       class="ask-expired"
@@ -236,7 +202,6 @@ function answerText(q: AskQuestion): string {
       该问题已失效（等待超时或对话已结束），本次诊断将按现有信息继续。
     </div>
 
-    <!-- 待回答：一次一题的向导 -->
     <div v-else class="ask-form">
       <div class="ask-progress">
         <span class="ask-progress-text">
@@ -286,7 +251,6 @@ function answerText(q: AskQuestion): string {
             </span>
           </label>
 
-          <!-- 固定最后一项：自定义输入 -->
           <label class="ask-opt custom" :class="{ checked: customOn[currentQ.id] }">
             <input
               v-if="!currentQ.multiSelect"
@@ -430,7 +394,6 @@ function answerText(q: AskQuestion): string {
   font-weight: 600;
 }
 
-/* 进度：第 n / m 题 + 圆点 */
 .ask-progress {
   display: flex;
   align-items: center;

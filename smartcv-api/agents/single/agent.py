@@ -43,8 +43,6 @@ _MODE_PROMPTS = {
     "analyze": (_PROMPT_DIR / "analyze_prompt.md").read_text(encoding="utf-8"),
 }
 
-# 前端传的是润色模式（strict / free），片段只有一个「润色」版本；
-# 两者的差别只在 {mode_rules}，由下面的规则表填进片段末尾那段。
 _MODE_TEMPLATE = {
     "strict": "polish",
     "free": "polish",
@@ -52,7 +50,6 @@ _MODE_TEMPLATE = {
     "analyze": "analyze",
 }
 
-# 模板里的占位符 ↔ 片段 md 里的段落标题（6 段，顺序即片段里的书写顺序）
 _SLOT_HEADINGS = {
     "{role}": "角色",
     "{input_format}": "输入格式",
@@ -121,13 +118,11 @@ def _system_prompt(mode: str) -> str:
 
     prompt = _BASE_PROMPT
     for placeholder, heading in _SLOT_HEADINGS.items():
-        # 片段没写某一段 = 该段留空，模板结构不变
         body = next((text for name, text in sections if name == heading), "")
         prompt = prompt.replace(placeholder, body)
     prompt = prompt.replace("{other}", "\n\n".join(extras))
     return prompt.replace("{mode_rules}", _MODE_RULES.get(mode, _MODE_RULES[_DEFAULT_MODE]))
 
-# 系统提示词明确要求不要代码围栏，但个别模型仍会加上，解析前先剥掉
 _FENCE = re.compile(r"```(?:json)?\s*(.*?)```", re.S)
 
 
@@ -159,7 +154,6 @@ def _parse_items(content: str) -> list[str]:
     try:
         return _to_items(json.loads(text))
     except json.JSONDecodeError:
-        # 前后有解释性文字：退化成"取第一个 { 到最后一个 }"
         start, end = text.find("{"), text.rfind("}")
         if start < 0 or end <= start:
             return []
@@ -184,16 +178,9 @@ def run_polish_agent(
     structured_llm = llm.with_structured_output(
         PolishedItems,
         method="json_mode",
-        include_raw=True,  # 解析失败时保留原文 {"raw": ..., "parsed": ..., "parsing_error": ...}
+        include_raw=True,
     )
 
-    # 三类输入分工明确：
-    #   context     参考材料（JD / 简历 / 对话历史…），只读，不参与改写
-    #   description 要求（怎么改），可为空；两种模式下的地位见各自提示词
-    #   texts       待处理内容，逐行改写，输出条数与之对应
-    # 用标签包裹，避免模型把参考材料也当成本次要改写的内容，也降低材料里的
-    # 文字被误当成指令的风险。老调用方不传 context/description 时，拼装结果
-    # 和以前等价（只是措辞更中性）。
     blocks: list[str] = []
     if context.strip():
         blocks.append(f"<参考材料>\n{context.strip()}\n</参考材料>")
@@ -247,7 +234,6 @@ def run_analyze_agent(
         session_id=session_id,
         context=resume_text,
     )
-    # 模型偶尔多给或少给：按契约裁到 2 条，缺的用空串补，前端按位置取
     normalized = [str(items[i]).strip() if i < len(items) else "" for i in range(2)]
     logging.info(
         "analyze session=%s 方向=%s 借鉴点条数=%d",

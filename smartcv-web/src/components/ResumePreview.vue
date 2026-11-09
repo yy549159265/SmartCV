@@ -1,14 +1,4 @@
 <script setup lang="ts">
-/**
- * 右侧 · 实时预览（A4 成品效果）
- *
- * 数据和编辑画布完全同源（同一个 store.resume），任何修改立刻同步到这里。
- *
- * 分页原理（详见 composables/usePagination.ts）：
- *   1. 本组件里有一个"隐藏测量层"，把全部章节连续渲染一遍（与 A4 内容区等宽）；
- *   2. usePagination 测量每个章节的高度，把分页方案写入 store.pagePlan；
- *   3. 下方 A4 纸张按方案分页渲染；画布的红线也按方案绘制 —— 三处永远一致。
- */
 import { computed, nextTick, ref, watch } from 'vue'
 import { usePagination } from '@/composables/usePagination'
 import { previewZoom } from '@/composables/usePreviewZoom'
@@ -21,13 +11,9 @@ import type { Section } from '@/types'
 
 const store = useResumeStore()
 
-/* ---------- 隐藏测量层：连续渲染全部章节，用于测量高度算分页 ---------- */
 const measureFlowEl = ref<HTMLElement | null>(null)
 usePagination(measureFlowEl)
 
-/* ---------- 缩放：与诊断页共用 previewZoom，两边字号永远一致 ---------- */
-
-/** 纸张样式：固定纸面尺寸 + 页边距 + 缩放（宽高都随用户设置的纸面走，恒为 A4 纵向比例） */
 const pageStyle = computed(() => ({
   width: `${pageWidth.value}px`,
   minHeight: `${pageHeight.value}px`,
@@ -35,10 +21,8 @@ const pageStyle = computed(() => ({
   zoom: previewZoom.value,
 }))
 
-/** 隐藏测量层宽度：与纸面内容区等宽（纸面宽度变化时自动跟着变并重新分页） */
 const measureStyle = computed(() => ({ width: `${contentWidth.value}px` }))
 
-/* ---------- 分页渲染：把每页的单元 id 还原成若干"连续同章节片段"(RunSpec) ---------- */
 const pages = computed(() =>
   store.pagePlan.pages.map((page) =>
     pageRunSpecs(
@@ -51,13 +35,11 @@ const pages = computed(() =>
   ),
 )
 
-/* ---------- 选中高亮：画布点了章节/内容后，预览里对应的渲染块持续闪烁提示位置 ---------- */
 const pageStackEl = ref<HTMLElement | null>(null)
 
 watch(
   () => store.selectedId,
   async (id) => {
-    // 先清掉上次的高亮
     pageStackEl.value?.querySelectorAll('.preview-flash').forEach((el) => el.classList.remove('preview-flash'))
     if (!id) return
     await nextTick()
@@ -71,7 +53,6 @@ watch(
     if (!selector || !pageStackEl.value) return
     const matches = pageStackEl.value.querySelectorAll<HTMLElement>(selector)
     matches.forEach((el) => el.classList.add('preview-flash'))
-    // 滚到第一个匹配块，让用户能看见它在哪一页
     if (matches.length > 0) {
       matches[0].scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' })
     }
@@ -91,7 +72,6 @@ watch(
     </div>
 
     <div class="preview-scroll">
-      <!-- 隐藏测量层：position 绝对定位移出可视区，visibility 隐藏但仍占布局 -->
       <div ref="measureFlowEl" class="measure-flow" :style="measureStyle">
         <PreviewSection
           v-for="g in store.resume"
@@ -102,7 +82,6 @@ watch(
         />
       </div>
 
-      <!-- 分页后的 A4 纸张 -->
       <div ref="pageStackEl" class="page-stack">
         <div v-for="(page, i) in pages" :key="i" class="page-slot">
           <div class="a4-page" :style="pageStyle">
@@ -166,11 +145,9 @@ watch(
   overflow: auto;
   padding: var(--doc-workspace-pad);
   position: relative;
-  /* 工作区：均匀中性浅灰，与纯白纸张形成清晰对比（与「当前简历」同款） */
   background: var(--doc-workspace);
 }
 
-/* 隐藏测量层：移出可视区域，不影响滚动布局 */
 .measure-flow {
   position: absolute;
   top: 0;
@@ -188,7 +165,6 @@ watch(
 .a4-page {
   position: relative;
   background: var(--doc-paper);
-  /* 发丝边界 + 两层柔和投影：范围大、透明度低，纸张自然浮起但不是弹窗 */
   box-shadow: var(--doc-paper-shadow);
 }
 

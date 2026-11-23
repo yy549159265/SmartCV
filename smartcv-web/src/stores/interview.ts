@@ -512,7 +512,7 @@ export const useInterviewStore = defineStore('interview', {
     async generate(options: {
       scene: PackScene
       followDepth: FollowDepth | null
-      /** 项目面试可选；未选择或综合面试为 null，保存时用 balanced 占位。 */
+      /** 项目面试可选；未选择或综合面试为 null，请求时按 balanced 发送。 */
       focus: InterviewFocus | null
       projectIds: string[]
     }): Promise<boolean> {
@@ -535,7 +535,7 @@ export const useInterviewStore = defineStore('interview', {
           anchors: this.profileRecord.anchors,
           scene: options.scene,
           followDepth: options.followDepth,
-          focus: options.focus ?? undefined,
+          focus: options.focus ?? 'balanced',
           projectIds: options.projectIds,
         })
         const record: PackRecord = {

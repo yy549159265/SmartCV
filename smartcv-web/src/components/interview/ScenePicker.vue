@@ -61,7 +61,7 @@ const scene = ref<PackScene>(
   props.initial?.scene === 'comprehensive' ? 'comprehensive' : 'project',
 )
 const followDepth = ref<FollowDepth>(props.initial?.followDepth ?? 'normal')
-// 考察方向可选：没有默认选中项，不选时传 null，后端按 balanced 混合出题。
+// 考察方向可选：没有默认选中项，不选时传 null，生成请求按 balanced 混合出题。
 // 旧题包里的 balanced 同样视为未选择。
 const focus = ref<InterviewFocus | null>(
   props.initial?.focus && FOCUS_VALUES.includes(props.initial.focus as InterviewFocus)

@@ -5,8 +5,8 @@
   - 综合面试：动机 / 规划 / 薪资 / 稳定性 / 真实性五个主题组。
 
 对话与清单共用同一份题包，只在第 4 步决定怎么消费；分组规则与题量都不受
-方式影响。项目面试的 `focus` 会追加业务场景 / 实现细节 / 架构设计 / 复盘决策
-对应提示词，并用维度占比做一次软提示。
+方式影响。两种场景各加载一份场景提示词，项目面试再追加考察方向提示词
+（未选方向时为均衡模式 balanced），并用维度占比做一次软提示。
 
 每组一次结构化调用，组间最多并发 3 个。追问链与露馅信号的硬性要求写在
 `QuestionCard` 字段约束里，由结构化输出直接校验，不再额外做卡片校验。
@@ -49,8 +49,14 @@ from schemas.provider import ProviderConfig
 logger = logging.getLogger("smartcv")
 
 _CARDS_PROMPT = load_prompt("pack", "cards.md")
-_COMPREHENSIVE_PROMPT = load_prompt("pack", "comprehensive.md")
+# 场景提示词：项目面试与综合面试各一份，按 `task.scene` 加载。
+_SCENE_PROMPTS = {
+    "project": load_prompt("pack", "scene", "project.md"),
+    "comprehensive": load_prompt("pack", "scene", "comprehensive.md"),
+}
+# 考察方向只属于项目面试；balanced 是未选择方向时的默认值。
 _FOCUS_PROMPTS = {
+    "balanced": load_prompt("pack", "focus", "balanced.md"),
     "business": load_prompt("pack", "focus", "business.md"),
     "tech": load_prompt("pack", "focus", "tech.md"),
     "architecture": load_prompt("pack", "focus", "architecture.md"),
@@ -96,11 +102,14 @@ def _corpus(profile: ResumeProfile, anchors: list[Anchor]) -> str:
     return "\n".join(part for part in parts if part)
 
 
+def _scene_prompt(req: PackRequest) -> str:
+    """按场景加载提示词；综合面试不追加考察方向。"""
+    return _SCENE_PROMPTS[req.scene]
+
+
 def _system_prompt(spec: dict, req: PackRequest) -> str:
-    parts = [_CARDS_PROMPT]
-    if spec["kind"] == "theme":
-        parts.append(_COMPREHENSIVE_PROMPT)
-    elif req.focus in _FOCUS_PROMPTS:
+    parts = [_CARDS_PROMPT, _scene_prompt(req)]
+    if spec["kind"] == "project":
         parts.append(_FOCUS_PROMPTS[req.focus])
     return "\n\n".join(parts)
 

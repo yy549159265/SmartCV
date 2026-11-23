@@ -211,8 +211,8 @@ export interface PackPayload {
   anchors: Anchor[]
   scene: PackScene
   followDepth: FollowDepth | null
-  /** 项目面试考察方向；综合面试不传。 */
-  focus?: InterviewFocus
+  /** 项目面试考察方向；未选择时传 balanced，综合面试不传。 */
+  focus?: PackFocus
   projectIds: string[]
 }
 

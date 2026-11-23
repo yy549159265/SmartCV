@@ -581,9 +581,9 @@ async function confirmUpload() {
   overflow: auto;
 }
 .ref-container {
-  width: min(1120px, 100%);
+  width: min(1180px, 100%);
   margin: 0 auto;
-  padding: 36px 28px 56px;
+  padding: 40px 30px 64px;
 }
 
 .ref-head {
@@ -594,16 +594,16 @@ async function confirmUpload() {
 }
 .ref-title {
   margin: 0;
-  font-size: 22px;
+  font-size: 32px;
   font-weight: 600;
-  letter-spacing: -0.015em;
+  letter-spacing: -0.03em;
   color: var(--text);
 }
 .ref-desc {
-  margin: 9px 0 0;
-  max-width: 660px;
-  font-size: 13px;
-  line-height: 1.7;
+  margin: 10px 0 0;
+  max-width: 680px;
+  font-size: 14.5px;
+  line-height: 1.75;
   color: var(--text-secondary);
 }
 .ref-head-actions {
@@ -614,7 +614,7 @@ async function confirmUpload() {
   padding-bottom: 2px;
 }
 .ref-count {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-tertiary);
   font-variant-numeric: tabular-nums;
 }
@@ -622,14 +622,14 @@ async function confirmUpload() {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  height: 38px;
-  padding: 0 18px;
+  height: 40px;
+  padding: 0 20px;
   border: 1px solid var(--primary);
-  border-radius: 10px;
+  border-radius: 9px;
   background: var(--primary);
   color: #fff;
-  font-size: 13.5px;
-  font-weight: 550;
+  font-size: 14.5px;
+  font-weight: 500;
   cursor: pointer;
   transition:
     background 0.16s var(--ease),
@@ -640,12 +640,13 @@ async function confirmUpload() {
 .ref-upload-btn:hover {
   background: var(--primary-hover);
   border-color: var(--primary-hover);
-  transform: translateY(-1px);
-  box-shadow: 0 8px 18px -10px rgba(71, 83, 199, 0.55);
+  box-shadow: 0 10px 22px -14px rgba(71, 83, 199, 0.9);
 }
 .ref-upload-btn:active {
-  background: #343da0;
-  transform: translateY(0);
+  background: var(--primary-pressed);
+  border-color: var(--primary-pressed);
+  transform: translateY(1px);
+  box-shadow: none;
 }
 
 .ref-note {
@@ -657,7 +658,7 @@ async function confirmUpload() {
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--surface-soft);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.6;
   color: var(--text-secondary);
 }
@@ -671,7 +672,7 @@ async function confirmUpload() {
   justify-content: center;
   gap: 10px;
   padding: 64px 16px;
-  font-size: 12.5px;
+  font-size: 13.5px;
   color: var(--text-secondary);
   text-align: center;
 }
@@ -702,13 +703,13 @@ async function confirmUpload() {
 }
 .ref-empty-title {
   margin: 0;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--text);
 }
 .ref-empty-desc {
   margin: 0 0 10px;
-  font-size: 12.5px;
+  font-size: 13.5px;
   line-height: 1.7;
   color: var(--text-secondary);
 }
@@ -772,13 +773,13 @@ async function confirmUpload() {
   padding: 16px;
 }
 .ref-thumb-text {
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.5;
   color: var(--text-secondary);
   text-align: center;
 }
 .ref-thumb-retry {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--primary);
 }
 
@@ -803,7 +804,7 @@ async function confirmUpload() {
   border-radius: 999px;
   background: var(--primary-soft);
   color: var(--primary-hover);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
@@ -811,7 +812,7 @@ async function confirmUpload() {
 }
 .ref-date {
   flex: none;
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: var(--text-tertiary);
   font-variant-numeric: tabular-nums;
 }
@@ -821,7 +822,7 @@ async function confirmUpload() {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.6;
   color: var(--text-secondary);
 }
@@ -830,14 +831,14 @@ async function confirmUpload() {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: var(--text-tertiary);
 }
 .ref-readonly {
   padding: 1px 7px;
   border: 1px solid var(--border);
   border-radius: 999px;
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-tertiary);
 }
 
@@ -848,7 +849,7 @@ async function confirmUpload() {
   gap: 8px;
 }
 .ref-modal-title {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 600;
   color: var(--text);
 }
@@ -856,7 +857,7 @@ async function confirmUpload() {
   padding: 1px 7px;
   border-radius: 999px;
   background: var(--surface-sunken);
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: var(--text-tertiary);
 }
 .ref-modal-footer {
@@ -867,7 +868,7 @@ async function confirmUpload() {
 }
 .ref-modal-hint {
   flex: 1;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-tertiary);
 }
 .ref-modal-actions {
@@ -887,7 +888,7 @@ async function confirmUpload() {
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--surface-soft);
-  font-size: 12.5px;
+  font-size: 13.5px;
   line-height: 1.7;
   color: var(--text-secondary);
   white-space: pre-wrap;
@@ -921,7 +922,7 @@ async function confirmUpload() {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-size: 12.5px;
+  font-size: 13.5px;
   font-weight: 600;
   color: var(--text);
 }
@@ -951,24 +952,24 @@ async function confirmUpload() {
   gap: 10px;
 }
 .ref-json-ok {
-  font-size: 11.5px;
+  font-size: 12.5px;
   color: var(--success);
 }
 .ref-json-input :deep(.n-input__textarea-el) {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 11.5px;
+  font-size: 12.5px;
   line-height: 1.6;
 }
 .ref-json-error {
   margin: 0;
-  font-size: 11.5px;
+  font-size: 12.5px;
   line-height: 1.6;
   color: var(--danger);
   overflow-wrap: anywhere;
 }
 .ref-json-hint {
   margin: 0;
-  font-size: 11.5px;
+  font-size: 12.5px;
   line-height: 1.6;
   color: var(--text-tertiary);
 }
@@ -986,7 +987,7 @@ async function confirmUpload() {
   border: 1px solid rgba(166, 118, 63, 0.22);
   border-radius: 10px;
   background: var(--warning-soft);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.6;
   color: var(--warning);
 }
@@ -1000,7 +1001,7 @@ async function confirmUpload() {
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--surface-soft);
-  font-size: 12.5px;
+  font-size: 13.5px;
   line-height: 1.7;
   color: var(--text-secondary);
   white-space: pre-wrap;

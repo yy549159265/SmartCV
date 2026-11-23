@@ -24,6 +24,12 @@ logger = logging.getLogger("smartcv")
 router = APIRouter(prefix="/api", tags=["agent"])
 
 _AGENTS_DIR = Path(__file__).resolve().parent.parent / "agents"
+# 市场洞察的提示词独立放在 marker/prompts 下，与优化简历的 system_prompt 分开预览。
+_MARKET_PROMPTS_DIR = _AGENTS_DIR / "resume" / "marker" / "prompts"
+_MARKET_PROMPT_ORDER = ("plan", "profile", "extract", "synthesis", "strategy", "compose")
+# 模拟面试的提示词按阶段放在 interview/prompts/<阶段>/ 下，单独分组预览。
+_INTERVIEW_PROMPTS_DIR = _AGENTS_DIR / "resume" / "interview" / "prompts"
+_INTERVIEW_PROMPT_ORDER = ("profile", "pack", "interview", "general", "teaching")
 
 
 class PolishRequest(BaseModel):
@@ -130,11 +136,38 @@ async def grammar(
     return ok(result)
 
 
-def _agent_md_payload() -> dict:
-    """扫描 agents/ 目录：提示词（system_prompt*.md + *_prompt.md）+ 技能（skill/**/*.md）。
+def _market_prompt_rank(path: Path) -> tuple[int, str]:
+    """市场洞察提示词按流水线节点排序：plan → profile → extract → synthesis → strategy → compose。"""
+    rel = path.relative_to(_MARKET_PROMPTS_DIR)
+    stage = rel.parts[0] if len(rel.parts) > 1 else ""
+    rank = (
+        _MARKET_PROMPT_ORDER.index(stage)
+        if stage in _MARKET_PROMPT_ORDER
+        else len(_MARKET_PROMPT_ORDER)
+    )
+    return rank, rel.as_posix()
 
-    `*_prompt.md` 是 single agent 的片段提示词（polish_prompt.md /
-    enhance_prompt.md），配合 system_prompt_base.md 模板一起展示。
+
+def _interview_prompt_rank(path: Path) -> tuple[int, str]:
+    """模拟面试提示词按阶段排序：profile → pack → interview → general → teaching。"""
+    rel = path.relative_to(_INTERVIEW_PROMPTS_DIR)
+    stage = rel.parts[0] if len(rel.parts) > 1 else ""
+    rank = (
+        _INTERVIEW_PROMPT_ORDER.index(stage)
+        if stage in _INTERVIEW_PROMPT_ORDER
+        else len(_INTERVIEW_PROMPT_ORDER)
+    )
+    return rank, rel.as_posix()
+
+
+def _agent_md_payload() -> dict:
+    """扫描 agents/ 目录，返回可预览的提示词与技能文档。
+
+    prompts 用 category 区分两类：
+      - resume：优化简历链路（system_prompt*.md + *_prompt.md），
+        其中 `*_prompt.md` 是 single agent 的片段提示词，配合 system_prompt_base.md 一起展示；
+      - interview：模拟面试链路（interview/prompts/**/*.md），按阶段目录存放；
+      - market：市场洞察链路（marker/prompts/**/*.md），按图节点目录存放，README 是目录说明不算提示词。
     """
 
     def read(f: Path) -> str:
@@ -157,7 +190,48 @@ def _agent_md_payload() -> dict:
         label = f.stem.replace("system_prompt_", "").replace("_prompt", "")
         if rel.parent.name and rel.parent.name != ".":
             label = f"{rel.parent.name}/{label}"
-        prompts.append({"name": label, "path": rel.as_posix(), "content": read(f)})
+        prompts.append(
+            {
+                "name": label,
+                "path": rel.as_posix(),
+                "content": read(f),
+                "category": "resume",
+            }
+        )
+    if _INTERVIEW_PROMPTS_DIR.exists():
+        interview_files = sorted(
+            _INTERVIEW_PROMPTS_DIR.rglob("*.md"),
+            key=_interview_prompt_rank,
+        )
+        for f in interview_files:
+            rel = f.relative_to(_INTERVIEW_PROMPTS_DIR).with_suffix("")
+            prompts.append(
+                {
+                    "name": rel.as_posix(),
+                    "path": f.relative_to(_AGENTS_DIR).as_posix(),
+                    "content": read(f),
+                    "category": "interview",
+                }
+            )
+    if _MARKET_PROMPTS_DIR.exists():
+        market_files = sorted(
+            (
+                f
+                for f in _MARKET_PROMPTS_DIR.rglob("*.md")
+                if f.name.lower() != "readme.md"
+            ),
+            key=_market_prompt_rank,
+        )
+        for f in market_files:
+            rel = f.relative_to(_MARKET_PROMPTS_DIR).with_suffix("")
+            prompts.append(
+                {
+                    "name": rel.as_posix(),
+                    "path": f.relative_to(_AGENTS_DIR).as_posix(),
+                    "content": read(f),
+                    "category": "market",
+                }
+            )
     skill_dir = _AGENTS_DIR / "skill"
     if skill_dir.exists():
         for f in sorted(skill_dir.rglob("*.md")):

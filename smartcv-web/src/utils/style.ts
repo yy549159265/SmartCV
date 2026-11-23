@@ -50,6 +50,18 @@ export function effectiveContentStyle(row: LayoutWindow, section: Section, conte
   }
 }
 
+/**
+ * 清掉字号 / 标题字号 / 行距，回到默认值（正文 14px、标题 20px、行距 1.25）。
+ * 内容上清掉后即重新跟随章节。
+ */
+export function clearTypography(style: SectionStyle | ContentStyle | undefined): void {
+  if (!style) return
+  const record = style as Record<string, unknown>
+  delete record.fontSize
+  delete record.lineHeight
+  delete record.titleSize
+}
+
 export function mergeStyle<T extends object>(target: T, patch: Partial<T> | undefined): void {
   if (!patch) return
   const record = target as Record<string, unknown>

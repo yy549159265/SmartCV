@@ -21,7 +21,10 @@ for (const q of props.item.questions) {
 }
 
 const current = ref(0)
-const currentQ = computed(() => props.item.questions[current.value] as AskQuestion)
+// 题量逐轮变化（第一轮可能 2~3 题，第二轮 1 题），索引必须跟着落在有效范围内。
+const currentQ = computed(
+  () => props.item.questions[Math.min(current.value, props.item.questions.length - 1)] as AskQuestion,
+)
 
 const submitting = computed(() => props.item.status === 'submitting')
 
@@ -59,6 +62,22 @@ watch(
   () => props.item.status,
   (status) => {
     if (status === 'answered' || status === 'expired') stopTimer()
+  },
+)
+
+// 复用同一个实例换题时，清掉上一轮的选中项与题号。
+watch(
+  () => props.item.questionId,
+  () => {
+    current.value = 0
+    skipped.clear()
+    for (const q of props.item.questions) {
+      selected[q.id] = []
+      customOn[q.id] = false
+      customText[q.id] = ''
+    }
+    now.value = Date.now()
+    if (props.item.status === 'pending') startTimer()
   },
 )
 
@@ -362,21 +381,21 @@ function answerText(q: AskQuestion): string {
   border-radius: 50%;
   background: var(--primary);
   color: #fff;
-  font-size: 11px;
-  font-weight: 700;
+  font-size: 12px;
+  font-weight: 600;
   line-height: 1;
 }
 .ask-title {
   flex: 1;
   min-width: 0;
-  font-size: 12.5px;
+  font-size: 13.5px;
   font-weight: 600;
   color: var(--text);
   overflow-wrap: anywhere;
 }
 .ask-timer {
   flex: none;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   color: var(--text-secondary);
@@ -390,7 +409,7 @@ function answerText(q: AskQuestion): string {
   border-radius: 999px;
   background: var(--primary-soft);
   color: var(--primary-hover);
-  font-size: 10.5px;
+  font-size: 11.5px;
   font-weight: 600;
 }
 
@@ -401,7 +420,7 @@ function answerText(q: AskQuestion): string {
   gap: 8px;
 }
 .ask-progress-text {
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: var(--text-tertiary);
   font-variant-numeric: tabular-nums;
 }
@@ -445,25 +464,25 @@ function answerText(q: AskQuestion): string {
   border-radius: 4px;
   background: var(--surface-soft);
   color: var(--text-tertiary);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
 }
 .ask-q-header {
-  font-size: 11.5px;
+  font-size: 12.5px;
   font-weight: 600;
   color: var(--text-secondary);
 }
 .ask-q-mode {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-tertiary);
 }
 .ask-q-skipped {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-tertiary);
   font-style: italic;
 }
 .ask-q-text {
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.6;
   color: var(--text);
   overflow-wrap: anywhere;
@@ -505,13 +524,13 @@ function answerText(q: AskQuestion): string {
   min-width: 0;
 }
 .opt-label {
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.5;
   color: var(--text);
   overflow-wrap: anywhere;
 }
 .opt-desc {
-  font-size: 10.5px;
+  font-size: 11.5px;
   line-height: 1.5;
   color: var(--text-tertiary);
   overflow-wrap: anywhere;
@@ -530,7 +549,7 @@ function answerText(q: AskQuestion): string {
 .ask-tip {
   flex: 1;
   min-width: 140px;
-  font-size: 10.5px;
+  font-size: 11.5px;
   line-height: 1.5;
   color: var(--text-tertiary);
 }
@@ -543,7 +562,7 @@ function answerText(q: AskQuestion): string {
   padding: 0;
   border: 0;
   background: none;
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: var(--text-tertiary);
   cursor: pointer;
 }
@@ -557,7 +576,7 @@ function answerText(q: AskQuestion): string {
 }
 
 .ask-expired {
-  font-size: 11.5px;
+  font-size: 12.5px;
   line-height: 1.6;
   color: var(--text-tertiary);
 }
@@ -570,7 +589,7 @@ function answerText(q: AskQuestion): string {
 .sum-row {
   display: flex;
   gap: 8px;
-  font-size: 11.5px;
+  font-size: 12.5px;
   line-height: 1.6;
 }
 .sum-q {

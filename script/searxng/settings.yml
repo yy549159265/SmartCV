@@ -1,78 +1,385 @@
-# SearXNG 配置：只给诊断 agent 的 web_search 工具用
+# SearXNG 配置模板 —— 面向中国大陆网络环境
 #
-# 上游默认配置全部继承，这里只覆盖必要的几项：
-#   - 必须开启 search.formats 里的 json，后端按 format=json 请求；
-#   - 私有实例，关闭 limiter，否则程序化请求会被当成爬虫拦掉；
-#   - 默认中文，国内引擎为主。
+# 面向 searxng/searxng 2026.9 之后的上游版本
+# （该版本把网络层从 httpx 迁移到 curl_cffi，配置项有变化，见下文）
 #
-# 修改后重启容器生效：docker compose restart searxng
+# 使用方式：
+#   - server.secret_key / valkey.url 保持占位值，由容器环境变量覆盖
+#     （SEARXNG_SECRET / SEARXNG_VALKEY_URL，见 docker-compose.yml）
+#   - 引擎启停按"本机实测 + 容器日志"决定，不要凭印象开关
+#
 use_default_settings: true
 
-general:
-  instance_name: "SmartCV Search"
-
 server:
+  secret_key: "CHANGE-ME"
+
+  # 本地/内网自用保持 false。对公网开放时改为 true，否则任何人
+  # 都能拿你的实例当免费接口用
   limiter: false
-  public_instance: false
+
   image_proxy: false
 
+  # 官方 2026-08 起默认 GET。method 只影响搜索框的提交方式，
+  # /search 同时接受 GET/POST，JSON API 不受影响。
+  # POST 的唯一好处是查询词不进浏览器历史，但会破坏后退/刷新/收藏。
+  method: GET
+
+# 缓存段：2026.9 起上游把段名改成了 valkey，redis 段只是兼容用的旧名。
+# 写成 redis 不报错，但每次启动都会打一条 DeprecationWarning。
+# 镜像用 redis 还是 valkey 都行 —— 两者协议兼容，URL 写法一样。
+valkey:
+  url: "redis://valkey:6379/0"
+
+outgoing:
+  # 关键：2026.9 之后超时只认 outgoing.request_timeout。
+  # 旧的 request.timeouts 已从 schema 移除，写了会被静默忽略，
+  # 实际一直是官方默认的 3 秒 —— 这是大量 curl_cffi Timeout 的主因
+  request_timeout: 6.0
+
+  # 单个引擎可以用自己的 timeout 往上顶，但不超过这个上限
+  max_request_timeout: 10.0
+
+  enable_http2: true
+  pool_connections: 100
+
+  # 不重试：国内网络下单次失败大多是限流/拦截，重试只会放大封禁
+  retries: 0
+
 search:
-  safe_search: 0
+  safe_search: 1
+
+  # 中文语境下 360search 的联想更贴合；官方默认是 duckduckgo
+  autocomplete: "360search"
+  autocomplete_min: 4
   default_lang: "zh-CN"
+
+  ban_time_on_fail: 5
+  max_ban_time_on_fail: 120
+
+  # 官方默认 180/3600/180。旧配置里 86400/86400/7200 过于激进：
+  # 一次 CAPTCHA 就把引擎封 24 小时，看起来像"引擎消失了"
+  suspended_times:
+    SearxEngineAccessDenied: 300
+    SearxEngineCaptcha: 1800
+    SearxEngineTooManyRequests: 300
+    cf_SearxEngineCaptcha: 1296000
+    cf_SearxEngineAccessDenied: 86400
+    recaptcha_SearxEngineCaptcha: 604800
+
   formats:
     - html
     - json
-
-outgoing:
-  # 单个引擎的连接超时；整个搜索请求的硬上限。
-  # 没有上限时，被墙引擎的 DNS/TCP 会一直挂着，整个 /search 能卡几十秒。
-  request_timeout: 3.0
-  max_request_timeout: 6.0
+    - csv
+    - rss
 
 engines:
-  # 只保留国内可直连的引擎。默认配置里 Google / DuckDuckGo / Brave /
-  # Startpage / Wikipedia 等在国内连不上，请求会一直挂到超时。
-  # 能直连的改成 disabled: false 即可。
-  - name: google
+  # =========================================================
+  # A. 已知上游 bug —— 默认关闭
+  #
+  #    sogou: 2026.9 迁移到 curl_cffi 后，sogou.py 仍在用 httpx
+  #    专属的 resp.next_request。sogou 回反爬 302 时抛 AttributeError，
+  #    表现为 ["sogou", "unexpected crash"] 且结果 0 条。
+  #    https://github.com/searxng/searxng/issues/6797（上游仍未修复）
+  #
+  #    想用 sogou 的话，用 patches/sogou.py 打补丁后把 disabled 改为 false，
+  #    详见 README。sogou videos / sogou wechat 不受此 bug 影响，可以保持启用。
+  #
+  #    注意：SearXNG 在指定引擎查询（&engines=xxx）时会按引擎加载，不看
+  #    disabled 标记，所以 /config 里它叫 "sogou videos"，日志里报错的
+  #    可能仍显示为 "sogou"。默认搜索不会调用已禁用的引擎。
+  # =========================================================
+  - name: sogou
     disabled: true
-  - name: google cse
-    disabled: true
-  - name: google news
-    disabled: true
-  - name: google videos
-    disabled: true
-  - name: google scholar
-    disabled: true
-  # 需要 Tor 代理，没配代理时加载即报错
-  - name: ahmia
-    disabled: true
-  - name: torch
-    disabled: true
-  - name: duckduckgo
-    disabled: true
-  - name: brave
-    disabled: true
-  - name: startpage
-    disabled: true
-  - name: mojeek
-    disabled: true
-  - name: dogpile
-    disabled: true
-  - name: findborg
-    disabled: true
-  - name: yandex api
-    disabled: true
-  - name: wolframalpha_api
-    disabled: true
+
+  # =========================================================
+  # B. bing —— 默认打 www.bing.com 会被重定向到 cn.bing.com，
+  #    SearXNG 判定为非法重定向而丢弃结果（日志: "1 redirects, maximum: 0"）。
+  #    改指 cn.bing.com 绕开重定向。
+  # =========================================================
+  - name: bing
+    engine: bing
+    shortcut: bi
+    base_url: "https://cn.bing.com"
+    disabled: false
+    timeout: 8.0
+
+  # =========================================================
+  # C. 日志里有明确超时/阻断证据的引擎 —— 每次必超时，
+  #    留着只会拖慢搜索（SearXNG 并发请求，整体响应要等最慢的那个）
+  #
+  #    判据严格：只关容器日志里反复出现 curl_cffi Timeout 的，
+  #    单次 0 结果不算 —— 那种可能是临时限流，交给挂起机制自愈。
+  # =========================================================
   - name: wikipedia
     disabled: true
-  - name: wikidata
+  - name: wikibooks
     disabled: true
-  - name: bing
-    disabled: false
+  - name: wikiquote
+    disabled: true
+  - name: wikivoyage
+    disabled: true
+  - name: wikimini
+    disabled: true
+  - name: wikinews
+    disabled: true
+
+  - name: brave
+    disabled: true
+  - name: brave.images
+    disabled: true
+  - name: brave.news
+    disabled: true
+  - name: brave.videos
+    disabled: true
+
+  - name: mojeek
+    disabled: true
+  - name: mojeek images
+    disabled: true
+  - name: mojeek news
+    disabled: true
+
+  - name: seznam
+    disabled: true
+
+  - name: qwant
+    disabled: true
+  - name: qwant images
+    disabled: true
+  - name: qwant news
+    disabled: true
+  - name: qwant videos
+    disabled: true
+
+  - name: fireball
+    disabled: true
+  - name: fireball news
+    disabled: true
+  - name: fireball videos
+    disabled: true
+
+  - name: vuhuv
+    disabled: true
+  - name: vuhuv images
+    disabled: true
+  - name: vuhuv videos
+    disabled: true
+
+  # =========================================================
+  # D. 容易被验证码/限流的引擎 —— 保持启用
+  #
+  #    baidu / quark / google / duckduckgo 在压测下会触发对方验证码，
+  #    但 SearXNG 的挂起机制会自动跳过它们，冷却后自动恢复。
+  #    挂起期间不产生请求开销，所以没必要硬关。
+  # =========================================================
   - name: baidu
     disabled: false
-  - name: sogou
+    timeout: 8.0
+    # 降低权重，减少查询频率，降低触发反爬的概率
+    weight: 0.3
+  - name: quark
+    disabled: false
+    timeout: 8.0
+  - name: google
+    disabled: false
+    timeout: 8.0
+  - name: duckduckgo
+    disabled: false
+    timeout: 8.0
+
+  # =========================================================
+  # E. 本机实测出结果的引擎 —— 官方默认关闭，这里显式打开
+  #
+  #    新版 settings.yml 里 344 个引擎条目中有 231 个默认 disabled，
+  #    下面这些都是在本机实测 count > 0 才开的。
+  #    新增引擎前先单独测：/search?q=test&format=json&engines=<名字>
+  # =========================================================
+
+  # --- general / web ---
+  - name: google cse
+    disabled: false
+    # 借公开 CSE ID，不需要 API key，实测稳定 20 条/页
+  - name: yandex
     disabled: false
   - name: 360search
+    disabled: false
+  - name: naver
+    disabled: false
+  - name: mwmbl
+    disabled: false
+  - name: encyclosearch
+    disabled: false
+  - name: searchmysite
+    disabled: false
+  - name: fynd
+    disabled: false
+  - name: searchch
+    disabled: false
+  - name: boardreader
+    disabled: false
+  - name: abcnyheter
+    disabled: false
+  - name: reloado
+    disabled: false
+  - name: crowdview
+    disabled: false
+  - name: ddg definitions
+    disabled: false
+  # resulthunter 在部分网络下上游直接返回错误页（SearxEngineResponseException），
+  # 保持官方默认关闭
+  - name: resulthunter
+    disabled: true
+
+  # --- images ---
+  - name: pixabay images
+    disabled: false
+  - name: 1x
+    disabled: false
+  - name: tusksearch images
+    disabled: false
+  - name: flaticon
+    disabled: false
+  - name: findthatmeme
+    disabled: false
+  - name: naver images
+    disabled: false
+  - name: resulthunter images
+    disabled: false
+  - name: privacywall images
+    disabled: false
+  - name: stocksnap
+    disabled: false
+  - name: frinkiac
+    disabled: false
+  - name: shopify stock
+    disabled: false
+  - name: public domain image archive
+    disabled: false
+  - name: ipernity
+    disabled: false
+  - name: baidu images
+    disabled: false
+  - name: quark images
+    disabled: false
+  - name: uxwing
+    disabled: false
+  - name: material icons
+    disabled: false
+
+  # --- videos ---
+  - name: pixabay videos
+    disabled: false
+  - name: acfun
+    disabled: false
+  - name: findfiles videos
+    disabled: false
+  - name: iqiyi
+    disabled: false
+  - name: bilibili
+    disabled: false
+  - name: odysee
+    disabled: false
+  - name: peertube
+    disabled: false
+  - name: mediathekviewweb
+    disabled: false
+  - name: sogou videos
+    disabled: false
+  - name: 360search videos
+    disabled: false
+  - name: tusksearch videos
+    disabled: false
+  - name: privacywall videos
+    disabled: false
+
+  # --- news ---
+  - name: naver news
+    disabled: false
+  - name: ansa
+    disabled: false
+  - name: sogou wechat
+    disabled: false
+
+  # --- it（开发向，本机实测产出最高的一类）---
+  - name: alpine linux packages
+    disabled: false
+  - name: baidu kaifa
+    disabled: false
+  - name: cachy os packages
+    disabled: false
+  - name: caddy.community
+    disabled: false
+  - name: codeberg
+    disabled: false
+  - name: crates.io
+    disabled: false
+  - name: discuss.python
+    disabled: false
+  - name: gitea.com
+    disabled: false
+  - name: hackernews
+    disabled: false
+  - name: hex
+    disabled: false
+  - name: lib.rs
+    disabled: false
+  - name: huggingface
+    disabled: false
+  - name: huggingface datasets
+    disabled: false
+  - name: huggingface spaces
+    disabled: false
+  - name: microsoft learn
+    disabled: false
+  - name: national vulnerability database
+    disabled: false
+  - name: nixos wiki
+    disabled: false
+  - name: npm
+    disabled: false
+  - name: pi-hole.community
+    disabled: false
+  - name: pkg.go.dev
+    disabled: false
+  - name: pub.dev
+    disabled: false
+  - name: sourcehut
+    disabled: false
+  - name: voidlinux
+    disabled: false
+
+  # --- science ---
+  - name: crossref
+    disabled: false
+  - name: openalex
+    disabled: false
+  - name: wikispecies
+    disabled: false
+
+  # --- files ---
+  - name: apple app store
+    disabled: false
+  - name: findfiles
+    disabled: false
+  - name: google play apps
+    disabled: false
+  - name: openrepos
+    disabled: false
+
+  # --- music ---
+  - name: findfiles music
+    disabled: false
+
+  # --- movies ---
+  - name: imdb
+    disabled: false
+  - name: rottentomatoes
+    disabled: false
+  - name: senscritique
+    disabled: false
+
+  # --- dictionaries ---
+  - name: duden
+    disabled: false
+  - name: jisho
     disabled: false

@@ -1,0 +1,295 @@
+.crow {
+  display: flex;
+  align-items: flex-start;
+  padding: 6px;
+}
+.crow-main {
+  flex: 1;
+  min-width: 0;
+}
+.crow-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.crow-name {
+  font-size: 13px;
+}
+.crow-num {
+  margin-left: auto;
+  font-size: 11.5px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+.crow-bar {
+  height: 3px;
+  margin-top: 5px;
+  border-radius: 2px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.crow-bar i {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: 2px;
+  background: var(--primary);
+  transition: width 0.3s var(--ease);
+}
+
+/* ---------- collect 来源分布 ---------- */
+/* 与其他横向模块共用同一张卡壳：相同内边距、相同头部分隔线。 */
+.dist-block {
+  padding: 9px 10px 10px;
+}
+.dist-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  padding: 0 2px 5px;
+  border-bottom: 1px solid rgba(28, 33, 48, 0.07);
+}
+/* 与技能画像的视图切换保持一致：同一套胶囊底 + 选中态。 */
+.dist-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  padding: 2px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.58);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+.dist-switch-btn {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-3);
+  line-height: 0;
+  cursor: pointer;
+  transition:
+    background 0.16s var(--ease),
+    color 0.16s var(--ease),
+    box-shadow 0.16s var(--ease);
+}
+.dist-switch-btn:hover {
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--text);
+}
+.dist-switch-btn.active {
+  background: var(--panel);
+  color: var(--primary);
+  box-shadow:
+    0 1px 2px rgba(28, 33, 48, 0.08),
+    inset 0 0 0 1px rgba(71, 83, 199, 0.16);
+}
+.dist-switch-btn:focus-visible {
+  outline: 2px solid rgba(71, 83, 199, 0.35);
+  outline-offset: 1px;
+}
+.dist-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.dist-row {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr) 22px;
+  align-items: center;
+  gap: 6px;
+}
+.dist-name {
+  font-size: 10.5px;
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dist-name.empty {
+  color: var(--text-3);
+}
+.dist-track {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.dist-track i {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--primary);
+  transition: width 0.3s var(--ease);
+}
+.dist-count {
+  font-size: 10.5px;
+  color: var(--text-3);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.dist-dims {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* ---------- collect groups ---------- */
+.cgroup + .cgroup {
+  margin-top: 10px;
+}
+.cgroup {
+  padding: 9px 10px 10px;
+}
+.cgroup-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 6px;
+  padding: 0 2px 5px;
+  border-bottom: 1px solid rgba(28, 33, 48, 0.07);
+}
+.cgroup .rows {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.cgroup-count {
+  font-size: 10.5px;
+  color: var(--text-3);
+}
+.cgroup-pages {
+  margin-left: auto;
+  font-size: 10.5px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+.collect-item.hl {
+  border-color: rgba(71, 83, 199, 0.24);
+  background: rgba(236, 239, 251, 0.72);
+}
+.collect-item.open {
+  background: rgba(255, 255, 255, 0.74);
+}
+.crow {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.crow:hover {
+  background: rgba(255, 255, 255, 0.72);
+}
+.crow-chevron {
+  flex: none;
+  margin-top: 1px;
+  color: var(--text-3);
+  transition: transform 0.18s var(--ease);
+}
+.collect-item.open .crow-chevron {
+  transform: rotate(180deg);
+}
+.crow-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 0 6px 6px;
+  padding: 8px 8px 6px;
+  border-top: 1px solid var(--border);
+  animation: detail-in 0.18s var(--ease);
+}
+@keyframes detail-in {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+}
+.crow-detail-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 10.5px;
+  color: var(--text-3);
+}
+.crow-detail-head span:first-child {
+  color: var(--text-2);
+  font-weight: 500;
+}
+.csrc {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 2px 6px;
+  padding: 5px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.56);
+  text-decoration: none;
+}
+.csrc:hover {
+  border-color: var(--primary-soft);
+  background: var(--primary-faint);
+}
+.csrc-id {
+  grid-row: span 2;
+  align-self: start;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--primary-faint);
+  color: var(--primary);
+  font-size: 10px;
+  line-height: 1.7;
+}
+.csrc-title {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-2);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.csrc-meta {
+  font-size: 10px;
+  color: var(--text-3);
+}
+.crow-detail-empty {
+  margin: 2px 0 0;
+  font-size: 10.5px;
+  line-height: 1.55;
+  color: var(--text-3);
+}
+.crow-detail-skip {
+  margin: 2px 0 0;
+  font-size: 10.5px;
+  line-height: 1.55;
+  color: #9a6a33;
+}
+
+/* ---------- 模块内容切换动画 ---------- */
+.mod-swap-enter-active,
+.mod-swap-leave-active {
+  transition:
+    opacity 0.16s var(--ease),
+    transform 0.16s var(--ease);
+}
+.mod-swap-enter-from {
+  opacity: 0;
+  transform: translateY(4px);
+}
+.mod-swap-leave-to {
+  opacity: 0;
+  transform: translateY(-3px);
+}
+.collect-groups {
+  display: flex;
+  flex-direction: column;
+}

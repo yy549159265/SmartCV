@@ -4,18 +4,34 @@ import DiffActionButton from './DiffActionButton.vue'
 import { effectiveContentStyle } from '@/utils/style'
 import { renderMarkdown } from '@/utils/markdown'
 import { diffAttr as resolveDiffAttr, type ChangeView, type DiffMark } from '@/utils/resumeDiff'
+import { orderedMarkers } from '@/utils/list'
 import type { Content, Section, LayoutWindow } from '@/types'
 
 const props = defineProps<{
   section: Section
   row: LayoutWindow
   content: Content
+  sectionIndex?: number
+  leafIndex?: number
+  contentIndex?: number
   diffMark?: DiffMark
   diffView?: ChangeView
   diffUnits?: Record<number, DiffMark>
   diffUnitViews?: Record<number, ChangeView>
   unitDiffs?: Record<number, string>
 }>()
+
+/** 与后端 [s:r:c:i] 对齐；只有接入坐标的预览（如简历原文面板）才会渲染。 */
+const coord = (i: number): string | undefined => {
+  if (
+    props.sectionIndex === undefined ||
+    props.leafIndex === undefined ||
+    props.contentIndex === undefined
+  ) {
+    return undefined
+  }
+  return `${props.sectionIndex}-${props.leafIndex}-${props.contentIndex}-${i}`
+}
 
 const diffAttr = computed(() => resolveDiffAttr(props.diffMark, props.diffView))
 
@@ -64,6 +80,8 @@ const listItems = computed(() =>
 
 const INDENT_STEP = 24
 
+const listMarkers = computed(() => orderedMarkers(listItems.value))
+
 const imageStyle = computed<CSSProperties>(() => {
   const shape = props.content.content.imageShape === 'circle'
     ? 'circle'
@@ -100,7 +118,11 @@ const imageStyle = computed<CSSProperties>(() => {
     >
       <DiffActionButton v-if="unitView(0)" class="diff-action-float" :view="unitView(0)!" />
       <span v-if="content.content.icon" class="pb-icon" v-html="content.content.icon" />
-      <div class="pb-text" v-html="unitDiffHtml(0) || md(content.content.text)" />
+      <div
+        class="pb-text"
+        :data-coord="coord(0)"
+        v-html="unitDiffHtml(0) || md(content.content.text)"
+      />
       <div v-if="(content.content.tags ?? []).length" class="pb-tags">
         <span v-for="t in content.content.tags" :key="t" class="pb-tag">{{ t }}</span>
       </div>
@@ -117,6 +139,7 @@ const imageStyle = computed<CSSProperties>(() => {
         </span>
         <div
           class="pb-col-wrap"
+          :data-coord="coord(i)"
           :data-diff="unitAttr(i)"
           :data-diff-key="unitView(i) ? `unit:${content.id}:${i}` : undefined"
         >
@@ -129,6 +152,7 @@ const imageStyle = computed<CSSProperties>(() => {
     <div
       v-else-if="content.type === 'timeRange'"
       class="pb-timerange"
+      :data-coord="coord(0)"
       :data-diff="unitAttr(0)"
       :data-diff-key="unitView(0) ? `unit:${content.id}:0` : undefined"
       :style="{ justifyContent: JUSTIFY_MAP[eff.textAlign] }"
@@ -148,6 +172,7 @@ const imageStyle = computed<CSSProperties>(() => {
         v-for="(t, i) in content.content.tags"
         :key="i"
         class="pb-tag"
+        :data-coord="coord(i)"
         :data-diff="unitAttr(i)"
         :data-diff-key="unitView(i) ? `unit:${content.id}:${i}` : undefined"
       >
@@ -170,9 +195,13 @@ const imageStyle = computed<CSSProperties>(() => {
       >
         <DiffActionButton v-if="unitView(i)" class="diff-action-float" :view="unitView(i)!" />
         <span class="pb-list-marker">
-          {{ content.content.listType === 'ordered' ? `${i + 1}.` : '•' }}
+          {{ content.content.listType === 'ordered' ? `${listMarkers[i]}.` : '•' }}
         </span>
-        <span class="pb-list-text" v-html="unitDiffHtml(i) || md(item.text)" />
+        <span
+          class="pb-list-text"
+          :data-coord="coord(i)"
+          v-html="unitDiffHtml(i) || md(item.text)"
+        />
       </div>
     </div>
 
@@ -201,6 +230,8 @@ const imageStyle = computed<CSSProperties>(() => {
 <style scoped>
 .preview-content {
   min-width: 0;
+  /* 字号再大，文字也只能在自己的框内换行，不会溢出到相邻组件 */
+  overflow-wrap: anywhere;
 }
 
 .diff-action-host {
@@ -242,10 +273,12 @@ const imageStyle = computed<CSSProperties>(() => {
 .pb-twocol {
   display: flex;
   align-items: baseline;
-  gap: 6px;
+  flex-wrap: wrap;
+  gap: 2px 6px;
 }
 .pb-col-wrap {
   min-width: 0;
+  max-width: 100%;
 }
 .pb-col {
   flex: 0 1 auto;
@@ -261,6 +294,12 @@ const imageStyle = computed<CSSProperties>(() => {
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
+  min-width: 0;
+}
+.pb-timerange > span {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 .pb-dash {
   margin: 0 6px;
@@ -275,12 +314,13 @@ const imageStyle = computed<CSSProperties>(() => {
 }
 .pb-tag {
   display: inline-content;
+  max-width: 100%;
   padding: 0 9px;
   border-radius: 999px;
   background: #eef1f6;
   font-size: 0.92em;
   line-height: 1.5;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .pb-image {
@@ -307,6 +347,7 @@ const imageStyle = computed<CSSProperties>(() => {
   display: flex;
   align-items: baseline;
   gap: 6px;
+  max-width: 100%;
   margin-bottom: 2px;
 }
 .pb-list-item:last-child {

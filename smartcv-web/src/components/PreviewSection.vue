@@ -10,6 +10,7 @@ import type { Section } from '@/types'
 const props = withDefaults(
   defineProps<{
     section: Section
+    sectionIndex?: number
     rowFrom?: number
     rowTo?: number
     showTitle?: boolean
@@ -28,6 +29,20 @@ const props = withDefaults(
 )
 
 const tableCols = computed(() => computeTableCols(props.section.rows))
+
+/** 叶子窗口在章节内的顺序，与后端 [s:r:c:i] 的 r 一一对应。 */
+const leafIndices = computed(() => {
+  const map: Record<string, number> = {}
+  let next = 0
+  const walk = (rows: Section['rows']) => {
+    for (const row of rows) {
+      if (row.rows?.length) walk(row.rows)
+      else map[row.id] = next++
+    }
+  }
+  walk(props.section.rows)
+  return map
+})
 
 const visibleRows = computed(() => {
   const all = props.section.rows
@@ -82,6 +97,8 @@ const sectionAttr = computed(() =>
         :key="row.id"
         :section="section"
         :row="row"
+        :section-index="sectionIndex"
+        :leaf-indices="leafIndices"
         :table-cols="tableCols"
         :marks="marks"
         :controls="controls"

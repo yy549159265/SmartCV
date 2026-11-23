@@ -303,8 +303,8 @@ const rowDiagramClass = (p: RowPreset) => {
 .library-title {
   flex: none;
   margin: 0;
-  font-size: 15px;
-  font-weight: 700;
+  font-size: 16px;
+  font-weight: 600;
   letter-spacing: -0.01em;
   white-space: nowrap;
   color: var(--text);
@@ -318,7 +318,7 @@ const rowDiagramClass = (p: RowPreset) => {
 .library-hint {
   flex: 0 1 auto;
   margin-left: 10px;
-  font-size: 11.5px;
+  font-size: 12.5px;
   color: var(--text-tertiary);
   min-width: 0;
   overflow: hidden;
@@ -361,7 +361,7 @@ const rowDiagramClass = (p: RowPreset) => {
   border: none;
   border-radius: 7px;
   background: transparent;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
   white-space: nowrap;
   color: var(--text-secondary);
@@ -449,7 +449,7 @@ const rowDiagramClass = (p: RowPreset) => {
   height: 28px;
   border-radius: 7px;
   background: var(--surface-soft);
-  font-size: 16px;
+  font-size: 17px;
   line-height: 1;
 }
 .sec-card-blank .sec-icon {
@@ -468,7 +468,7 @@ const rowDiagramClass = (p: RowPreset) => {
   gap: 1px;
 }
 .sec-name {
-  font-size: 12.5px;
+  font-size: 13.5px;
   font-weight: 600;
   color: var(--text);
   overflow: hidden;
@@ -476,7 +476,7 @@ const rowDiagramClass = (p: RowPreset) => {
   text-overflow: ellipsis;
 }
 .sec-desc {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-tertiary);
   overflow: hidden;
   white-space: nowrap;
@@ -487,7 +487,7 @@ const rowDiagramClass = (p: RowPreset) => {
   padding: 1px 6px;
   border-radius: 999px;
   background: var(--primary-soft);
-  font-size: 9.5px;
+  font-size: 10.5px;
   line-height: 1.5;
   color: var(--primary-hover);
   white-space: nowrap;
@@ -545,12 +545,12 @@ const rowDiagramClass = (p: RowPreset) => {
   gap: 1px;
 }
 .layout-name {
-  font-size: 12.5px;
+  font-size: 13.5px;
   font-weight: 600;
   color: var(--text);
 }
 .layout-desc {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-tertiary);
   overflow: hidden;
   white-space: nowrap;
@@ -615,7 +615,7 @@ const rowDiagramClass = (p: RowPreset) => {
   border: none;
   border-radius: 6px;
   background: transparent;
-  font-size: 11.5px;
+  font-size: 12.5px;
   font-weight: 500;
   color: var(--text-secondary);
   cursor: pointer;
@@ -657,7 +657,7 @@ const rowDiagramClass = (p: RowPreset) => {
   border: none;
   outline: none;
   background: transparent;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text);
 }
 .content-search input::placeholder {
@@ -705,7 +705,7 @@ const rowDiagramClass = (p: RowPreset) => {
   height: 26px;
   border-radius: 7px;
   background: var(--surface-soft);
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1;
 }
 .content-icon :deep(svg) {
@@ -721,7 +721,7 @@ const rowDiagramClass = (p: RowPreset) => {
   gap: 1px;
 }
 .content-name {
-  font-size: 12.5px;
+  font-size: 13.5px;
   font-weight: 600;
   color: var(--text);
   overflow: hidden;
@@ -729,7 +729,7 @@ const rowDiagramClass = (p: RowPreset) => {
   text-overflow: ellipsis;
 }
 .content-desc {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-tertiary);
   overflow: hidden;
   white-space: nowrap;
@@ -740,7 +740,7 @@ const rowDiagramClass = (p: RowPreset) => {
   padding: 1px 6px;
   border-radius: 999px;
   background: var(--primary-soft);
-  font-size: 9.5px;
+  font-size: 10.5px;
   line-height: 1.5;
   color: var(--primary-hover);
   white-space: nowrap;

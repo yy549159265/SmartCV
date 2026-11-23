@@ -1,10 +1,13 @@
 import { unwrap } from '@/api/error'
 import { apiFetch } from '@/api/http'
 
+export type AgentMdCategory = 'resume' | 'interview' | 'market'
+
 export interface AgentMdFile {
   name: string
   path: string
   content: string
+  category?: AgentMdCategory
 }
 
 export interface AgentMdPayload {

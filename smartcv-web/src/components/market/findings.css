@@ -1,0 +1,198 @@
+/* ---------- 招聘信息 · 岗位概览 ---------- */
+/* 四条事实排成一张说明表：标签在上、内容在下，长文本和长公司名完整换行，不做截断。 */
+.job-overview {
+  display: flex;
+  flex-direction: column;
+}
+.job-fact {
+  padding: 7px 2px;
+}
+.job-fact:first-child {
+  padding-top: 2px;
+}
+.job-fact:last-child {
+  padding-bottom: 1px;
+}
+.job-fact + .job-fact {
+  border-top: 1px solid rgba(28, 33, 48, 0.06);
+}
+.job-fact-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 3px;
+  min-width: 0;
+}
+.job-fact-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10.5px;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+.job-fact-label::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--text-3);
+}
+.job-fact.tone-role .job-fact-label::before,
+.job-fact.tone-company .job-fact-label::before {
+  background: var(--primary);
+}
+.job-fact.tone-salary .job-fact-label::before {
+  background: var(--success);
+}
+.job-fact.tone-requirement .job-fact-label::before {
+  background: var(--warn);
+}
+.job-fact-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  min-width: 0;
+}
+.job-fact-value {
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+.job-fact.tone-salary .job-fact-value {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--success);
+  font-variant-numeric: tabular-nums;
+}
+.job-fact-note {
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--text-3);
+  overflow-wrap: anywhere;
+}
+.job-fact-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.job-chip {
+  max-width: 100%;
+  padding: 1px 7px;
+  border-radius: 5px;
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- 招聘信息 · 技能要求 ---------- */
+/* 技能清单收进同一个框，行与行用细分隔线区分，不再每项一张小卡。 */
+.job-skills {
+  display: flex;
+  flex-direction: column;
+}
+.job-skills-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 0 2px 6px;
+  border-bottom: 1px solid rgba(28, 33, 48, 0.07);
+  font-size: 10.5px;
+  color: var(--text-3);
+}
+.job-skills-must {
+  margin-left: auto;
+  color: var(--warn);
+}
+.job-skill {
+  padding: 7px 2px;
+}
+.job-skill + .job-skill {
+  border-top: 1px solid rgba(28, 33, 48, 0.05);
+}
+.job-skill:last-child {
+  padding-bottom: 1px;
+}
+.job-skill.hl {
+  margin: 0 -4px;
+  padding-left: 6px;
+  padding-right: 6px;
+  border-radius: 6px;
+  background: rgba(236, 239, 251, 0.72);
+}
+.job-skill-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.job-skill-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.job-skill-must {
+  flex: none;
+  padding: 0 4px;
+  border-radius: 3px;
+  font-size: 10.5px;
+  line-height: 1.6;
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+.job-skill-years {
+  flex: none;
+  font-size: 10.5px;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+.job-skill-meter {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 5px;
+}
+.job-skill-track {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.job-skill-track i {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: #8b93d8;
+  transition: width 0.35s var(--ease);
+}
+.job-skill.top .job-skill-track i {
+  background: var(--primary);
+}
+.job-skill-num {
+  flex: none;
+  width: 38px;
+  text-align: right;
+  font-size: 10.5px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+.job-skill-note {
+  margin-top: 3px;
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--text-3);
+  overflow-wrap: anywhere;
+}
+
+/* ---------- 其它结论 / 动态方面：按 kind 分块 ---------- */
+/* 每种结论形态各自成块，块与块之间直接留白，不加类型标题。 */

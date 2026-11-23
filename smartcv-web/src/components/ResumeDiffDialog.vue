@@ -289,7 +289,7 @@ function onClose() {
   padding: 2px 9px;
   border-radius: 999px;
   background: var(--warning-soft);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--warning);
   white-space: nowrap;
@@ -303,7 +303,7 @@ function onClose() {
   padding: 2px 9px;
   border-radius: 999px;
   background: var(--success-soft);
-  font-size: 11.5px;
+  font-size: 12.5px;
   font-weight: 600;
   color: var(--success);
   white-space: nowrap;
@@ -312,7 +312,7 @@ function onClose() {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-secondary);
 }
 .legend-item {
@@ -390,7 +390,7 @@ function onClose() {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  font-size: 12.5px;
+  font-size: 13.5px;
   font-weight: 600;
   color: var(--text);
 }
@@ -411,7 +411,7 @@ function onClose() {
   padding: 1px 8px;
   border-radius: 999px;
   background: var(--panel-bg);
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-tertiary);
   white-space: nowrap;
 }
@@ -435,12 +435,12 @@ function onClose() {
   gap: 12px;
 }
 .diff-footer-tip {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-tertiary);
 }
 .diff-footer-tip b {
   color: var(--text-secondary);
-  font-weight: 700;
+  font-weight: 600;
 }
 .tip-before {
   color: var(--success);

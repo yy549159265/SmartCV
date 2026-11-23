@@ -1,0 +1,55 @@
+/* 动态方面：汇总句 + 内容块卡片；字段为空时组件不渲染，不存在占位。 */
+
+.aspect-pane {
+  min-width: 0;
+}
+
+.ap-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.ap-count {
+  flex: none;
+  font-size: 10.5px;
+  color: var(--text-3);
+}
+
+.ap-lead {
+  margin: 0 0 7px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+
+.ap-block {
+  padding: 8px 9px;
+}
+.ap-block + .ap-block {
+  margin-top: 7px;
+}
+
+.ap-block-head {
+  margin-bottom: 4px;
+}
+
+.ap-block-name {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-3);
+}
+
+.ap-text {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+.ap-text + .ap-text {
+  margin-top: 4px;
+}

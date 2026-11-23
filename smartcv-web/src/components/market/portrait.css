@@ -1,0 +1,461 @@
+.portrait {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+/* 职业画像：自述式「标题：正文」，标签成组，路径用鱼骨图。 */
+.career-body {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.career-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px;
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.75;
+  color: var(--text-2);
+  /* 正文必须完整显示，不做任何省略或裁切。 */
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.career-label {
+  flex: none;
+  font-weight: 600;
+  color: var(--text);
+}
+.career-value {
+  /* 基准宽度设为 0：正文始终跟在标题同一行，超长时在行内换行，不会整体掉到下一行。 */
+  flex: 1 1 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.career-tags {
+  align-items: flex-start;
+}
+.career-tag-list {
+  /* 基准宽度设为 0：标签组紧跟「职业标签：」同一行，再在组内换行。 */
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.career-tag {
+  max-width: 100%;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--primary-faint);
+  color: var(--primary);
+  box-shadow: inset 0 0 0 1px rgba(71, 83, 199, 0.14);
+  font-size: 11.5px;
+  line-height: 1.6;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.career-path {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.career-path .career-line {
+  row-gap: 0;
+}
+.pcard {
+  min-width: 0;
+  padding: 10px 11px;
+}
+.pcard-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 7px;
+}
+.pcard-sub {
+  font-size: 10.5px;
+  color: var(--text-3);
+}
+.portrait-hero {
+  background: linear-gradient(180deg, var(--panel), var(--primary-faint));
+}
+.portrait-summary {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+.portrait-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+}
+.meta-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+.meta-label {
+  font-size: 10.5px;
+  color: var(--text-3);
+}
+.meta-value {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+.meta-chip {
+  padding: 0 6px;
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: 11px;
+  line-height: 1.7;
+}
+.pcard-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+/* 画像子视图：右上角两个图标，技能画像 / 项目画像共用这套切换条。 */
+.skill-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.skill-title {
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.skill-tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.58);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+.skill-tool {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-3);
+  line-height: 0;
+  cursor: pointer;
+  transition:
+    background 0.16s var(--ease),
+    color 0.16s var(--ease),
+    box-shadow 0.16s var(--ease);
+}
+.skill-tool:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--text);
+}
+.skill-tool:disabled {
+  opacity: 0.32;
+  cursor: default;
+}
+.skill-tool.active {
+  background: var(--panel);
+  color: var(--primary);
+  box-shadow:
+    0 1px 2px rgba(28, 33, 48, 0.08),
+    inset 0 0 0 1px rgba(71, 83, 199, 0.16);
+}
+.skill-tool:focus-visible {
+  outline: 2px solid rgba(71, 83, 199, 0.35);
+  outline-offset: 1px;
+}
+.skill-summary-text {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 12.5px;
+  line-height: 1.75;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.skill-summary-empty {
+  margin: 0;
+  color: var(--text-3);
+  font-size: 11.5px;
+  line-height: 1.7;
+}
+.skill-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+.skill-card {
+  min-width: 0;
+  padding: 6px 7px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel);
+}
+.skill-card-head {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+.skill-name {
+  flex: 1;
+  min-width: 0;
+  color: var(--text);
+  font-size: 11.5px;
+  font-weight: 600;
+  /* 技能图谱固定两列，名称过长时省略，完整内容由 title 悬浮显示。 */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.skill-evidence {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 3px;
+}
+.skill-ev {
+  max-width: 100%;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--primary-faint);
+  color: var(--primary);
+  font-size: 10px;
+  line-height: 1.6;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.skill-empty {
+  margin: 0;
+  color: var(--text-3);
+  font-size: 11.5px;
+  line-height: 1.7;
+}
+.portrait-section {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.portrait-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.portrait-block + .portrait-block {
+  margin-top: 6px;
+}
+.portrait-group-title {
+  padding-left: 6px;
+  border-left: 2px solid var(--primary-soft);
+  color: var(--text-3);
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+.portrait-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.portrait-row {
+  min-width: 0;
+  padding: 7px 8px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel);
+}
+.portrait-row.tone-summary,
+.portrait-row.tone-meta {
+  border-color: transparent;
+  background: var(--surface);
+}
+.portrait-row-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.portrait-dot {
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--text-3);
+}
+.portrait-dot.hit {
+  background: var(--success);
+}
+.portrait-dot.transfer {
+  background: var(--primary);
+}
+.portrait-dot.gap {
+  background: var(--warn);
+}
+.portrait-row-label {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-2);
+  font-size: 11.5px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.portrait-row.pair.hit .portrait-row-label {
+  color: var(--success);
+}
+.portrait-row.pair.transfer .portrait-row-label {
+  color: var(--primary);
+}
+.portrait-row.pair.gap .portrait-row-label {
+  color: var(--warn);
+}
+.portrait-row-value {
+  flex: none;
+  color: var(--text-3);
+  font-size: 10.5px;
+}
+/* 缺口类型 / 严重程度：名称直接显示在标题行，不埋进正文括号里。 */
+.portrait-type {
+  flex: none;
+  padding: 0 5px;
+  border-radius: 3px;
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: 10px;
+  line-height: 1.7;
+}
+.portrait-severity {
+  flex: none;
+  padding: 0 5px;
+  border-radius: 3px;
+  background: var(--surface);
+  color: var(--text-3);
+  font-size: 10px;
+  line-height: 1.7;
+}
+.portrait-severity.high {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.portrait-severity.medium {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+.portrait-row.tone-meta .portrait-row-head {
+  flex-wrap: wrap;
+}
+.portrait-row.tone-meta .portrait-row-value {
+  flex-basis: 100%;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.portrait-row-text {
+  margin: 3px 0 0;
+  color: var(--text-3);
+  font-size: 11.5px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+.portrait-row-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 5px;
+}
+.portrait-chip {
+  max-width: 100%;
+  padding: 0 5px;
+  border-radius: 3px;
+  background: var(--surface);
+  color: var(--text-3);
+  font-size: 10px;
+  line-height: 1.7;
+  /* 标签片完整展示，允许换行，不省略。 */
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+/* 项目画像的分组标签：个人贡献 / 项目优势 / 量化成果各占一行。 */
+.portrait-row-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 5px;
+}
+.portrait-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px;
+}
+.portrait-group-label {
+  flex: none;
+  color: var(--text-3);
+  font-size: 10px;
+  line-height: 1.7;
+}
+.portrait-group-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  min-width: 0;
+}
+.portrait-group-items .portrait-chip {
+  background: var(--primary-faint);
+  color: var(--text-2);
+}
+.portrait-row-evidence {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+  padding-top: 5px;
+  border-top: 1px dashed var(--border);
+}
+.portrait-evidence {
+  padding: 0 5px;
+  border-radius: 3px;
+  background: var(--primary-faint);
+  color: var(--primary);
+  font-size: 10px;
+  line-height: 1.7;
+}
+.level-badge {
+  flex: none;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--text-3);
+  font-size: 10px;
+  line-height: 1.7;
+}
+.level-badge.expert {
+  background: var(--primary);
+  color: #fff;
+}
+.level-badge.proficient {
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+.level-badge.familiar {
+  background: var(--success-soft);
+  color: var(--success);
+}
+.level-badge.mentioned {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-3);
+}

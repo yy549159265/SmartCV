@@ -4,10 +4,8 @@
 - 诊断需要了解最新的行业术语、岗位要求、公司/产品背景时，可以查外部信息；
 - 优化/摘要 agent 只处理简历文字与诊断结果，不需要联网，避免事实被网络内容污染。
 
-搜索源是自建的 SearXNG（见 docker-compose.yml 的 searxng 服务）：
-  - 通过 SEARXNG_URL 指定地址（Docker 内为 http://searxng:8080，本地默认 127.0.0.1:8080）；
-  - 只接受 JSON 输出，需在 SearXNG 的 settings.yml 里开启 search.formats: json；
-  - 同一个 query 缓存 10 分钟，避免模型反复搜同一内容。
+搜索引擎的地址、超时、并发、JSON 规整和 10 分钟缓存都在
+`agents/utils/searxng.py`，这里只负责工具调用次数、事件输出和异常文案。
 
 事件：
   - tool_call / tool_result：进入通用「工具调用」记录；
@@ -15,70 +13,20 @@
 """
 
 import logging
-import os
-import re
 from typing import Annotated
 
 import httpx
-from cachetools import TTLCache
 from langchain_core.tools import tool
 from langgraph.config import get_stream_writer
 from pydantic import Field
 
+from agents.utils.searxng import SEARXNG_TIMEOUT, search_sync
+
 logger = logging.getLogger("smartcv")
 
-_SEARXNG_URL = os.getenv("SEARXNG_URL", "http://127.0.0.1:8080").rstrip("/")
-_MAX_RESULTS = int(os.getenv("WEB_SEARCH_MAX_RESULTS", "5"))
-_TIMEOUT_SECONDS = float(os.getenv("WEB_SEARCH_TIMEOUT", "8"))
-_MAX_CALLS = int(os.getenv("WEB_SEARCH_MAX_CALLS", "3"))
-_cache: TTLCache = TTLCache(maxsize=256, ttl=600)
-
-
-def _clean(text: object, limit: int) -> str:
-    """压缩空白并截断，避免 HTML 残留和超长摘要。"""
-    value = re.sub(r"\s+", " ", str(text or "")).strip()
-    return value[:limit]
-
-
-def _parse_results(payload: dict) -> list[dict]:
-    """把 SearXNG 的 results 规整成前端/模型都能直接用的小列表。"""
-    results: list[dict] = []
-    seen: set[str] = set()
-    for item in payload.get("results") or []:
-        if not isinstance(item, dict):
-            continue
-        url = str(item.get("url") or "").strip()
-        if not url or url in seen:
-            continue
-        seen.add(url)
-        results.append(
-            {
-                "title": _clean(item.get("title"), 120) or url,
-                "url": url,
-                "content": _clean(item.get("content") or item.get("snippet"), 300),
-            }
-        )
-        if len(results) >= _MAX_RESULTS:
-            break
-    return results
-
-
-def _search(query: str) -> list[dict]:
-    """请求 SearXNG 的 JSON 接口；命中缓存直接返回。"""
-    cached = _cache.get(query)
-    if cached is not None:
-        return cached
-
-    resp = httpx.get(
-        f"{_SEARXNG_URL}/search",
-        params={"q": query, "format": "json", "language": "zh-CN"},
-        timeout=_TIMEOUT_SECONDS,
-        trust_env=False,
-    )
-    resp.raise_for_status()
-    results = _parse_results(resp.json())
-    _cache[query] = results
-    return results
+# 每次搜索返回给模型的条数；一次诊断最多调用次数。
+_RESULT_LIMIT = 5
+_MAX_CALLS = 3
 
 
 def _format_for_model(query: str, results: list[dict]) -> str:
@@ -104,12 +52,12 @@ def _error_text(exc: Exception) -> str:
     if isinstance(exc, httpx.ConnectError):
         return "搜索失败：连不上 SearXNG，确认 searxng 容器已启动，且 SEARXNG_URL 指向它。"
     if isinstance(exc, httpx.TimeoutException):
-        return f"搜索失败：SearXNG 超过 {_TIMEOUT_SECONDS:g} 秒没有响应。"
+        return f"搜索失败：SearXNG 超过 {SEARXNG_TIMEOUT:g} 秒没有响应。"
     return f"搜索失败：{exc}"
 
 
 def make_web_search_tool():
-    """创建 web_search 工具（缓存是模块级的，调用次数按工具实例计）。"""
+    """创建 web_search 工具（调用次数按工具实例计）。"""
     calls = 0
 
     @tool
@@ -136,7 +84,7 @@ def make_web_search_tool():
         writer({"type": "tool_call", "tool": "web_search", "args": {"query": query}})
 
         try:
-            results = _search(query)
+            results = search_sync(query, limit=_RESULT_LIMIT)
         except Exception as exc:
             message = _error_text(exc)
             logger.warning("web_search 失败 query=%r: %s", query, exc)

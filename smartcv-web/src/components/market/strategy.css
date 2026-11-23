@@ -1,0 +1,112 @@
+/* 策略总结的写法提示 / 风险模块：整框一个分点列表，风险用暖色点。 */
+.pane-module.tip-module,
+.pane-module.risk-module {
+  padding: 10px 11px;
+}
+.pane-module.tip-module {
+  border-color: rgba(71, 83, 199, 0.16);
+}
+.pane-module.risk-module {
+  border-color: rgba(166, 118, 63, 0.18);
+}
+.pane-module.risk-module .fact::before {
+  background: var(--warn);
+}
+
+/* 结构化策略：标题 + 徽标 + 字段卡；空字段不渲染，长文本换行撑高容器。 */
+.strategy-pane {
+  min-width: 0;
+}
+
+.sp-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.sp-count {
+  font-size: 10.5px;
+  color: var(--text-3);
+}
+
+.sp-block {
+  padding: 8px 9px;
+}
+.sp-block + .sp-block {
+  margin-top: 7px;
+}
+.sp-block-name {
+  display: block;
+  margin-bottom: 3px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-3);
+}
+
+.sp-text {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+
+.sp-card {
+  padding: 8px 9px;
+}
+.sp-card + .sp-card {
+  margin-top: 7px;
+}
+.sp-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+.sp-card-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.6;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.sp-badge {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  line-height: 1.7;
+  white-space: nowrap;
+}
+.sp-badge.tone-high {
+  color: var(--warn);
+  background: rgba(166, 118, 63, 0.1);
+}
+.sp-badge.tone-medium {
+  color: var(--primary);
+  background: rgba(71, 83, 199, 0.09);
+}
+.sp-badge.tone-low {
+  color: var(--text-3);
+  background: var(--surface);
+}
+.sp-badge.tone-tag {
+  color: var(--text-2);
+  background: var(--surface);
+}
+
+.sp-field {
+  margin-top: 6px;
+}
+.sp-field-label {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-3);
+}
+.sp-links {
+  margin-top: 6px;
+}

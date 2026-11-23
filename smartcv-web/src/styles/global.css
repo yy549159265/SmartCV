@@ -1,54 +1,119 @@
 :root {
-  --app-bg: #f6f7f9;
+  /* ---------- 表面 ---------- */
+  --app-bg: #f2f4f8;
   --panel-bg: #ffffff;
-  --surface-soft: #f4f5f8;
-  --surface-sunken: #eceef3;
-  --border: #e4e6ec;
-  --border-strong: #d3d6df;
-  --text: #1c2130;
-  --text-secondary: #596175;
-  --text-tertiary: #8a91a6;
+  --surface-soft: #f5f6fa;
+  --surface-sunken: #e9ecf3;
+  --border: #e2e5ee;
+  --border-strong: #ccd1de;
+  --border-faint: #edeff5;
+
+  /* ---------- 墨色 ---------- */
+  --text: #181c29;
+  --text-secondary: #525a6e;
+  --text-tertiary: #798196;
+
+  /* ---------- 品牌 ---------- */
   --primary: #4753c7;
-  --primary-hover: #3c46b2;
+  --primary-hover: #3b46b4;
+  --primary-pressed: #323c9c;
   --primary-soft: #eceffb;
-  --primary-faint: #f4f5fc;
-  --danger: #a94f4a;
-  --danger-soft: #f7eae9;
-  --warning: #a6763f;
-  --warning-soft: #f6efe4;
-  --success: #3f8f5a;
-  --success-soft: #edf4ef;
-  --focus-ring: rgba(71, 83, 199, 0.35);
+  --primary-faint: #f6f7fd;
+  --primary-line: #d9ddf5;
+  --focus-ring: rgba(71, 83, 199, 0.42);
 
-  --radius-lg: 14px;
+  /* ---------- 语义 ---------- */
+  --danger: #a34640;
+  --danger-soft: #f8eae8;
+  --warning: #8f6128;
+  --warning-soft: #f7f0e4;
+  --success: #2f7d52;
+  --success-soft: #eaf3ed;
+
+  /* ---------- 圆角 ---------- */
+  --radius-xs: 6px;
+  --radius-sm: 8px;
   --radius-md: 10px;
-  --radius-sm: 7px;
-  --shadow-paper:
-    0 1px 2px rgba(28, 33, 48, 0.04),
-    0 18px 40px -24px rgba(28, 33, 48, 0.2);
-  --shadow-raised: 0 10px 30px -18px rgba(28, 33, 48, 0.22);
-  --ease: cubic-bezier(0.2, 0.7, 0.3, 1);
+  --radius-lg: 14px;
+  --radius-xl: 18px;
 
+  /* ---------- 阴影 ---------- */
+  --shadow-xs: 0 1px 2px rgba(24, 28, 41, 0.04);
+  --shadow-card:
+    0 1px 2px rgba(24, 28, 41, 0.04),
+    0 16px 40px -34px rgba(24, 28, 41, 0.26);
+  --shadow-paper:
+    0 1px 2px rgba(24, 28, 41, 0.04),
+    0 18px 44px -28px rgba(24, 28, 41, 0.22);
+  --shadow-raised: 0 18px 44px -30px rgba(24, 28, 41, 0.28);
+
+  /* ---------- 字体 ---------- */
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI Variable Text', 'Segoe UI', 'PingFang SC',
+    'HarmonyOS Sans SC', 'Microsoft YaHei UI', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+  --font-display:
+    'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, 'Songti SC', 'Noto Serif SC',
+    serif;
+  --font-mono:
+    ui-monospace, 'SFMono-Regular', 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;
+
+  --fs-3xl: 34px;
+  --fs-2xl: 27px;
+  --fs-xl: 21px;
+  --fs-lg: 17px;
+  --fs-md: 15px;
+  --fs-base: 14px;
+  --fs-sm: 13px;
+  --fs-xs: 12px;
+  --fs-2xs: 11px;
+
+  --lh-tight: 1.2;
+  --lh-snug: 1.45;
+  --lh-body: 1.7;
+
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+
+  /* ---------- 间距 ---------- */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-7: 28px;
+  --sp-8: 32px;
+  --sp-9: 40px;
+  --sp-10: 48px;
+
+  /* ---------- 动效 ---------- */
+  --dur-1: 120ms;
+  --dur-2: 180ms;
+  --dur-3: 280ms;
+  --ease: cubic-bezier(0.2, 0.7, 0.3, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* ---------- 编辑画布 ---------- */
   --doc-workspace: #e9ecf1;
   --doc-workspace-pad: 28px 24px 64px;
   --doc-page-gap: 32px;
   --doc-paper: #ffffff;
   --doc-paper-shadow:
-    0 0 0 1px rgba(28, 33, 48, 0.07),
-    0 2px 6px rgba(28, 33, 48, 0.08),
-    0 10px 20px -8px rgba(28, 33, 48, 0.16),
-    0 24px 48px -16px rgba(28, 33, 48, 0.24);
-
-  --font-sans:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
-    'Microsoft YaHei', sans-serif;
-  --font-display:
-    'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, 'Songti SC', 'Noto Serif SC',
-    serif;
+    0 0 0 1px rgba(24, 28, 41, 0.07),
+    0 2px 6px rgba(24, 28, 41, 0.08),
+    0 10px 20px -8px rgba(24, 28, 41, 0.16),
+    0 24px 48px -16px rgba(24, 28, 41, 0.24);
 }
 
 * {
   box-sizing: border-box;
+}
+
+html {
+  height: 100%;
+  color-scheme: light;
+  -webkit-text-size-adjust: 100%;
 }
 
 html,
@@ -60,15 +125,32 @@ body,
 
 body {
   font-family: var(--font-sans);
+  font-size: var(--fs-base);
+  line-height: 1.6;
   color: var(--text);
   background: var(--app-bg);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
+button,
 input,
-textarea,
+select,
+textarea {
+  font: inherit;
+}
+
 button {
-  font-family: inherit;
+  color: inherit;
+  transition:
+    background-color var(--dur-2) var(--ease),
+    border-color var(--dur-2) var(--ease),
+    color var(--dur-2) var(--ease);
+}
+
+button:disabled {
+  cursor: not-allowed;
 }
 
 :where(a, button, [role='button'], [tabindex]):focus-visible {
@@ -77,7 +159,103 @@ button {
 }
 
 ::selection {
-  background: rgba(71, 83, 199, 0.16);
+  background: rgba(71, 83, 199, 0.18);
+}
+
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- 按钮 ---------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--panel-bg);
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  transition:
+    background-color var(--dur-2) var(--ease),
+    border-color var(--dur-2) var(--ease),
+    color var(--dur-2) var(--ease),
+    box-shadow var(--dur-2) var(--ease),
+    transform var(--dur-1) var(--ease);
+}
+.btn:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  background: var(--surface-soft);
+  color: var(--text);
+}
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btn.primary {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: #fff;
+  box-shadow: 0 1px 2px rgba(71, 83, 199, 0.22);
+}
+.btn.primary:hover:not(:disabled) {
+  border-color: var(--primary-hover);
+  background: var(--primary-hover);
+  color: #fff;
+  box-shadow: 0 8px 20px -12px rgba(71, 83, 199, 0.8);
+}
+.btn.primary:active:not(:disabled) {
+  border-color: var(--primary-pressed);
+  background: var(--primary-pressed);
+  box-shadow: none;
+}
+.btn.ghost {
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-secondary);
+}
+.btn.ghost:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--surface-soft);
+  color: var(--text);
+}
+.btn.sm {
+  height: 30px;
+  padding: 0 12px;
+  border-radius: var(--radius-xs);
+  font-size: var(--fs-xs);
+}
+.btn .icon-glyph {
+  flex: none;
+}
+
+/* ---------- 骨架屏 ---------- */
+.skeleton {
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    var(--surface-soft),
+    var(--surface-sunken),
+    var(--surface-soft)
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s ease infinite;
+}
+@keyframes skeleton-shimmer {
+  to {
+    background-position: -200% 0;
+  }
 }
 
 .from-user .bubble::selection,
@@ -98,11 +276,11 @@ button {
   padding-left: 1.4em;
 }
 .md-body code {
-  background: rgba(89, 97, 117, 0.1);
+  background: rgba(82, 90, 110, 0.1);
   padding: 1px 5px;
   border-radius: 4px;
   font-size: 0.9em;
-  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-family: var(--font-mono);
 }
 .md-body pre {
   background: var(--surface-soft);
@@ -145,18 +323,18 @@ button {
 }
 
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 12px;
+  height: 12px;
 }
 ::-webkit-scrollbar-thumb {
-  background: #c6cbd8;
-  border: 3px solid transparent;
+  background: #c7cedd;
+  border: 4px solid transparent;
   border-radius: 999px;
   background-clip: content-box;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #aeb5c6;
-  border: 3px solid transparent;
+  background: #aeb6c8;
+  border: 4px solid transparent;
   background-clip: content-box;
 }
 ::-webkit-scrollbar-track {
@@ -164,27 +342,27 @@ button {
 }
 
 [data-diff] {
-  --diff-color: #a6763f;
-  --diff-bg: rgba(166, 118, 63, 0.13);
+  --diff-color: #8f6128;
+  --diff-bg: rgba(143, 97, 40, 0.13);
   position: relative;
   border-radius: 3px;
   background: var(--diff-bg);
   box-shadow: -3px 0 0 0 var(--diff-color);
 }
 [data-diff='added'] {
-  --diff-color: #3f8f5a;
-  --diff-bg: rgba(63, 143, 90, 0.12);
+  --diff-color: #2f7d52;
+  --diff-bg: rgba(47, 125, 82, 0.12);
 }
 [data-diff='removed'] {
-  --diff-color: #a94f4a;
-  --diff-bg: rgba(169, 79, 74, 0.11);
+  --diff-color: #a34640;
+  --diff-bg: rgba(163, 70, 64, 0.11);
   text-decoration: line-through;
   text-decoration-color: var(--diff-color);
 }
 
 [data-diff='restored'] {
-  --diff-color: #3f8f5a;
-  --diff-bg: rgba(63, 143, 90, 0.1);
+  --diff-color: #2f7d52;
+  --diff-bg: rgba(47, 125, 82, 0.1);
   text-decoration: none;
 }
 
@@ -224,13 +402,13 @@ button {
   padding: 0 1px;
 }
 .md-body del {
-  background: rgba(169, 79, 74, 0.14);
+  background: rgba(163, 70, 64, 0.14);
   text-decoration: line-through;
-  text-decoration-color: var(--danger, #a94f4a);
+  text-decoration-color: var(--danger, #a34640);
 }
 .md-body ins {
-  background: rgba(63, 143, 90, 0.22);
-  box-shadow: 0 0 0 1px rgba(63, 143, 90, 0.26);
+  background: rgba(47, 125, 82, 0.22);
+  box-shadow: 0 0 0 1px rgba(47, 125, 82, 0.26);
 }
 
 .preview-flash {
@@ -258,10 +436,10 @@ button {
 @keyframes diff-flash {
   0%,
   100% {
-    outline-color: rgba(169, 79, 74, 0.15);
+    outline-color: rgba(163, 70, 64, 0.15);
   }
   50% {
-    outline-color: rgba(169, 79, 74, 0.95);
+    outline-color: rgba(163, 70, 64, 0.95);
   }
 }
 

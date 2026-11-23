@@ -66,7 +66,7 @@ function remove(tag: string) {
   padding: 0 6px 0 10px;
   border-radius: 999px;
   background: var(--primary-soft);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.7;
   color: var(--primary-hover);
 }
@@ -81,7 +81,7 @@ function remove(tag: string) {
   border-radius: 50%;
   background: transparent;
   color: var(--text-tertiary);
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1;
   cursor: pointer;
   transition: background 0.12s var(--ease), color 0.12s var(--ease);
@@ -97,7 +97,7 @@ function remove(tag: string) {
   border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--panel-bg);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.5;
   color: var(--text);
   outline: none;

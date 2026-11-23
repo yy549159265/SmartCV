@@ -481,7 +481,7 @@ function openBackupSettings() {
   flex: none;
 }
 .editor-name-label {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--text-secondary);
   white-space: nowrap;
@@ -491,7 +491,7 @@ function openBackupSettings() {
   border: 1px solid transparent;
   border-radius: 7px;
   background: transparent;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--text);
   padding: 4px 8px;
@@ -540,7 +540,7 @@ function openBackupSettings() {
   padding: 0 4px;
   border-radius: 8px;
   background: var(--primary-soft);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   line-height: 16px;
   text-align: center;
@@ -569,12 +569,12 @@ function openBackupSettings() {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 12.5px;
+  font-size: 13.5px;
   font-weight: 600;
   color: var(--text);
 }
 .library-sub {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-tertiary);
 }
 .library-icon-btn {
@@ -687,7 +687,7 @@ function openBackupSettings() {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 12.5px;
+  font-size: 13.5px;
   color: var(--text-secondary);
 }
 .library-item.active .library-item-name {
@@ -695,7 +695,7 @@ function openBackupSettings() {
   color: var(--primary-hover);
 }
 .library-item-meta {
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: var(--text-tertiary);
 }
 .library-item-check {
@@ -722,14 +722,14 @@ function openBackupSettings() {
 }
 .library-empty-title {
   margin: 0;
-  font-size: 12.5px;
+  font-size: 13.5px;
   font-weight: 600;
   color: var(--text-secondary);
 }
 .library-empty-text {
   margin: 0;
   max-width: 230px;
-  font-size: 11.5px;
+  font-size: 12.5px;
   line-height: 1.6;
   color: var(--text-tertiary);
 }
@@ -750,7 +750,7 @@ function openBackupSettings() {
   border: 1px solid var(--border);
   border-radius: 7px;
   background: var(--panel-bg);
-  font-size: 11.5px;
+  font-size: 12.5px;
   font-weight: 500;
   color: var(--text-secondary);
   cursor: pointer;
@@ -821,7 +821,7 @@ function openBackupSettings() {
   border: none;
   border-radius: 6px;
   background: transparent;
-  font-size: 11.5px;
+  font-size: 12.5px;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
   color: var(--text-secondary);
@@ -850,7 +850,7 @@ function openBackupSettings() {
   border: none;
   border-radius: 7px;
   background: transparent;
-  font-size: 11.5px;
+  font-size: 12.5px;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
   color: var(--text-secondary);
@@ -878,7 +878,7 @@ function openBackupSettings() {
   gap: 10px;
 }
 .width-menu-label {
-  font-size: 11.5px;
+  font-size: 12.5px;
   font-weight: 600;
   color: var(--text-tertiary);
 }
@@ -909,12 +909,12 @@ function openBackupSettings() {
   background: var(--primary-faint);
 }
 .width-preset-name {
-  font-size: 11.5px;
+  font-size: 12.5px;
   font-weight: 600;
   color: var(--text);
 }
 .width-preset-value {
-  font-size: 10.5px;
+  font-size: 11.5px;
   font-variant-numeric: tabular-nums;
   color: var(--text-tertiary);
 }
@@ -935,7 +935,7 @@ function openBackupSettings() {
   flex: none;
   width: 76px;
   text-align: right;
-  font-size: 11.5px;
+  font-size: 12.5px;
   font-variant-numeric: tabular-nums;
   color: var(--text-secondary);
 }

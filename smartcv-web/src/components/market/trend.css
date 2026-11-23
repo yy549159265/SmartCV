@@ -1,0 +1,420 @@
+/* 技术趋势：五块矩阵共用玻璃卡片；所有文字完整换行，不省略。 */
+
+.trend-matrix {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.tm-lead {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.65;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+.tm-toolbar {
+  display: flex;
+  justify-content: flex-end;
+}
+.tm-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  border: 1px solid rgba(28, 33, 48, 0.06);
+  background: var(--surface);
+}
+.tm-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-3);
+  font-size: 11px;
+  line-height: 1.4;
+  cursor: pointer;
+  transition:
+    background 0.16s var(--ease),
+    color 0.16s var(--ease),
+    box-shadow 0.16s var(--ease);
+}
+.tm-toggle-btn:hover {
+  color: var(--text);
+}
+.tm-toggle-btn.active {
+  background: var(--panel);
+  color: var(--primary);
+  box-shadow: 0 1px 2px rgba(28, 33, 48, 0.07);
+}
+.tm-toggle-btn:focus-visible {
+  outline: 2px solid rgba(71, 83, 199, 0.35);
+  outline-offset: 1px;
+}
+
+.tm-section {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.tm-stat {
+  padding: 8px 10px;
+  border: 1px solid rgba(28, 33, 48, 0.05);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.55);
+}
+.tm-stat-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  min-width: 0;
+}
+.tm-stat-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.tm-num {
+  flex: none;
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.tm-meter {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 4px;
+}
+.tm-track {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.tm-track i {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: #8b93d8;
+  transition: width 0.35s var(--ease);
+}
+.tm-meta-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  margin-top: 4px;
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--text-3);
+  overflow-wrap: anywhere;
+}
+
+/* 鱼骨图：中心主题 → 垂直脊柱 → 领域分支 → 技术卡片。 */
+.tm-fish {
+  padding: 9px 10px 10px;
+  border: 1px solid rgba(28, 33, 48, 0.05);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.52);
+}
+.tm-fish-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding-bottom: 7px;
+  border-bottom: 1px dashed rgba(28, 33, 48, 0.08);
+}
+.tm-fish-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+.tm-fish-center {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.tm-fish-range {
+  flex: 0 1 auto;
+  max-width: 100%;
+  font-size: 10.5px;
+  line-height: 1.4;
+  color: var(--text-3);
+  overflow-wrap: anywhere;
+}
+.tm-axis {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 3px 8px;
+  padding: 6px 0 2px;
+  font-size: 10px;
+  line-height: 1.4;
+  color: var(--text-3);
+}
+.tm-branches {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin-top: 4px;
+  padding-left: 16px;
+}
+.tm-branches::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 5px;
+  width: 2px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, rgba(71, 83, 199, 0.35), rgba(71, 83, 199, 0.08));
+}
+.tm-branch {
+  position: relative;
+  min-width: 0;
+}
+.tm-branch-head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.tm-branch-head::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: -11px;
+  width: 11px;
+  height: 1px;
+  background: rgba(71, 83, 199, 0.28);
+}
+.tm-branch-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--primary);
+  box-shadow: 0 0 0 3px rgba(71, 83, 199, 0.1);
+}
+.tm-branch-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+.tm-branch-meta {
+  flex: none;
+  font-size: 10px;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+.tm-tech {
+  margin-top: 6px;
+  padding: 7px 8px;
+}
+.tm-tech-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  min-width: 0;
+}
+.tm-tech-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.tm-tech-num {
+  flex: none;
+  font-size: 10.5px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.tm-spark {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 32px;
+  margin-top: 5px;
+  padding-top: 2px;
+}
+.tm-bar {
+  display: flex;
+  flex: 1;
+  align-items: flex-end;
+  height: 100%;
+  min-width: 0;
+  border-radius: 3px;
+  background: rgba(71, 83, 199, 0.05);
+}
+.tm-bar i {
+  display: block;
+  width: 100%;
+  border-radius: 3px 3px 1px 1px;
+  background: linear-gradient(180deg, #8b93d8, #636dc9);
+}
+
+/* 技术生态 / 趋势 / 问题卡片。 */
+.tm-card {
+  padding: 8px 9px;
+}
+.tm-card-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  min-width: 0;
+}
+.tm-card-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.tm-badge {
+  flex: none;
+  padding: 0 5px;
+  border-radius: 4px;
+  font-size: 10px;
+  line-height: 1.7;
+  white-space: normal;
+  background: var(--surface);
+  color: var(--text-3);
+}
+.tm-badge.trend-rising,
+.tm-badge.trend-emerging {
+  background: var(--success-soft);
+  color: var(--success);
+}
+.tm-badge.trend-declining {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+.tm-badge.trend-stable {
+  background: var(--surface);
+  color: var(--text-3);
+}
+.tm-desc {
+  margin: 4px 0 0;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+.tm-impact {
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+  margin: 4px 0 0;
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+.tm-impact-label {
+  flex: none;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-size: 10px;
+  line-height: 1.7;
+}
+.tm-note {
+  margin: 4px 0 0;
+  font-size: 10.5px;
+  line-height: 1.55;
+  color: var(--text-3);
+  overflow-wrap: anywhere;
+}
+.tm-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 5px;
+}
+.tm-chip {
+  max-width: 100%;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--primary-faint);
+  color: var(--primary);
+  font-size: 10px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+/* 场景月度变化：每根柱子都带月份和次数，完整展示。 */
+.tm-scenario-chart {
+  display: flex;
+  gap: 3px;
+  margin-top: 6px;
+}
+.tm-scenario-bar {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+.tm-scenario-count {
+  font-size: 10px;
+  line-height: 1.3;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+.tm-scenario-track {
+  display: flex;
+  align-items: flex-end;
+  width: 100%;
+  height: 34px;
+  border-radius: 4px;
+  background: rgba(71, 83, 199, 0.05);
+}
+.tm-scenario-track i {
+  display: block;
+  width: 100%;
+  border-radius: 4px 4px 1px 1px;
+  background: linear-gradient(180deg, #8b93d8, #636dc9);
+}
+.tm-scenario-month {
+  font-size: 10px;
+  line-height: 1.2;
+  color: var(--text-3);
+  text-align: center;
+  overflow-wrap: anywhere;
+}

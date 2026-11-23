@@ -9,6 +9,8 @@ import type { Section, LayoutWindow } from '@/types'
 const props = defineProps<{
   section: Section
   row: LayoutWindow
+  sectionIndex?: number
+  leafIndices?: Record<string, number>
   tableCols?: number
   marks?: DiffMarks
   controls?: DiffControls
@@ -18,6 +20,14 @@ const props = defineProps<{
 const isContainer = (row: LayoutWindow) => Array.isArray(row.rows)
 
 const cols = computed(() => props.tableCols ?? computeTableCols(props.row.rows ?? []))
+
+const leafIndex = computed(() => props.leafIndices?.[props.row.id])
+
+/** 文字单元编号只数可引用内容，与后端 iter_text_units 的 c 保持一致。 */
+const TEXT_TYPES = new Set(['iconText', 'twoColumn', 'timeRange', 'listText', 'tag'])
+
+const contentIndex = (index: number) =>
+  props.row.contents.slice(0, index).filter((item) => TEXT_TYPES.has(item.type)).length
 
 function childGridStyle(index: number): CSSProperties | undefined {
   if (props.row.layout !== 'horizontal') return undefined
@@ -61,6 +71,8 @@ const unitDiffsOf = (id: string) => props.unitDiffs?.[id]
         :key="child.id"
         :section="section"
         :row="child"
+        :section-index="sectionIndex"
+        :leaf-indices="leafIndices"
         :table-cols="cols"
         :marks="marks"
         :controls="controls"
@@ -75,11 +87,14 @@ const unitDiffsOf = (id: string) => props.unitDiffs?.[id]
       :class="row.layout === 'horizontal' ? 'row-h' : 'row-v'"
     >
       <PreviewContent
-        v-for="b in row.contents"
+        v-for="(b, index) in row.contents"
         :key="b.id"
         :section="section"
         :row="row"
         :content="b"
+        :section-index="sectionIndex"
+        :leaf-index="leafIndex"
+        :content-index="TEXT_TYPES.has(b.type) ? contentIndex(index) : undefined"
         :diff-mark="contentMark(b.id)"
         :diff-view="contentView(b.id)"
         :diff-units="unitMarks(b.id)"
@@ -136,6 +151,8 @@ const unitDiffsOf = (id: string) => props.unitDiffs?.[id]
 }
 .row-h > :deep(.preview-content) {
   flex: 1 1 0;
+  /* 字号调大后不再被压成几个字一行：放不下就整体换到下一行占满宽度 */
+  min-width: min(100%, 9em);
 }
 .row-h > :deep(.preview-content.tight) {
   flex: 0 1 auto;

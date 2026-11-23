@@ -14,7 +14,7 @@ import {
   type RowPreset,
 } from '@/data/presets'
 import { uid } from '@/utils/id'
-import { mergeStyle } from '@/utils/style'
+import { clearTypography, mergeStyle } from '@/utils/style'
 import type { PagePlan, PageUnit } from '@/utils/pagination'
 
 const MAX_HISTORY = 50
@@ -377,6 +377,20 @@ export const useResumeStore = defineStore('resume', {
       if (patch.icon !== undefined) g.icon = patch.icon
       if (patch.pageBreakBefore !== undefined) g.pageBreakBefore = patch.pageBreakBefore
       mergeStyle(g.style, patch.style)
+    },
+
+    /** 章节及内部所有组件的字号 / 标题字号 / 行距恢复默认（跟随），其余样式不动 */
+    resetSectionTypography(sectionId: string) {
+      const section = this.resume.find((g) => g.id === sectionId)
+      if (!section) return
+      clearTypography(section.style)
+      const walk = (rows: LayoutWindow[]) => {
+        for (const row of rows) {
+          for (const content of row.contents ?? []) clearTypography(content.style)
+          if (row.rows) walk(row.rows)
+        }
+      }
+      walk(section.rows)
     },
 
     moveSection(id: string, toIndex: number) {

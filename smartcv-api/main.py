@@ -25,30 +25,74 @@ import asyncio
 import contextlib
 import faulthandler
 import logging
+from logging.handlers import RotatingFileHandler
 import os
+import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 from uuid import UUID
 
 faulthandler.enable()
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-logging.getLogger().setLevel(logging.INFO)
+# Windows 控制台 / 重定向到文件时，输出流可能是 GBK 或 ASCII；中文日志会被
+# logging 退化成 \xe5\x81\x9a 这类转义。统一成 UTF-8，日志可读。
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):
+        pass
+
+_LOG_LEVEL = os.getenv("SMARTCV_LOG_LEVEL", "INFO").upper()
+
+_log_fmt = logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
+
+# 控制台：只打印 INFO 及以上，保持正常输出
+_console_handler = logging.StreamHandler()
+_console_handler.setLevel(logging.INFO)
+_console_handler.setFormatter(_log_fmt)
+
+# 文件：DEBUG 及以上都写（debug 只进文件，不刷控制台）。文件被 .gitignore 的 *.log 忽略。
+# _LOG_DIR = Path(__file__).resolve().parent / "logs"
+# _LOG_DIR.mkdir(parents=True, exist_ok=True)
+# _file_handler = RotatingFileHandler(
+#     _LOG_DIR / "smartcv-api.log",
+#     maxBytes=5 * 1024 * 1024,
+#     backupCount=3,
+#     encoding="utf-8",
+# )
+# _file_handler.setLevel(logging.DEBUG)
+# _file_handler.setFormatter(_log_fmt)
+
+logging.basicConfig(level=_LOG_LEVEL, handlers=[_console_handler])
+logging.getLogger().setLevel(_LOG_LEVEL)
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from agents.resume.optimize.utils.checkpointer import clear_checkpoints, close_checkpointer, open_checkpointer
+from agents.resume.marker.tools.fetch import close_fetchers
+from agents.utils.checkpointer import (
+    clear_checkpoints,
+    close_checkpointer,
+    open_checkpointer,
+    prune_idle_threads,
+)
 from routers import agent as agent_router
 from routers import business as business_router
+from routers import interview as interview_router
+from routers import market as market_router
 from schemas.response import error
 from services.html2pdf import close_browser
 
 
 _CHECKPOINT_DB = Path(__file__).resolve().parent / "chat_checkpoints.sqlite"
 _CHECKPOINT_CLEANUP_SECONDS = 60 * 60
+
+# 面试检查点独立存放：进行中的一场面试不能被 chat 的整库清理误伤。
+_INTERVIEW_CHECKPOINT_DB = Path(__file__).resolve().parent / "interview_checkpoints.sqlite"
+_INTERVIEW_IDLE_SECONDS = 60 * 60
+_INTERVIEW_PRUNE_SECONDS = 10 * 60
 
 
 async def _checkpoint_cleanup_loop() -> None:
@@ -62,17 +106,38 @@ async def _checkpoint_cleanup_loop() -> None:
             logger.exception("清空 chat 检查点失败")
 
 
+async def _interview_prune_loop() -> None:
+    """按线程最后更新时间裁剪面试检查点：空闲超过 1h 的线程删除。"""
+    while True:
+        await asyncio.sleep(_INTERVIEW_PRUNE_SECONDS)
+        try:
+            removed = await asyncio.to_thread(
+                prune_idle_threads, "interview", _INTERVIEW_IDLE_SECONDS
+            )
+            if removed:
+                logger.info("已清理 %d 个空闲面试线程", removed)
+        except Exception:
+            logger.exception("清理面试检查点失败")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """启动时打开 chat 的 sqlite 检查点，并启动 1h 清理循环；退出时释放。"""
+    """启动时打开 chat / interview 两个 saver 与各自清理循环；退出时释放。"""
     await open_checkpointer(str(_CHECKPOINT_DB))
+    await open_checkpointer(str(_INTERVIEW_CHECKPOINT_DB), name="interview")
     cleanup_task = asyncio.create_task(_checkpoint_cleanup_loop())
+    interview_task = asyncio.create_task(_interview_prune_loop())
     yield
     cleanup_task.cancel()
+    interview_task.cancel()
     with contextlib.suppress(asyncio.CancelledError):
         await cleanup_task
+    with contextlib.suppress(asyncio.CancelledError):
+        await interview_task
     await close_checkpointer()
+    await close_checkpointer("interview")
     await close_browser()
+    await close_fetchers()
 
 
 app = FastAPI(title="SmartCV API", lifespan=lifespan)
@@ -173,6 +238,8 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 
 app.include_router(business_router.router)
 app.include_router(agent_router.router)
+app.include_router(market_router.router)
+app.include_router(interview_router.router)
 
 
 if __name__ == "__main__":

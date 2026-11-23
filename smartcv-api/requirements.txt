@@ -1,34 +1,24 @@
-# SmartCV 后端依赖
-# 版本：全部锁定为当前开发机（.venv）实际跑通的版本。
-# docling 本地解析已停用，下面的 docling / pypdfium2 / easyocr 注释保留以便恢复；
-# 恢复时 docling 版本必须与 docling-models/ 里的模型目录名一致，否则离线找不到模型。
-
 # Web 框架
 fastapi==0.141.1
 uvicorn[standard]==0.52.4
 python-multipart==0.0.32
 pydantic==2.13.4
 cachetools==7.1.7
+aiosqlite==0.22.1
+pyyaml==6.0.3
+httpx==0.28.1
 
 # LLM 框架（LangGraph 编排多 Agent）
 langchain==1.3.15
 langchain-core==1.6.0
 langchain-openai==1.6.0
 langgraph==1.2.11
-# chat 会话检查点（agents/resume/optimize/utils/checkpointer.py 的 AsyncSqliteSaver）。
-# langgraph 本体不带它，必须显式装；本地 .venv 已有，Docker 镜像只装 requirements，
-# 漏掉就会在启动时 ModuleNotFoundError: No module named 'langgraph.checkpoint.sqlite'。
 langgraph-checkpoint-sqlite==3.1.1
-aiosqlite==0.22.1
-# 供应商/技能模块
-pyyaml==6.0.3
-httpx==0.28.1
 
-## PDF 本地解析（已停用，保留以便恢复）
-#docling==2.123.0
-#pypdfium2==5.13.0
-## OCR 引擎：docling 扫描件路径用 EasyOCR（中文 ch_sim + en）
-#easyocr==1.7.2
 
 # PDF 导出（无头 Chromium 打印 HTML）
 playwright==1.62.0
+
+# 网页抓取（Scrapling 带浏览器指纹抓取 + 正文转 Markdown）
+scrapling[fetchers]==0.5.1
+markdownify==1.2.3

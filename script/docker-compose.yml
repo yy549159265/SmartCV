@@ -1,14 +1,16 @@
+# SmartCV 部署编排。默认运行目录 /opt/smartcv（deploy.ps1 的 RemoteDir），
+# 持久化目录统一放在 /opt/smartcv/{backend,frontend,searxng} 下，首次启动由 docker 自动创建。
 services:
   backend:
     image: registry.cn-hangzhou.aliyuncs.com/smartcv/smartcv-backend:v1
     ports:
       - "8600:8600"
     volumes:
-      - /opt/smartcv/stats:/app/data
-      - /opt/smartcv/reference-examples:/app/reference-examples
+      - /opt/smartcv/backend/data:/app/data
+      - /opt/smartcv/backend/reference-examples:/app/reference-examples
     environment:
       SMARTCV_REFERENCE_DIR: /app/reference-examples
-      SEARXNG_URL: http://searxng:8080
+      SEARXNG_URL: http://searxng:8088
     depends_on:
       - searxng
     healthcheck:
@@ -18,16 +20,43 @@ services:
       retries: 5
       start_period: 20s
 
+  asr:
+    # Sherpa-ONNX 语音识别 WebSocket 服务，供前端「语音输入」使用。
+    # 模型已打进镜像；容器内监听 6006，前端 nginx 通过 /asr 反代到这里。
+    image: registry.cn-hangzhou.aliyuncs.com/smartcv/smartcv-sherpa-asr:v1
+    restart: unless-stopped
+    ports:
+      # 默认只绑宿主机回环，便于本机联调；公网访问走 nginx 的 /asr
+      - "${ASR_HOST:-127.0.0.1}:${ASR_PORT:-6006}:6006"
+    environment:
+      # 解码线程；1/2/4 线程实测基本一致，8 线程会因争抢变慢
+      NUM_THREADS: "2"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; s=socket.socket(); s.settimeout(3); s.connect(('127.0.0.1',6006)); s.close()"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      # 启动时要加载并预热 ONNX 模型，首次启动给足时间
+      start_period: 40s
+    logging:
+      driver: json-file
+      options:
+        max-size: "1m"
+        max-file: "1"
+
   frontend:
     image: registry.cn-hangzhou.aliyuncs.com/smartcv/smartcv-frontend:v1
     depends_on:
       backend:
         condition: service_healthy
+      asr:
+        # 只等容器起来，ASR 异常时不连坐整个站点；nginx 启动时能解析到 asr 即可
+        condition: service_started
     ports:
       - "443:443"
     volumes:
-      - /opt/smartcv/certs/:/etc/nginx/certs:ro
-      - /opt/smartcv/logs:/var/log/nginx
+      - /opt/smartcv/frontend/certs:/etc/nginx/certs:ro
+      - /opt/smartcv/frontend/logs:/var/log/nginx
     command:
       - /bin/sh
       - -c
@@ -47,19 +76,59 @@ services:
       start_period: 10s
 
   searxng:
-    image: searxng/searxng:v1
-    pull_policy: never
-    ports:
-      - "8080:8080"
-    volumes:
-      - ./searxng:/etc/searxng
-    environment:
-      SEARXNG_BASE_URL: http://searxng:8080/
-      SEARXNG_SECRET: ${SEARXNG_SECRET:-smartcv-searxng-secret}
+    # 拉不下来时换成镜像站：m.daocloud.io/ghcr.io/searxng/searxng:latest
+    # 或 docker.1ms.run/searxng/searxng:latest
+    image: registry.cn-hangzhou.aliyuncs.com/smartcv/searxng:v1
     restart: unless-stopped
+    depends_on:
+      valkey:
+        condition: service_healthy
+    ports:
+      # 内网端口和宿主机端口都是 8088，和 agents/utils/searxng.py 的默认地址一致
+      - "${SEARXNG_HOST:-127.0.0.1}:${SEARXNG_PORT:-8088}:8088"
+    volumes:
+      # 配置目录：只放仓库带来的 settings.yml，其余默认配置由镜像提供
+      - /opt/smartcv/searxng:/etc/searxng:rw
+      - /opt/smartcv/searxng/cache:/var/cache/searxng
+    environment:
+      # 官方 entrypoint 会把它转成 GRANIAN_PORT，容器内 granian 直接监听 8088
+      SEARXNG_PORT: "8088"
+      # 只监听 127.0.0.1 时用默认值即可；改成对外监听前先在 .env 里换掉
+      SEARXNG_SECRET: ${SEARXNG_SECRET:-smartcv-searxng-secret}
+      SEARXNG_BASE_URL: ${SEARXNG_BASE_URL:-http://searxng:8088/}
+      SEARXNG_VALKEY_URL: redis://valkey:6379/0
+      # 清空代理变量：宿主机 / docker daemon 的代理配置串进 SearXNG 后，
+      # 所有引擎都会走代理并整批超时
+      HTTP_PROXY: ""
+      HTTPS_PROXY: ""
+      http_proxy: ""
+      https_proxy: ""
+    logging:
+      driver: json-file
+      options:
+        max-size: "1m"
+        max-file: "1"
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/healthz"]
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8088/healthz"]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 20s
+
+  valkey:
+    image: registry.cn-hangzhou.aliyuncs.com/smartcv/valkey:8-alpine
+    command: valkey-server --save 300 1 --save 60 1000 --loglevel warning
+    restart: unless-stopped
+    volumes:
+      - /opt/smartcv/searxng/valkey:/data
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    logging:
+      driver: json-file
+      options:
+        max-size: "1m"
+        max-file: "1"

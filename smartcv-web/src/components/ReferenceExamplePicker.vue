@@ -103,7 +103,7 @@ function goLibrary() {
         @click="collapsed = !collapsed"
       >
         <span class="ref-caret" :class="{ open: !collapsed }" aria-hidden="true"></span>
-        <span class="ref-toggle-text">优秀示例（可选，最多 3 份）</span>
+        <span class="ref-toggle-text">优秀示例</span>
         <span v-if="selected.length" class="ref-selected-count">已选 {{ selected.length }} 份</span>
         <span class="ref-toggle-spacer" />
         <span v-if="collapsed && selectedPreview" class="ref-selected-preview">
@@ -247,7 +247,7 @@ function goLibrary() {
   padding: 9px 0 9px 16px;
   border: none;
   background: transparent;
-  font-size: 12.5px;
+  font-size: 13.5px;
   font-weight: 600;
   color: var(--text-secondary);
   text-align: left;
@@ -298,7 +298,7 @@ function goLibrary() {
   border-radius: 999px;
   background: var(--primary-soft);
   color: var(--primary-hover);
-  font-size: 10.5px;
+  font-size: 11.5px;
   font-weight: 600;
   white-space: nowrap;
 }
@@ -311,7 +311,7 @@ function goLibrary() {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 400;
   color: var(--text-tertiary);
 }
@@ -324,7 +324,7 @@ function goLibrary() {
   border: none;
   border-radius: 7px;
   background: transparent;
-  font-size: 11.5px;
+  font-size: 12.5px;
   font-weight: 500;
   color: var(--primary);
   white-space: nowrap;
@@ -360,7 +360,7 @@ function goLibrary() {
 }
 .ref-selected-direction {
   flex: none;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text);
 }
@@ -369,7 +369,7 @@ function goLibrary() {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-tertiary);
 }
 .ref-selected-remove {
@@ -400,7 +400,7 @@ function goLibrary() {
   gap: 8px;
 }
 .ref-modal-title {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 600;
   color: var(--text);
 }
@@ -408,7 +408,7 @@ function goLibrary() {
   padding: 1px 7px;
   border-radius: 999px;
   background: var(--surface-sunken);
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: var(--text-tertiary);
   font-variant-numeric: tabular-nums;
 }
@@ -466,8 +466,8 @@ function goLibrary() {
   margin-top: 1px;
   border: 1px solid var(--border-strong);
   border-radius: 50%;
-  font-size: 10px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 600;
   line-height: 1;
   color: transparent;
   transition:
@@ -493,12 +493,12 @@ function goLibrary() {
   gap: 4px 8px;
 }
 .ref-item-direction {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text);
 }
 .ref-item-meta {
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: var(--text-tertiary);
 }
 .ref-item-desc {
@@ -506,7 +506,7 @@ function goLibrary() {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  font-size: 11.5px;
+  font-size: 12.5px;
   line-height: 1.55;
   color: var(--text-secondary);
   overflow-wrap: anywhere;
@@ -517,7 +517,7 @@ function goLibrary() {
   flex-wrap: wrap;
   gap: 10px;
   padding: 22px 0;
-  font-size: 11.5px;
+  font-size: 12.5px;
   line-height: 1.6;
   color: var(--text-secondary);
   justify-content: center;
@@ -529,7 +529,7 @@ function goLibrary() {
 }
 .ref-limit-tip {
   margin: 0;
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: var(--text-tertiary);
 }
 .ref-modal-footer {

@@ -1,0 +1,230 @@
+/* 产出总线各面板共用的玻璃表面、分点列表与来源链接。 */
+
+.glass-surface {
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 12px;
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.82), rgba(246, 247, 252, 0.62));
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.95) inset,
+    0 18px 36px -30px rgba(28, 33, 48, 0.6);
+  backdrop-filter: blur(22px) saturate(1.5);
+  -webkit-backdrop-filter: blur(22px) saturate(1.5);
+}
+.glass-item {
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 1px 2px rgba(28, 33, 48, 0.055);
+  backdrop-filter: blur(14px) saturate(1.3);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
+  transition:
+    background 0.17s var(--ease),
+    border-color 0.17s var(--ease),
+    box-shadow 0.17s var(--ease);
+}
+.glass-item:hover {
+  border-color: rgba(255, 255, 255, 1);
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 1),
+    0 10px 20px -16px rgba(28, 33, 48, 0.55);
+}
+.glass-item.hl {
+  border-color: rgba(71, 83, 199, 0.24);
+  background: rgba(236, 239, 251, 0.72);
+}
+.pane-empty {
+  padding: 18px 2px;
+  font-size: 12.5px;
+  line-height: 1.75;
+  color: var(--text-3);
+}
+.module-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 7px;
+}
+.module-sub {
+  font-size: 10.5px;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+.pane-module {
+  padding: 8px 9px;
+}
+.point-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.point-list > li {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-2);
+}
+.point-mark {
+  flex: none;
+  width: 5px;
+  height: 5px;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: var(--primary);
+}
+.point-mark.up,
+.point-mark.hit {
+  background: var(--success);
+}
+.point-mark.down,
+.point-mark.gap {
+  background: var(--warn);
+}
+.point-mark.flat {
+  background: var(--text-3);
+}
+.point-body {
+  flex: 1;
+  min-width: 0;
+}
+.point-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+/* 跨源分析：所有类别共用同一套卡片排版，与技术矩阵其它页签一致。 */
+.syn-block {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.syn-lead {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.65;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+.syn-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.syn-card {
+  padding: 8px 9px;
+}
+.syn-card.hl {
+  border-color: rgba(71, 83, 199, 0.24);
+  background: rgba(236, 239, 251, 0.72);
+}
+.syn-card-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  min-width: 0;
+}
+.syn-card-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.syn-badge {
+  flex: none;
+  padding: 0 5px;
+  border-radius: 4px;
+  font-size: 10px;
+  line-height: 1.7;
+  white-space: normal;
+  background: var(--surface);
+  color: var(--text-3);
+}
+.syn-text {
+  margin: 4px 0 0;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+.syn-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 5px;
+}
+.syn-chip {
+  max-width: 100%;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--primary-faint);
+  color: var(--primary);
+  font-size: 10px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+/* 结论分块：同一类结论收进浅色卡片，块与块之间留白。 */
+.extra-block {
+  padding: 7px 8px;
+  border: 1px solid rgba(28, 33, 48, 0.045);
+  border-radius: 9px;
+  background: rgba(244, 245, 248, 0.72);
+}
+.extra-block + .extra-block {
+  margin-top: 8px;
+}
+
+.srclist {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: auto;
+  flex: none;
+}
+.src {
+  padding: 0 4px;
+  border-radius: 3px;
+  font-size: 11px;
+  line-height: 1.5;
+  background: var(--primary-faint);
+  color: var(--primary);
+  text-decoration: none;
+  font-variant-numeric: tabular-nums;
+}
+.src:hover {
+  background: var(--primary-soft);
+}
+.src-more {
+  font-size: 11px;
+  color: var(--text-3);
+}
+.src-date {
+  margin-left: 2px;
+  opacity: 0.55;
+  font-size: 10px;
+}
+.mod-swap-leave-active {
+  transition:
+    opacity 0.16s var(--ease),
+    transform 0.16s var(--ease);
+}
+.mod-swap-enter-from {
+  opacity: 0;
+  transform: translateY(4px);
+}
+.mod-swap-leave-to {
+  opacity: 0;
+  transform: translateY(-3px);
+}

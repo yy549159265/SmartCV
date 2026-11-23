@@ -1,0 +1,176 @@
+/* 招聘矩阵：结构化四块共用「名称 + 标签 + 页面数 + 占比条」的行式排版；文字一律完整换行。 */
+
+.jobs-matrix {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.jm-lead {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.65;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+.jm-section {
+  padding: 8px 10px;
+  border: 1px solid rgba(28, 33, 48, 0.05);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.55);
+}
+.jm-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid rgba(28, 33, 48, 0.06);
+}
+.jm-head-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+.jm-head-meta {
+  margin-left: auto;
+  font-size: 10.5px;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+.jm-stat {
+  padding: 7px 0;
+}
+.jm-stat:last-child {
+  padding-bottom: 1px;
+}
+.jm-stat + .jm-stat {
+  border-top: 1px solid rgba(28, 33, 48, 0.05);
+}
+.jm-stat-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  min-width: 0;
+}
+.jm-stat-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.jm-num {
+  flex: none;
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.jm-meter {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 4px;
+}
+.jm-track {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.jm-track i {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: #8b93d8;
+  transition: width 0.35s var(--ease);
+}
+.jm-badge {
+  flex: none;
+  padding: 0 5px;
+  border-radius: 4px;
+  font-size: 10px;
+  line-height: 1.6;
+  white-space: nowrap;
+  background: var(--surface);
+  color: var(--text-3);
+}
+.jm-badge.req-must_have {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+.jm-badge.req-preferred {
+  background: var(--success-soft);
+  color: var(--success);
+}
+.jm-badge.req-common {
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+.jm-badge.imp-high {
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+.jm-badge.imp-medium {
+  background: var(--success-soft);
+  color: var(--success);
+}
+.jm-desc {
+  margin: 3px 0 0;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+.jm-note {
+  margin: 4px 0 0;
+  font-size: 10.5px;
+  line-height: 1.55;
+  color: var(--text-3);
+  overflow-wrap: anywhere;
+}
+.jm-meta-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  padding-top: 6px;
+  font-size: 10.5px;
+  color: var(--text-3);
+}
+.jm-salary-list {
+  margin-top: 2px;
+}
+.jm-salary-item {
+  padding: 6px 0;
+}
+.jm-salary-item + .jm-salary-item {
+  border-top: 1px solid rgba(28, 33, 48, 0.05);
+}
+.jm-salary-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 6px;
+  min-width: 0;
+}
+.jm-salary-value {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--success);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.jm-meta-text {
+  display: block;
+  margin-top: 1px;
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--text-3);
+  overflow-wrap: anywhere;
+}

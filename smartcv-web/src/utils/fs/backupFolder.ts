@@ -7,6 +7,10 @@ export interface BackupFileInfo {
   size: number
 }
 
+/** 市场洞察的来源库：和简历放在同一个备份文件夹里，但不作为简历展示。 */
+export const MARKET_SOURCES_FILE = 'market-sources.json'
+const RESERVED_FILES = new Set([MARKET_SOURCES_FILE.toLowerCase()])
+
 function isJsonName(name: string): boolean {
   return /\.json$/i.test(name)
 }
@@ -14,7 +18,7 @@ function isJsonName(name: string): boolean {
 export async function listResumeFiles(dir: FileSystemDirectoryHandle): Promise<BackupFileInfo[]> {
   const files: BackupFileInfo[] = []
   for await (const [name, handle] of dir.entries()) {
-    if (handle.kind !== 'file' || !isJsonName(name)) continue
+    if (handle.kind !== 'file' || !isJsonName(name) || RESERVED_FILES.has(name.toLowerCase())) continue
     try {
       const file = await (handle as FileSystemFileHandle).getFile()
       files.push({
@@ -30,13 +34,13 @@ export async function listResumeFiles(dir: FileSystemDirectoryHandle): Promise<B
   return files
 }
 
-export async function readResumeJson(dir: FileSystemDirectoryHandle, name: string): Promise<unknown> {
+export async function readBackupJson(dir: FileSystemDirectoryHandle, name: string): Promise<unknown> {
   const handle = await dir.getFileHandle(name)
   const text = await (await handle.getFile()).text()
   return JSON.parse(text)
 }
 
-export async function writeResumeJson(
+export async function writeBackupJson(
   dir: FileSystemDirectoryHandle,
   name: string,
   data: unknown,
@@ -49,6 +53,18 @@ export async function writeResumeJson(
     await writable.close()
   }
   return (await handle.getFile()).lastModified
+}
+
+export function readResumeJson(dir: FileSystemDirectoryHandle, name: string): Promise<unknown> {
+  return readBackupJson(dir, name)
+}
+
+export function writeResumeJson(
+  dir: FileSystemDirectoryHandle,
+  name: string,
+  data: unknown,
+): Promise<number> {
+  return writeBackupJson(dir, name, data)
 }
 
 export async function writeBlobToFolder(
@@ -99,7 +115,7 @@ export async function findAvailableName(
   baseTitle: string,
   ext = '.json',
 ): Promise<string> {
-  const names = new Set<string>()
+  const names = new Set<string>(RESERVED_FILES)
   for await (const [name, handle] of dir.entries()) {
     if (handle.kind === 'file') names.add(name.toLowerCase())
   }

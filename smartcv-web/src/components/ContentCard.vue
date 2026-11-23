@@ -11,6 +11,7 @@ import StylePopover from './StylePopover.vue'
 import IconGlyph from './IconGlyph.vue'
 import TagInput from './TagInput.vue'
 import { onMarkdownKeydown } from '@/utils/textShortcuts'
+import { orderedMarkers } from '@/utils/list'
 
 const props = defineProps<{
   section: Section
@@ -134,11 +135,47 @@ function removeColumn(index: number) {
   columnsModel.value = cols
 }
 
+const columnDragIndex = ref<number | null>(null)
+const columnDragOverIndex = ref<number | null>(null)
+
+function onColumnDragStart(index: number, e: DragEvent) {
+  columnDragIndex.value = index
+  if (e.dataTransfer) {
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', String(index))
+  }
+}
+
+function onColumnDragOver(index: number, e: DragEvent) {
+  if (columnDragIndex.value === null) return
+  e.preventDefault()
+  if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
+  columnDragOverIndex.value = index
+}
+
+function onColumnDrop(index: number) {
+  const from = columnDragIndex.value
+  columnDragIndex.value = null
+  columnDragOverIndex.value = null
+  if (from === null || from === index) return
+  const cols = [...(columnsModel.value ?? [])]
+  const [moved] = cols.splice(from, 1)
+  cols.splice(index, 0, moved)
+  columnsModel.value = cols
+}
+
+function onColumnDragEnd() {
+  columnDragIndex.value = null
+  columnDragOverIndex.value = null
+}
+
 const listItems = computed(() =>
   (props.content.content.items ?? []).map((item) =>
     typeof item === 'string' ? { text: item, indent: 0 } : { text: item.text ?? '', indent: item.indent ?? 0 },
   ),
 )
+
+const listMarkers = computed(() => orderedMarkers(listItems.value))
 
 function saveListItems(items: { text: string; indent: number }[]) {
   store.updateContent(props.section.id, props.content.id, { content: { items } })
@@ -596,7 +633,26 @@ function onRemove() {
 
       <template v-else-if="content.type === 'twoColumn'">
         <div class="column-editor">
-          <div v-for="(col, i) in columnsModel ?? []" :key="i" class="column-row">
+          <div
+            v-for="(col, i) in columnsModel ?? []"
+            :key="i"
+            class="column-row"
+            :class="{
+              dragging: columnDragIndex === i,
+              'drag-over': columnDragOverIndex === i && columnDragIndex !== i,
+            }"
+            @dragover="onColumnDragOver(i, $event)"
+            @drop.prevent="onColumnDrop(i)"
+          >
+            <span
+              class="column-drag"
+              draggable="true"
+              title="按住拖动调整分栏顺序"
+              @dragstart="onColumnDragStart(i, $event)"
+              @dragend="onColumnDragEnd"
+            >
+              ⋮⋮
+            </span>
             <span class="column-index">{{ i + 1 }}</span>
             <n-input
               :value="col"
@@ -772,7 +828,7 @@ function onRemove() {
               ⋮⋮
             </span>
             <span class="list-marker">
-              {{ content.content.listType === 'ordered' ? `${i + 1}.` : '•' }}
+              {{ content.content.listType === 'ordered' ? `${listMarkers[i]}.` : '•' }}
             </span>
             <n-button
               size="tiny"
@@ -1217,12 +1273,40 @@ function onRemove() {
   gap: 6px;
 }
 .column-row {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 6px;
+  border-radius: 4px;
+  transition: opacity 0.12s;
 }
 .column-row :deep(.n-input) {
   flex: 1;
+}
+.column-row.dragging {
+  opacity: 0.4;
+}
+.column-row.drag-over::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -4px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--primary);
+}
+.column-drag {
+  flex: none;
+  color: var(--text-tertiary);
+  line-height: 26px;
+  font-size: 12px;
+  letter-spacing: 1px;
+  cursor: grab;
+  user-select: none;
+}
+.column-drag:active {
+  cursor: grabbing;
 }
 .column-index {
   flex: none;

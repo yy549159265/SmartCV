@@ -81,6 +81,68 @@ def locate_unit(resume: list[dict], s: int, r: int, c: int, i: int):
     return contents[c], unit_type, unit_index, old
 
 
+def normalize_refs(value) -> list[list[int]]:
+    """把模型给出的引用坐标收敛成 `[[s, r, c, i], ...]`。
+
+    模型偶尔会写 `{"s": 0, "r": 1, "c": 0, "i": 0}` 或坐标字符串；
+    这里统一成数组并丢弃无效项，交给 `resolve_refs` 按坐标取原文。
+    """
+    if not isinstance(value, (list, tuple)):
+        return []
+    refs: list[list[int]] = []
+    seen: set[tuple[int, int, int, int]] = set()
+    for raw in value:
+        if isinstance(raw, dict):
+            values = [raw.get(key) for key in ("s", "r", "c", "i")]
+        elif isinstance(raw, (list, tuple)) and len(raw) == 4:
+            values = list(raw)
+        elif isinstance(raw, str):
+            numbers = re.findall(r"\d+", raw)
+            values = [int(number) for number in numbers] if len(numbers) == 4 else []
+        else:
+            values = []
+
+        if len(values) != 4:
+            continue
+        coords: list[int] = []
+        for item in values:
+            if isinstance(item, bool):
+                coords = []
+                break
+            if isinstance(item, int):
+                coords.append(item)
+            elif isinstance(item, float) and item.is_integer():
+                coords.append(int(item))
+            elif isinstance(item, str) and item.isdigit():
+                coords.append(int(item))
+            else:
+                coords = []
+                break
+        if len(coords) != 4 or any(item < 0 for item in coords):
+            continue
+
+        key = (coords[0], coords[1], coords[2], coords[3])
+        if key in seen:
+            continue
+        seen.add(key)
+        refs.append(coords)
+    return refs
+
+
+def resolve_refs(resume: list[dict], refs) -> list[tuple[list[int], str]]:
+    """按坐标取出原文：返回 [(坐标, 文字单元), ...]，非法坐标与空单元跳过。"""
+    resolved: list[tuple[list[int], str]] = []
+    for ref in normalize_refs(refs):
+        located = locate_unit(resume, *ref)
+        if located is None:
+            continue
+        text = (located[3] or "").strip()
+        if not text:
+            continue
+        resolved.append((ref, text))
+    return resolved
+
+
 def write_text_unit(content: dict, unit_type: str, unit_index: int, text: str) -> None:
     """把定位到的文字单元写回 content 节点（就地改，不动其它字段）。"""
     data = content.setdefault("content", {})

@@ -59,8 +59,8 @@ const tooltip = computed(() =>
   border-radius: 50%;
   background: var(--panel-bg, #fff);
   color: var(--diff-color, #a6763f);
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 600;
   line-height: 1;
   cursor: pointer;
   user-select: none;

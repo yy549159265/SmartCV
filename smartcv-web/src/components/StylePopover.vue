@@ -327,7 +327,7 @@ const colorPresets = [
   border: none;
   border-radius: 6px;
   background: transparent;
-  font-size: 11.5px;
+  font-size: 12.5px;
   font-weight: 500;
   color: var(--text-secondary);
   cursor: pointer;
@@ -370,7 +370,7 @@ const colorPresets = [
 .prop-label {
   flex: none;
   width: 52px;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-secondary);
 }
 .prop-control {
@@ -392,7 +392,7 @@ const colorPresets = [
   flex: none;
   width: 34px;
   text-align: right;
-  font-size: 11.5px;
+  font-size: 12.5px;
   font-variant-numeric: tabular-nums;
   color: var(--text);
 }
@@ -404,7 +404,7 @@ const colorPresets = [
   border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--panel-bg);
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: var(--text-tertiary);
   cursor: pointer;
   transition:

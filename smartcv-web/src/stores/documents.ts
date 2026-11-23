@@ -14,12 +14,15 @@ import {
   supportsDirectoryPicker,
 } from '@/utils/fs/directoryHandle'
 import {
+  MARKET_SOURCES_FILE,
   findAvailableName,
   folderFileExists,
   getFolderFileInfo,
   listResumeFiles,
+  readBackupJson,
   readResumeJson,
   removeFolderFile,
+  writeBackupJson,
   writeBlobToFolder,
   writeResumeJson,
   type BackupFileInfo,
@@ -361,6 +364,53 @@ export const useDocumentsStore = defineStore('documents', {
           return false
         }
       })
+    },
+
+    /** 只读一份备份简历（不切换当前文件），供市场洞察选择简历快照。 */
+    async readFileSnapshot(name: string): Promise<unknown | null> {
+      if (!this.isBound || !name) return null
+      if (!(await this.ensurePermission()) || !dir) {
+        message.warning('没有文件夹访问权限，请重新授权')
+        return null
+      }
+      try {
+        const info = await getFolderFileInfo(dir, name)
+        if (!info) {
+          message.error('文件不存在，可能已被重命名或删除')
+          await this.refreshFiles()
+          return null
+        }
+        return await readResumeJson(dir, info.name)
+      } catch (err) {
+        message.error(`读取简历失败：${errorText(err)}`)
+        return null
+      }
+    },
+
+    /** 读取市场洞察来源库（备份文件夹里的 market-sources.json）。 */
+    async readMarketSources(): Promise<unknown | null> {
+      if (!this.isBound) return null
+      if (!(await this.ensurePermission()) || !dir) return null
+      try {
+        return await readBackupJson(dir, MARKET_SOURCES_FILE)
+      } catch (err) {
+        if (err instanceof DOMException && err.name === 'NotFoundError') return null
+        message.error(`读取来源库失败：${errorText(err)}`)
+        return null
+      }
+    },
+
+    /** 写入市场洞察来源库；文件不存在时自动创建。 */
+    async writeMarketSources(data: unknown): Promise<boolean> {
+      if (!this.isBound) return false
+      if (!(await this.ensurePermission()) || !dir) return false
+      try {
+        await writeBackupJson(dir, MARKET_SOURCES_FILE, data)
+        return true
+      } catch (err) {
+        message.error(`写入来源库失败：${errorText(err)}（修改已保存在浏览器）`)
+        return false
+      }
     },
 
     deleteFile(name: string): Promise<boolean> {

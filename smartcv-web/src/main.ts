@@ -46,6 +46,7 @@ const HISTORY_STRUCTURAL_ACTIONS = new Set([
   'addSection',
   'removeSection',
   'duplicateSection',
+  'resetSectionTypography',
   'moveSection',
   'addRow',
   'addRowFromPreset',

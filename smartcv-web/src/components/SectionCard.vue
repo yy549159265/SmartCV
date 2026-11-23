@@ -100,6 +100,31 @@ function onRowAdd(evt: { data?: unknown; newIndex?: number }) {
   }
 }
 
+/** 章节或内部任一组件改过字号 / 行距（标题字号也算） */
+const hasTypographyOverride = computed(() => {
+  const style = props.section.style
+  if (style.fontSize !== undefined || style.lineHeight !== undefined || style.titleSize !== undefined) {
+    return true
+  }
+  const has = (rows: LayoutWindow[]): boolean =>
+    rows.some(
+      (row) =>
+        row.contents.some(
+          (b) => b.style.fontSize !== undefined || b.style.lineHeight !== undefined,
+        ) || (row.rows ? has(row.rows) : false),
+    )
+  return has(props.section.rows)
+})
+
+function onResetTypography() {
+  if (!hasTypographyOverride.value) {
+    message.info('当前已是默认字号与行距')
+    return
+  }
+  store.resetSectionTypography(props.section.id)
+  message.success('已恢复章节及所有组件的默认字号与行距')
+}
+
 function togglePageBreak() {
   store.updateSection(props.section.id, { pageBreakBefore: !props.section.pageBreakBefore })
 }
@@ -218,6 +243,20 @@ function onRemove() {
         </n-popover>
         <n-tooltip trigger="hover">
           <template #trigger>
+            <button
+              type="button"
+              class="section-tool-btn"
+              :class="{ 'is-dim': !hasTypographyOverride }"
+              title="恢复默认字号与行距"
+              @click="onResetTypography"
+            >
+              <IconGlyph name="refresh-cw" :size="13" />
+            </button>
+          </template>
+          恢复默认字号与行距（章节标题 + 章节内所有组件）
+        </n-tooltip>
+        <n-tooltip trigger="hover">
+          <template #trigger>
             <button type="button" class="section-tool-btn" title="复制章节" @click="onDuplicate">
               <IconGlyph name="copy" :size="13" />
             </button>
@@ -289,7 +328,7 @@ function onRemove() {
   color: var(--warning);
   border: 1px solid rgba(166, 118, 63, 0.24);
   border-radius: 999px;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 18px;
   padding: 0 8px;
   pointer-events: none;
@@ -316,7 +355,7 @@ function onRemove() {
   border-radius: 5px;
   background: transparent;
   color: var(--text-tertiary);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1;
   cursor: pointer;
   transition: background 0.12s var(--ease);
@@ -333,7 +372,7 @@ function onRemove() {
   align-items: center;
   cursor: grab;
   color: var(--text-tertiary);
-  font-size: 15px;
+  font-size: 16px;
   letter-spacing: 1px;
   padding: 0 8px;
   margin: -2px 0 -2px -4px;
@@ -373,7 +412,7 @@ function onRemove() {
   border: 1px solid transparent;
   border-radius: 6px;
   background: transparent;
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1;
   cursor: pointer;
   transition:
@@ -407,7 +446,7 @@ function onRemove() {
   padding: 2px;
 }
 .icon-section-name {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-tertiary);
   margin-bottom: 4px;
 }
@@ -425,7 +464,7 @@ function onRemove() {
   border: 1px solid transparent;
   border-radius: 6px;
   background: transparent;
-  font-size: 16px;
+  font-size: 17px;
   line-height: 1;
   cursor: pointer;
   transition:
@@ -496,6 +535,9 @@ function onRemove() {
   background: var(--danger-soft);
   color: var(--danger);
 }
+.section-tool-btn.is-dim {
+  opacity: 0.45;
+}
 .section-card:hover .section-toolbar,
 .section-card.selected .section-toolbar {
   opacity: 1;
@@ -530,7 +572,7 @@ function onRemove() {
   border-radius: 8px;
   background: var(--panel-bg);
   color: var(--text-tertiary);
-  font-size: 12px;
+  font-size: 13px;
   pointer-events: none;
 }
 

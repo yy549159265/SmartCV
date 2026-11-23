@@ -753,7 +753,7 @@ function onDiscardDiff() {
       <div class="jd-section">
         <button class="jd-toggle" :class="{ open: jdExpanded }" @click="jdExpanded = !jdExpanded">
           <span class="jd-caret" aria-hidden="true"></span>
-          <span class="jd-toggle-text">JD 职位描述（可选，有就粘贴）</span>
+          <span class="jd-toggle-text">JD 职位描述</span>
         </button>
         <div v-if="jdExpanded" class="jd-body">
           <n-input
@@ -1542,11 +1542,11 @@ function onDiscardDiff() {
 }
 .panel-title {
   font-weight: 600;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--text);
 }
 .panel-hint {
-  font-size: 11.5px;
+  font-size: 12.5px;
   color: var(--text-tertiary);
 }
 .panel-spacer {
@@ -1573,7 +1573,7 @@ function onDiscardDiff() {
   position: absolute;
   bottom: 12px;
   right: 16px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-tertiary);
   pointer-events: none;
 }
@@ -1581,7 +1581,7 @@ function onDiscardDiff() {
   padding: 60px 0;
   text-align: center;
   color: var(--text-tertiary);
-  font-size: 12.5px;
+  font-size: 13.5px;
 }
 
 .chat-panel {
@@ -1607,7 +1607,7 @@ function onDiscardDiff() {
   padding: 9px 16px;
   border: none;
   background: transparent;
-  font-size: 12.5px;
+  font-size: 13.5px;
   font-weight: 600;
   color: var(--text-secondary);
   text-align: left;
@@ -1691,14 +1691,14 @@ function onDiscardDiff() {
   border-radius: 6px;
   background: var(--primary-soft);
   color: var(--primary);
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1;
 }
 .session-id {
   padding: 2px 8px;
   border-radius: 999px;
   background: var(--surface-soft);
-  font-size: 10.5px;
+  font-size: 11.5px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   color: var(--text-tertiary);
   white-space: nowrap;
@@ -1751,12 +1751,12 @@ function onDiscardDiff() {
   border-radius: 12px;
   background: var(--primary-soft);
   color: var(--primary);
-  font-size: 16px;
+  font-size: 17px;
   line-height: 1;
 }
 .chat-empty-title {
   margin: 0;
-  font-size: 12.5px;
+  font-size: 13.5px;
   line-height: 1.7;
   color: var(--text-secondary);
 }
@@ -1771,7 +1771,7 @@ function onDiscardDiff() {
   border-radius: 999px;
   background: var(--surface-soft);
   color: var(--text-tertiary);
-  font-size: 11.5px;
+  font-size: 12.5px;
   line-height: 1.6;
 }
 .chat-msg {
@@ -1802,7 +1802,7 @@ function onDiscardDiff() {
   display: flex;
   align-items: center;
   gap: 5px;
-  font-size: 11.5px;
+  font-size: 12.5px;
   color: var(--text-tertiary);
   line-height: 1.6;
 }
@@ -1912,14 +1912,14 @@ function onDiscardDiff() {
 }
 .flow-title {
   flex: none;
-  font-size: 12.5px;
+  font-size: 13.5px;
   font-weight: 600;
   color: var(--text);
 }
 .flow-status {
   flex: 1;
   min-width: 0;
-  font-size: 11.5px;
+  font-size: 12.5px;
   color: var(--text-tertiary);
   white-space: nowrap;
   overflow: hidden;
@@ -1951,7 +1951,7 @@ function onDiscardDiff() {
 .flow-preview {
   min-width: 0;
   padding: 8px 11px;
-  font-size: 11.5px;
+  font-size: 12.5px;
   line-height: 1.65;
   color: var(--text-secondary);
 }
@@ -2048,7 +2048,7 @@ function onDiscardDiff() {
   gap: 6px;
   padding: 3px 9px;
   border-radius: 999px;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
   background: var(--surface-soft);
   color: var(--text-secondary);
@@ -2079,7 +2079,7 @@ function onDiscardDiff() {
   border: none;
   border-radius: 6px;
   background: transparent;
-  font-size: 11.5px;
+  font-size: 12.5px;
   font-weight: 600;
   color: var(--text-tertiary);
   cursor: pointer;
@@ -2094,7 +2094,7 @@ function onDiscardDiff() {
   display: inline-flex;
 }
 .field-hint {
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 500;
   padding: 1px 5px;
   border: 1px solid var(--border);
@@ -2114,7 +2114,7 @@ function onDiscardDiff() {
   padding: 6px 9px;
   background: var(--text);
   color: #fff;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 400;
   line-height: 1.5;
   white-space: normal;
@@ -2176,18 +2176,18 @@ function onDiscardDiff() {
   gap: 4px 7px;
 }
 .ref-note-index {
-  font-size: 10px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 600;
   color: var(--primary);
 }
 .ref-note-direction {
-  font-size: 11.5px;
+  font-size: 12.5px;
   font-weight: 600;
   color: var(--text);
 }
 .ref-note-desc {
   margin: 3px 0 0;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.55;
   color: var(--text-secondary);
   overflow-wrap: anywhere;
@@ -2199,14 +2199,14 @@ function onDiscardDiff() {
   background: var(--primary-faint);
 }
 .style-notes-title {
-  font-size: 10.5px;
-  font-weight: 700;
+  font-size: 11.5px;
+  font-weight: 600;
   color: var(--primary-hover);
 }
 .style-notes-list {
   margin: 4px 0 0;
   padding-left: 18px;
-  font-size: 11.5px;
+  font-size: 12.5px;
   line-height: 1.65;
   color: var(--text-secondary);
 }
@@ -2214,7 +2214,7 @@ function onDiscardDiff() {
   margin-top: 2px;
 }
 .agent-think {
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.7;
   color: var(--text-secondary);
   white-space: pre-wrap;
@@ -2232,7 +2232,7 @@ function onDiscardDiff() {
   background: var(--surface-soft);
   color: var(--text-secondary);
   font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.65;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -2249,7 +2249,7 @@ function onDiscardDiff() {
   border-radius: var(--radius-md);
   background: var(--primary-faint);
   color: var(--primary-hover);
-  font-size: 13px;
+  font-size: 14px;
 }
 .diag-pending::after {
   content: '';
@@ -2281,7 +2281,7 @@ function onDiscardDiff() {
   border-radius: 50%;
   background: var(--primary-soft);
   color: var(--primary);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1;
   animation: diag-pending-breathe 1.8s ease-in-out infinite;
 }
@@ -2364,7 +2364,7 @@ function onDiscardDiff() {
   border-radius: 50%;
   background: var(--primary);
   color: #fff;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1;
 }
 .diag-entry-main {
@@ -2373,8 +2373,8 @@ function onDiscardDiff() {
   gap: 7px;
 }
 .diag-entry-title {
-  font-size: 13px;
-  font-weight: 700;
+  font-size: 14px;
+  font-weight: 600;
   color: var(--text);
 }
 .diag-entry-chips {
@@ -2388,7 +2388,7 @@ function onDiscardDiff() {
   align-items: center;
   gap: 3px;
   margin-left: auto;
-  font-size: 11.5px;
+  font-size: 12.5px;
   font-weight: 600;
   color: var(--primary);
   white-space: nowrap;
@@ -2420,7 +2420,7 @@ function onDiscardDiff() {
   border-radius: 50%;
   background: var(--primary);
   color: #fff;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1;
 }
 .diag-report-count {
@@ -2428,8 +2428,8 @@ function onDiscardDiff() {
   border-radius: 999px;
   background: var(--primary-soft);
   color: var(--primary-hover);
-  font-size: 10.5px;
-  font-weight: 700;
+  font-size: 11.5px;
+  font-weight: 600;
 }
 .diag-report-chips {
   display: inline-flex;
@@ -2443,7 +2443,7 @@ function onDiscardDiff() {
   align-items: center;
   gap: 5px;
   color: var(--text-tertiary);
-  font-size: 10.5px;
+  font-size: 11.5px;
   font-weight: 500;
   white-space: nowrap;
 }
@@ -2472,8 +2472,8 @@ function onDiscardDiff() {
   flex-wrap: wrap;
 }
 .diag-modal-title {
-  font-size: 15px;
-  font-weight: 700;
+  font-size: 16px;
+  font-weight: 600;
   color: var(--text);
 }
 .diag-help-btn {
@@ -2518,12 +2518,12 @@ function onDiscardDiff() {
   gap: 6px;
 }
 .diag-help-title {
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 600;
   color: var(--text);
 }
 .diag-help-sub {
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: var(--text-tertiary);
 }
 .diag-help-row {
@@ -2533,7 +2533,7 @@ function onDiscardDiff() {
   gap: 8px;
 }
 .diag-help-flag {
-  font-size: 10.5px;
+  font-size: 11.5px;
   line-height: 18px;
   color: var(--text-tertiary);
   white-space: nowrap;
@@ -2549,7 +2549,7 @@ function onDiscardDiff() {
   gap: 5px;
   height: 18px;
   color: var(--text-tertiary);
-  font-size: 10.5px;
+  font-size: 11.5px;
   font-weight: 600;
   white-space: nowrap;
 }
@@ -2583,7 +2583,7 @@ function onDiscardDiff() {
   color: var(--danger);
 }
 .diag-help-desc {
-  font-size: 11.5px;
+  font-size: 12.5px;
   line-height: 18px;
   color: var(--text-secondary);
 }
@@ -2604,8 +2604,8 @@ function onDiscardDiff() {
   align-items: center;
   gap: 7px;
   padding: 2px 2px 7px;
-  font-size: 13px;
-  font-weight: 700;
+  font-size: 14px;
+  font-weight: 600;
   color: var(--text);
   cursor: pointer;
   border-radius: 6px;
@@ -2630,7 +2630,7 @@ function onDiscardDiff() {
 .diag-group-count {
   flex: none;
   color: var(--text-tertiary);
-  font-size: 10.5px;
+  font-size: 11.5px;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
@@ -2649,7 +2649,7 @@ function onDiscardDiff() {
 }
 .diag-modal-hint {
   flex: 1;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-tertiary);
 }
 .diag-item {
@@ -2658,7 +2658,7 @@ function onDiscardDiff() {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--panel-bg);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.6;
   animation: diag-item-in 0.28s var(--ease) both;
   transition: border-color 0.16s var(--ease);
@@ -2713,7 +2713,7 @@ function onDiscardDiff() {
   flex: none;
   min-width: 15px;
   color: var(--text-tertiary);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   line-height: 17px;
   text-align: right;
@@ -2721,7 +2721,7 @@ function onDiscardDiff() {
 }
 .diag-quote {
   color: var(--text);
-  font-size: 12.5px;
+  font-size: 13.5px;
   font-weight: 600;
   overflow-wrap: anywhere;
 }
@@ -2731,7 +2731,7 @@ function onDiscardDiff() {
   border-radius: 8px;
   background: var(--surface-sunken);
   color: var(--text-tertiary);
-  font-size: 10px;
+  font-size: 11px;
   line-height: 17px;
 }
 .diag-location {
@@ -2740,7 +2740,7 @@ function onDiscardDiff() {
   border-radius: 8px;
   background: var(--primary-soft);
   color: var(--primary-hover);
-  font-size: 10px;
+  font-size: 11px;
   line-height: 17px;
   white-space: nowrap;
 }
@@ -2765,7 +2765,7 @@ function onDiscardDiff() {
 }
 .diag-state-label {
   color: var(--text-tertiary);
-  font-size: 10.5px;
+  font-size: 11.5px;
   white-space: nowrap;
 }
 .diag-state-value {
@@ -2773,7 +2773,7 @@ function onDiscardDiff() {
   align-items: center;
   gap: 5px;
   color: var(--text-tertiary);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   line-height: 17px;
   white-space: nowrap;
@@ -2818,7 +2818,7 @@ function onDiscardDiff() {
   border-radius: 8px;
   background: var(--primary-soft);
   color: var(--primary-hover);
-  font-size: 10px;
+  font-size: 11px;
   line-height: 17px;
   white-space: nowrap;
   cursor: pointer;
@@ -2854,7 +2854,7 @@ function onDiscardDiff() {
 }
 .diag-label {
   color: var(--text-tertiary);
-  font-size: 10.5px;
+  font-size: 11.5px;
   line-height: 1.7;
   text-align: right;
   white-space: nowrap;
@@ -2862,7 +2862,7 @@ function onDiscardDiff() {
 .diag-value {
   min-width: 0;
   color: var(--text-secondary);
-  font-size: 12.5px;
+  font-size: 13.5px;
   line-height: 1.7;
   overflow-wrap: anywhere;
 }
@@ -2873,7 +2873,7 @@ function onDiscardDiff() {
   box-shadow: none;
 }
 .agent-answer {
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.7;
   color: var(--text-secondary);
   overflow-wrap: anywhere;
@@ -2899,7 +2899,7 @@ function onDiscardDiff() {
 .agent-answer :deep(h3),
 .agent-answer :deep(h4) {
   margin: 6px 0 4px;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--text);
 }
@@ -2907,7 +2907,7 @@ function onDiscardDiff() {
   background: var(--surface-sunken);
   padding: 1px 4px;
   border-radius: 3px;
-  font-size: 11px;
+  font-size: 12px;
 }
 .agent-answer :deep(pre) {
   background: var(--surface-soft);
@@ -2934,7 +2934,7 @@ function onDiscardDiff() {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.55;
   color: var(--text-tertiary);
 }
@@ -3001,7 +3001,7 @@ function onDiscardDiff() {
   color: var(--primary);
 }
 .search-url {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-tertiary);
   opacity: 0.8;
   white-space: nowrap;
@@ -3019,7 +3019,7 @@ function onDiscardDiff() {
   display: flex;
   flex-direction: column;
   gap: 3px;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.55;
   color: var(--text-tertiary);
 }
@@ -3044,7 +3044,7 @@ function onDiscardDiff() {
   max-width: 100%;
   padding: 9px 12px;
   border-radius: 12px;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.7;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -3096,7 +3096,7 @@ function onDiscardDiff() {
   padding: 8px 16px;
   border-top: 1px solid var(--border);
   background: var(--primary-faint);
-  font-size: 11.5px;
+  font-size: 12.5px;
   font-weight: 500;
   color: var(--primary-hover);
   animation: block-reveal 0.2s var(--ease) both;
@@ -3128,7 +3128,7 @@ function onDiscardDiff() {
 }
 .composer-menu-label {
   padding: 5px 10px 3px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--text-tertiary);
 }
@@ -3174,12 +3174,12 @@ function onDiscardDiff() {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   line-height: 1.4;
 }
 .menu-desc {
-  font-size: 11.5px;
+  font-size: 12.5px;
   line-height: 1.45;
   color: var(--text-tertiary);
 }
@@ -3236,7 +3236,7 @@ function onDiscardDiff() {
   min-width: 0;
 }
 .mode-name {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   line-height: 1.4;
   color: var(--text);
@@ -3245,7 +3245,7 @@ function onDiscardDiff() {
   color: var(--primary);
 }
 .mode-desc {
-  font-size: 11.5px;
+  font-size: 12.5px;
   line-height: 1.45;
   color: var(--text-tertiary);
 }
@@ -3271,7 +3271,7 @@ function onDiscardDiff() {
   border-radius: 999px;
   background: var(--panel-bg);
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1;
   white-space: nowrap;
   cursor: pointer;
@@ -3303,7 +3303,7 @@ function onDiscardDiff() {
   border-radius: 999px;
   background: var(--primary-faint);
   color: var(--primary);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
@@ -3328,11 +3328,11 @@ function onDiscardDiff() {
   border-radius: 50%;
   background: var(--primary);
   color: #fff;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1;
 }
 .enhance-modal-title {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 600;
   color: var(--text);
 }
@@ -3367,7 +3367,7 @@ function onDiscardDiff() {
   gap: 6px;
   padding: 7px 12px;
   border-bottom: 1px solid var(--border);
-  font-size: 11.5px;
+  font-size: 12.5px;
   font-weight: 600;
   color: var(--text-tertiary);
 }
@@ -3378,7 +3378,7 @@ function onDiscardDiff() {
 }
 .enhance-col-icon {
   color: var(--primary);
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1;
 }
 .enhance-editable {
@@ -3387,7 +3387,7 @@ function onDiscardDiff() {
   border: 1px solid var(--primary-soft);
   border-radius: 999px;
   background: var(--panel-bg);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 500;
   color: var(--primary-hover);
 }
@@ -3395,7 +3395,7 @@ function onDiscardDiff() {
   max-height: 46vh;
   overflow: auto;
   padding: 12px 14px;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.75;
   color: var(--text-secondary);
   white-space: pre-wrap;

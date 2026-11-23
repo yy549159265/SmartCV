@@ -254,12 +254,12 @@ const formatSize = (bytes: number) => `${Math.max(1, Math.round(bytes / 1024))} 
   align-items: center;
   gap: 12px;
   padding: 56px 0;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--text-secondary);
   text-align: center;
 }
 .example-status-icon {
-  font-size: 24px;
+  font-size: 26px;
 }
 
 .example-grid {
@@ -318,13 +318,13 @@ const formatSize = (bytes: number) => `${Math.max(1, Math.round(bytes / 1024))} 
   background: var(--surface-soft);
 }
 .example-thumb-text {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-secondary);
   text-align: center;
   line-height: 1.5;
 }
 .example-thumb-retry {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--primary);
 }
 
@@ -337,7 +337,7 @@ const formatSize = (bytes: number) => `${Math.max(1, Math.round(bytes / 1024))} 
   border-top: 1px solid var(--border);
 }
 .example-title {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--text);
   overflow: hidden;
@@ -346,12 +346,12 @@ const formatSize = (bytes: number) => `${Math.max(1, Math.round(bytes / 1024))} 
 }
 .example-size {
   flex: none;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-tertiary);
 }
 
 .example-footer-tip {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-tertiary);
 }
 </style>

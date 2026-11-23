@@ -78,7 +78,7 @@ pull() {
     local old_ids
     old_ids=$(compose_image_ids)
 
-    echo -e "${YELLOW}正在从远程仓库拉取最新镜像（searxng 来自 Docker Hub，国内可能较慢）...${NC}"
+    echo -e "${YELLOW}正在从远程仓库拉取最新镜像（searxng / valkey 走 Docker Hub，国内可能较慢）...${NC}"
     $COMPOSE_CMD -f "$COMPOSE_FILE" pull
 
     echo -e "${YELLOW}正在用新镜像重建容器...${NC}"
@@ -136,16 +136,17 @@ usage() {
   stop            停止所有容器（docker compose down）
   restart         重新启动所有容器（先 stop 再 start）
   pull            拉取最新镜像 → 用新镜像重建容器 → 删除被替换的旧镜像
-                  （backend/frontend 走阿里云，searxng 走 Docker Hub）
+                  （backend/frontend 走阿里云，searxng/valkey 走 Docker Hub）
   status          查看容器当前运行状态
-  logs [service]  查看容器日志（可指定服务名: backend、frontend 或 searxng）
+  logs [service]  查看容器日志（可指定服务名: backend、frontend、searxng 或 valkey）
   help            显示此帮助信息
 
 服务:
   backend         FastAPI 后端（8600）
-  frontend        nginx 前端（5173）
-  searxng         自建搜索，诊断 agent 的 web_search 用（仅本机 8080）
-                  配置在 ./searxng/settings.yml，首次启动会自动生成其余默认配置
+  frontend        nginx 前端（443）
+  searxng         自建搜索，诊断 agent 和「市场洞察」用（仅本机 8088）
+                  配置取 /opt/smartcv/searxng/settings.yml，仓库里是 script/searxng/settings.yml
+  valkey          SearXNG 的缓存 / 引擎挂起状态存储
 
 示例:
   $0 start

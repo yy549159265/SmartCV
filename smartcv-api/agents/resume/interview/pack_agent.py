@@ -2,11 +2,13 @@
 
 分组规则见 `tools.pack.group_specs`：
   - 项目面试：所选项目一个组；
-  - 综合面试：动机 / 规划 / 薪资 / 稳定性 / 真实性五个主题组。
+  - 综合面试：动机 / 规划 / 薪资 / 稳定性 / 真实性五个主题组；
+  - 排查面试：故障排查 / 性能优化 / 方案设计三个题型组。
 
 对话与清单共用同一份题包，只在第 4 步决定怎么消费；分组规则与题量都不受
-方式影响。两种场景各加载一份场景提示词，项目面试再追加考察方向提示词
-（未选方向时为均衡模式 balanced），并用维度占比做一次软提示。
+方式影响。每种场景各加载一份场景提示词，项目面试再追加考察方向提示词
+（未选方向时为均衡模式 balanced），并用维度占比做一次软提示。排查面试在
+同一份场景提示词里按 `task.theme` 区分故障排查、性能优化与方案设计。
 
 每组一次结构化调用，组间最多并发 3 个。追问链与露馅信号的硬性要求写在
 `QuestionCard` 字段约束里，由结构化输出直接校验，不再额外做卡片校验。
@@ -35,6 +37,7 @@ from agents.resume.interview.tools.pack import (
     focus_gap,
     group_specs,
     prepare_cards,
+    primary_techs,
     profile_payload,
 )
 from agents.resume.interview.utils.prompts import load_prompt
@@ -53,6 +56,7 @@ _CARDS_PROMPT = load_prompt("pack", "cards.md")
 _SCENE_PROMPTS = {
     "project": load_prompt("pack", "scene", "project.md"),
     "comprehensive": load_prompt("pack", "scene", "comprehensive.md"),
+    "scenario": load_prompt("pack", "scene", "scenario.md"),
 }
 # 考察方向只属于项目面试；balanced 是未选择方向时的默认值。
 _FOCUS_PROMPTS = {
@@ -103,7 +107,7 @@ def _corpus(profile: ResumeProfile, anchors: list[Anchor]) -> str:
 
 
 def _scene_prompt(req: PackRequest) -> str:
-    """按场景加载提示词；综合面试不追加考察方向。"""
+    """按场景加载提示词；综合面试与排查面试都不追加考察方向。"""
     return _SCENE_PROMPTS[req.scene]
 
 
@@ -115,20 +119,23 @@ def _system_prompt(spec: dict, req: PackRequest) -> str:
 
 
 def _payload(spec: dict, req: PackRequest, profile: ResumeProfile) -> str:
+    task = {
+        "groupKey": spec["key"],
+        "kind": spec["kind"],
+        "label": spec["label"],
+        "scene": req.scene,
+        "focus": req.focus,
+        "follow_depth": req.follow_depth or "none",
+        "theme": spec["theme"],
+        "project": spec["project"],
+        "tech": spec["tech"],
+    }
+    if req.scene == "scenario":
+        task["primaryTechs"] = primary_techs(profile)
     payload = {
         "profile": profile_payload(profile),
         "anchors": spec["anchors"],
-        "task": {
-            "groupKey": spec["key"],
-            "kind": spec["kind"],
-            "label": spec["label"],
-            "scene": req.scene,
-            "focus": req.focus,
-            "follow_depth": req.follow_depth or "none",
-            "theme": spec["theme"],
-            "project": spec["project"],
-            "tech": spec["tech"],
-        },
+        "task": task,
     }
     return json.dumps(payload, ensure_ascii=False, indent=2)
 

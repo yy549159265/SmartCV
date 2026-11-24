@@ -83,7 +83,7 @@ function stepUsage(usage: TokenUsage | null) {
 
 const steps = computed(() => [
   { n: 1, label: '确认简历', desc: '画像与证据锚点', usage: stepUsage(store.profileUsage) },
-  { n: 2, label: '选择面试场景', desc: '项目或综合' },
+  { n: 2, label: '选择面试场景', desc: '项目、综合或排查' },
   { n: 3, label: '生成问题包', desc: '确认题量与追问', usage: stepUsage(store.packUsage) },
   { n: 4, label: '选择面试方式', desc: '对话或清单' },
   {
@@ -115,9 +115,11 @@ const packRecord = computed(() => store.packRecord)
 /** 对话面试与清单自测共用第 3 步生成的问题包。 */
 const activeCards = computed(() => packRecord.value?.cards ?? null)
 const activeWarnings = computed(() => packRecord.value?.warnings ?? [])
-const activeScene = computed<PackScene>(() =>
-  packRecord.value?.scene === 'comprehensive' ? 'comprehensive' : 'project',
-)
+const activeScene = computed<PackScene>(() => {
+  const scene = packRecord.value?.scene
+  if (scene === 'comprehensive' || scene === 'scenario') return scene
+  return 'project'
+})
 const activeFocus = computed<PackFocus>(() => packRecord.value?.focus ?? 'balanced')
 const activeSeen = computed(() => {
   const record = packRecord.value
@@ -143,7 +145,11 @@ const contentInitial = computed(() => {
   const pack = packRecord.value
   if (!pack || store.packStale) return null
   return {
-    scene: (pack.scene === 'comprehensive' ? 'comprehensive' : 'project') as PackScene,
+    scene: (pack.scene === 'scenario'
+      ? 'scenario'
+      : pack.scene === 'comprehensive'
+        ? 'comprehensive'
+        : 'project') as PackScene,
     followDepth: pack.followDepth,
     focus: pack.focus ?? 'balanced',
     projectIds: [...pack.projectIds],

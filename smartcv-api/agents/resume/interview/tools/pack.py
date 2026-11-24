@@ -3,7 +3,8 @@
 这里只做确定性的数据加工，不调用模型：
 
   assign_profile   核对锚点原文、补全项目 / 锚点 id、为技术栈补追溯锚点
-  group_specs      按 scene 拆出并发生成的分组（项目一个组 / 综合五个主题组）
+  group_specs      按 scene 拆分组（项目一个组 / 综合五个主题组 / 排查三类题型）
+  primary_techs    按等级、项目使用与求职方向给出排查面试的主技术栈提示
   prepare_cards    单组卡片归一化（补证据引用、清理空追问 / 空信号、清空答案）
   focus_gap        考察方向的维度占比检查；不达标只提示，不阻断整组
   assign_ids       合并后统一编号
@@ -36,6 +37,15 @@ COMPREHENSIVE_THEMES = [
     ("stability", "稳定性", "离职原因、空窗期、频繁变动的解释、到岗时间"),
     ("authenticity", "项目真实性", "挑简历里最亮的结果或最含糊的表述，核对数据口径、个人贡献与细节"),
 ]
+
+# 排查面试的三类题型；分组对用户不可见，只用于让每类题单独结构化生成。
+SCENARIO_THEMES = [
+    ("troubleshoot", "故障排查"),
+    ("performance", "性能优化"),
+    ("design", "方案设计"),
+]
+
+_LEVEL_RANK = {"精通": 3, "熟练": 2, "掌握": 1}
 
 # 考察方向只作用于项目面试；未选择方向或综合面试用 balanced，不追加提示词，也不做比例校验。
 FOCUS_LABELS = {
@@ -106,6 +116,55 @@ def anchor_payload(anchor: Anchor, *, by_alias: bool = False) -> dict:
     data = anchor.model_dump(by_alias=by_alias)
     data.pop("refs", None)
     return data
+
+
+def _tech_used(name: str, project: ProjectItem) -> bool:
+    key = name.casefold()
+    for tech in project.tech_stack:
+        other = (tech or "").strip().casefold()
+        if other and (key in other or other in key):
+            return True
+    return False
+
+
+def primary_techs(profile: ResumeProfile, limit: int = 3) -> list[str]:
+    """按等级、项目使用与求职方向给出主技术栈提示。
+
+    只作为排查面试的出题重心，不替代模型对项目描述的判断；简历里并列列出的
+    多门技术不会因此被平均分配。
+    """
+    direction = profile.direction.casefold()
+    scores: dict[str, int] = {}
+    names: dict[str, str] = {}
+
+    def add(name: str, score: int) -> None:
+        key = name.casefold()
+        if key not in names:
+            names[key] = name
+            scores[key] = score
+        else:
+            scores[key] = max(scores[key], score)
+
+    for item in profile.tech_stacks:
+        name = (item.name or "").strip()
+        if not name:
+            continue
+        used = sum(1 for project in profile.projects if _tech_used(name, project))
+        add(
+            name,
+            _LEVEL_RANK.get(item.level, 1) * 2
+            + used
+            + (2 if name.casefold() in direction else 0),
+        )
+
+    for project in profile.projects:
+        for tech in project.tech_stack:
+            tech = (tech or "").strip()
+            if tech:
+                add(tech, 1)
+
+    ranked = sorted(scores, key=lambda key: (-scores[key], names[key]))
+    return [names[key] for key in ranked[:limit]]
 
 
 def _resolved_quote(
@@ -280,6 +339,21 @@ def group_specs(
             }
         ]
 
+    if req.scene == "scenario":
+        # 排查面试固定拆成三类题型；用户只选场景，不感知分组。
+        return [
+            {
+                "key": f"scenario:{theme_id}",
+                "kind": "scenario",
+                "label": label,
+                "theme": theme_id,
+                "project": {},
+                "tech": "",
+                "anchors": [anchor_payload(anchor) for anchor in anchors],
+            }
+            for theme_id, label in SCENARIO_THEMES
+        ]
+
     # comprehensive：五个主题各一组，每组由模型按主题出 1~2 张卡。
     return [
         {
@@ -330,6 +404,9 @@ def prepare_cards(
                 card.evidence_quote = anchor.quote
         elif card.evidence_quote and not quote_in_text(card.evidence_quote, resume_text):
             card.evidence_quote = ""
+        if anchor is None and scene == "scenario":
+            # 排查面试的锚点是可选的；模型自造的 id 会让建场校验失败，直接清空。
+            card.anchor_id = ""
 
         follow_ups = []
         seen: set[str] = set()

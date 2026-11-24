@@ -26,10 +26,10 @@ Refs = Annotated[list[Coord], BeforeValidator(normalize_refs)]
 TechLevel = Literal["精通", "熟练", "掌握"]
 AnchorKind = Literal["tech", "result", "architecture", "metric", "contribution"]
 UseMode = Literal["dialog", "checklist"]
-# 出题场景只有项目面试与综合面试；checklist 是生成之后选择的消费方式，
+# 出题场景：项目面试、综合面试与排查面试；checklist 是生成之后选择的消费方式，
 # 不再是场景。这里保留该值只为兼容升级前保存在浏览器里的旧题包。
-Scene = Literal["project", "comprehensive", "checklist"]
-PackScene = Literal["project", "comprehensive"]
+Scene = Literal["project", "comprehensive", "scenario", "checklist"]
+PackScene = Literal["project", "comprehensive", "scenario"]
 # 追问强度：normal 正常交流，deep 追问更直接、更关注依据与个人贡献。
 FollowDepth = Literal["normal", "deep"]
 # 项目面试的考察方向；可选项，balanced 表示不限定方向、保持混合出题，

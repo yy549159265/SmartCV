@@ -4,6 +4,7 @@
  *
  * 项目面试：选一个项目，可加考察方向与追问强度。
  * 综合面试：动机 / 规划 / 薪资 / 稳定性 / 真实性，不使用考察方向与追问强度。
+ * 排查面试：按简历技能出故障排查、性能优化与方案设计，不选项目与方向。
  * 对话还是清单，等题包生成后再选。
  */
 
@@ -58,7 +59,11 @@ const FOCUS_OPTIONS: {
 const FOCUS_VALUES = FOCUS_OPTIONS.map((option) => option.value)
 
 const scene = ref<PackScene>(
-  props.initial?.scene === 'comprehensive' ? 'comprehensive' : 'project',
+  props.initial?.scene === 'comprehensive'
+    ? 'comprehensive'
+    : props.initial?.scene === 'scenario'
+      ? 'scenario'
+      : 'project',
 )
 const followDepth = ref<FollowDepth>(props.initial?.followDepth ?? 'normal')
 // 考察方向可选：没有默认选中项，不选时传 null，生成请求按 balanced 混合出题。
@@ -78,7 +83,7 @@ if (!selectedProjects.value.length && props.profile.projects[0]) {
 
 const projects = computed(() => props.profile.projects)
 const canGenerate = computed(
-  () => scene.value === 'comprehensive' || selectedProjects.value.length === 1,
+  () => scene.value !== 'project' || selectedProjects.value.length === 1,
 )
 
 function toggleProject(id: string) {
@@ -129,6 +134,15 @@ function submit() {
         <span class="segment-title">综合面试</span>
         <span class="segment-desc">动机、职业规划、薪资期待、稳定性与真实性</span>
       </button>
+      <button
+        type="button"
+        class="segment"
+        :class="{ on: scene === 'scenario' }"
+        @click="scene = 'scenario'"
+      >
+        <span class="segment-title">排查面试</span>
+        <span class="segment-desc">按简历技能出故障排查、性能优化与方案设计题</span>
+      </button>
     </div>
 
     <div v-if="scene === 'project'" class="block">
@@ -137,7 +151,7 @@ function submit() {
         <span class="block-count">单选</span>
       </div>
       <p v-if="!projects.length" class="block-empty">
-        画像里没有项目。可以返回确认页补充项目，或改用综合面试。
+        画像里没有项目。可以返回确认页补充项目，或改用综合面试、排查面试。
       </p>
       <div v-else class="option-list">
         <button
@@ -255,7 +269,7 @@ function submit() {
 
 .segments {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
   gap: 12px;
 }
 .segment {

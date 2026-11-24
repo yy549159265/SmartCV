@@ -60,6 +60,7 @@ export const PRIORITY_LABEL: Record<Priority, string> = {
 export const SCENE_LABEL: Record<Scene, string> = {
   project: '项目面试',
   comprehensive: '综合面试',
+  scenario: '排查面试',
   checklist: '清单自测',
 }
 

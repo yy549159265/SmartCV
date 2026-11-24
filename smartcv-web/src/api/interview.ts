@@ -28,8 +28,8 @@ export type Coord = [number, number, number, number]
 export type AnchorKind = 'tech' | 'result' | 'architecture' | 'metric' | 'contribution'
 export type UseMode = 'dialog' | 'checklist'
 /** 出题场景；checklist 只用于兼容升级前的旧题包。 */
-export type Scene = 'project' | 'comprehensive' | 'checklist'
-export type PackScene = 'project' | 'comprehensive'
+export type Scene = 'project' | 'comprehensive' | 'scenario' | 'checklist'
+export type PackScene = 'project' | 'comprehensive' | 'scenario'
 /** 追问强度；deep 表示追问更直接、更关注依据与个人贡献。 */
 export type FollowDepth = 'normal' | 'deep'
 

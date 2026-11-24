@@ -67,7 +67,12 @@ const emit = defineEmits<{
 
 const title = computed(() => (props.mode === 'checklist' ? '清单自测' : '问题包回看'))
 const sceneLabel = computed(() => {
-  const base = props.scene === 'comprehensive' ? '综合面试' : '项目面试'
+  const base =
+    props.scene === 'comprehensive'
+      ? '综合面试'
+      : props.scene === 'scenario'
+        ? '排查面试'
+        : '项目面试'
   const focus = focusLabel(props.focus)
   return focus ? `${base} · ${focus}` : base
 })

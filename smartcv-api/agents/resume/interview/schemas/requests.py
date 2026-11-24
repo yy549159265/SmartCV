@@ -43,6 +43,7 @@ class PackRequest(InterviewModel):
     """POST /api/interview/pack：按场景出题。
 
     第 3 步生成一份题包，对话面试与清单自测共用；题量由模型按证据量决定。
+    排查面试不使用项目选择、考察方向与追问强度，由后端按三类题型分组出题。
     """
 
     provider: ProviderConfig
@@ -53,7 +54,9 @@ class PackRequest(InterviewModel):
         default_factory=list,
         description="画像里保留的证据锚点；追问方向与事实校验都引用它的原文",
     )
-    scene: PackScene = Field("project", description="project / comprehensive")
+    scene: PackScene = Field(
+        "project", description="project / comprehensive / scenario"
+    )
     follow_depth: FollowDepth | None = Field(
         None, description="仅项目面试使用：normal 常规 / deep 深度追问"
     )
@@ -207,7 +210,9 @@ class ThreadRequest(InterviewModel):
     cards: list[QuestionCard] = Field(
         ..., min_length=1, description="已生成的问题卡；建场只读取它，不重新出题"
     )
-    scene: Scene = Field("project", description="出题场景：project / comprehensive")
+    scene: Scene = Field(
+        "project", description="出题场景：project / comprehensive / scenario"
+    )
     follow_depth: FollowDepth | None = Field(
         None, description="仅项目面试使用：normal 常规 / deep 深度追问"
     )

@@ -62,7 +62,16 @@ def validate_mode(req: PackRequest) -> None:
             raise PolicyError("综合面试不使用考察方向")
         return
 
-    raise PolicyError("出题场景只能是项目面试或综合面试")
+    if req.scene == "scenario":
+        if req.follow_depth:
+            raise PolicyError("排查面试不使用深度追问")
+        if req.focus != "balanced":
+            raise PolicyError("排查面试不使用考察方向")
+        if project_ids:
+            raise PolicyError("排查面试不需要选择项目")
+        return
+
+    raise PolicyError("出题场景只能是项目面试、综合面试或排查面试")
 
 
 def validate_thread(req: ThreadRequest) -> None:

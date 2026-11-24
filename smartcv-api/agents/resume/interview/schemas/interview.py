@@ -119,7 +119,7 @@ class InterviewState(TypedDict, total=False):
     thread_id: str  # 线程 id；读检查点时用于确认拿到的确实是本线程
     owner_session: str  # 浏览器会话 id；防止换一个页面就读到别人的面试
     use_mode: str  # dialog；清单自测不建场，后端出题也不依赖它
-    scene: str  # project / comprehensive；决定面试官提示词与复盘口径
+    scene: str  # project / comprehensive / scenario；决定面试官提示词与复盘口径
     follow_depth: str  # normal / deep / ""；只影响面试官的追问强度
     focus: str  # business / tech / architecture / review；综合面试为 balanced，约束追问方向
     profile: dict  # 用户确认后的 ResumeProfile；出题与参考答案的唯一事实来源
